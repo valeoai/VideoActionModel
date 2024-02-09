@@ -5,11 +5,18 @@ See an example Docker file at: https://github.com/valeoai/VisualQuantization/blo
 
 Change the relevant paths in configs/paths
 
+
+## DATA
+
+For now two "quantized nuscenes" are available on the valeo's cluster. Both are accesible under `/master_datasets_preprocessed/nuscenes_quantized`
+- VQGAN_ImageNet_f16_1024   available in `/datasets_local` on `[urus,viper]`
+- VQGAN_OpenImage_f8_16384  available in `/datasets_local` on `[urus,mustang]`
+
 ## Run
 
 Simple command to launch a debug run on valeo's cluster
 ```
-cluster jobs add --name=worldmodel --restricted-to-machines=urus --cpu-memory=80 --gpus=1 -f Dockerfile_scene_token "export HYDRA_FULL_ERROR=1 && cd /home/fbartocc/workspace/scene_tokenization/NextTokenPrediction && pip install . && python ./world_model/train.py paths=valeo_debug experiment=DummyGPT_vqgan_open_image_f8_16384 debug=gpu_limit_batches"
+cluster jobs add --name=worldmodel --restricted-to-machines=urus --cpu-memory=80 --gpus=1 -f Dockerfile_scene_token "export HYDRA_FULL_ERROR=1 && cd /home/fbartocc/workspace/scene_tokenization/NextTokenPrediction && pip install . && python ./world_model/train.py paths=valeo_debug experiment=DummyGPT_vqgan_imagenet_f16_1024 debug=gpu_limit_batches"
 ```
 
 Use:
@@ -27,7 +34,7 @@ callbacks: callbacks_debug, callbacks_training, early_stopping, learning_rate_mo
 data: tokenized_sequence_nuscenes
 data/transform: crop_and_resize
 debug: default, fast_dev_run, gpu_limit_batches, gpu_overfit, overfit, profiler
-experiment: DummyGPT_vqgan_open_image_f8_16384
+experiment: DummyGPT_vqgan_imagenet_f16_1024, DummyGPT_vqgan_open_image_f8_16384
 logger: csv, many_loggers, none, tensorboard, wandb
 model: next_token_predictor
 model/action_quantizer: random_speed_and_curvature
@@ -45,8 +52,3 @@ model/network=your_network
 ```
 to use it
 
-## DATA
-
-For now two "quantized nuscenes" are available on the valeo's cluster. Both are accesible under `/master_datasets_preprocessed/nuscenes_quantized`
-- VQGAN_ImageNet_f16_1024   available in `/datasets_local` on `[urus,viper]`
-- VQGAN_OpenImage_f8_16384  available in `/datasets_local` on `[urus,mustang]`
