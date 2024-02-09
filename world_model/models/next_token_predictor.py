@@ -91,7 +91,7 @@ class NextTokenPredictor(LightningModule):
         visual_logits = logits_sequence[sequence_data['target_visual_tokens_mask']]
         visual_target_tokens = sequence_data['target_tokens'][sequence_data['target_visual_tokens_mask']]
         
-        loss = self.cross_entropy_loss (visual_logits, visual_target_tokens)
+        loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
         
         return {
             'loss': loss
