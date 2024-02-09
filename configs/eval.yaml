@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: tokenized_sequence_nuscenes
+  - model: next_token_predictor
+  - logger: null
+  - trainer: default
+  - paths: default
+  - hydra: default
+
+name: "eval"
+
+# passing checkpoint path is necessary for evaluation
+ckpt_path: ???
+
+# pretty print config at the start of the run using Rich library
+print_config: True
+
+# disable python warnings if they annoy you
+ignore_warnings: True

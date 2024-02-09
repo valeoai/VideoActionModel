@@ -1,0 +1,9 @@
+# Path to the directory where checkpoints and logs will be saved
+output_dir: ???
+
+# Path to the directory where data is located
+data_dir: /lus/scratch/NAT/gda2214/SHARED/datasets/nuscenes
+
+nuscene_pickle_path: ???
+
+quantized_nuscenes_root_dir: ???

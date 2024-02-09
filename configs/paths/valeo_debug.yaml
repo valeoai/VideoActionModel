@@ -1,0 +1,5 @@
+defaults:
+  - valeo
+
+# Path to the directory where checkpoints and logs will be saved
+output_dir: /home/fbartocc/scratch/adastra_world_model/next_token_predictor_debug

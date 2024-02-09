@@ -1,0 +1,9 @@
+# Path to the directory where checkpoints and logs will be saved
+output_dir: /home/fbartocc/scratch/adastra_world_model/next_token_predictor
+
+# Path to the directory where data is located
+data_dir: /datasets_local/nuscenes
+
+nuscene_pickle_path: /datasets_local/nuscenes_pickle/trainval_data.pkl
+
+quantized_nuscenes_root_dir: /datasets_local/nuscenes_quantized/VQGAN_OpenImage_f8_16384

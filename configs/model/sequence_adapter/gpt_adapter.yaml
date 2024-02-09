@@ -1,0 +1,3 @@
+_target_: world_model.sequence_adapters.gpt_adapter.GPTAdapter
+visual_vocab_size: ???
+action_vocab_sizes: ???

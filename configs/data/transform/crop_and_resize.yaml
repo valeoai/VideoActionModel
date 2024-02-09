@@ -1,0 +1,3 @@
+_target_: world_model.dataloader.components.transforms.CropAndResizeTransform
+trop_crop_size: 4
+resize_factor: 4

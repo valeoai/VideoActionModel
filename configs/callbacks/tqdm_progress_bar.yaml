@@ -1,0 +1,5 @@
+# https://lightning.ai/docs/pytorch/latest/api/lightning.pytorch.callbacks.ProgressBar.html
+
+progress_bar:
+  _target_: lightning.pytorch.callbacks.TQDMProgressBar
+  refresh_rate: 5 # rate (number of batches) at which the progress bar get updated

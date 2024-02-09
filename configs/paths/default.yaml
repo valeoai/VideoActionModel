@@ -1,0 +1,9 @@
+# Path to the directory where checkpoints and logs will be saved
+output_dir: null
+
+# Path to the directory where data is located
+data_dir: null
+
+nuscene_pickle_path: null
+
+quantized_nuscenes_root_dir: null

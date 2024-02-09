@@ -1,0 +1,5 @@
+defaults:
+  - adastra
+
+# Path to the directory where checkpoints and logs will be saved
+output_dir: ???

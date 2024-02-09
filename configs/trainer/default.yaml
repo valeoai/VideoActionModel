@@ -1,0 +1,24 @@
+_target_: lightning.pytorch.trainer.Trainer
+
+# Default path for logs and weights when 
+# no logger or lightning.pytorch.callbacks.ModelCheckpoint callback passed
+default_root_dir: ${paths.output_dir}/default_log_dir
+
+min_epochs: 1 # prevents early stopping
+max_epochs: 10
+
+accelerator: cpu
+devices: 1
+
+# set to 16 for mixed precision for extra speed-up
+precision: 32
+
+# perform a validation loop every N training epochs
+check_val_every_n_epoch: 1
+
+# set True to to ensure deterministic results
+# makes training slower but gives more reproducibility than just setting seeds
+deterministic: False
+
+# number of validation steps to execute at the beginning of the training
+num_sanity_val_steps: 2
