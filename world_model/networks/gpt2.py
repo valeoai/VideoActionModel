@@ -113,44 +113,38 @@ class Block(nn.Module):
 
 @dataclass
 class GPTConfig:
-    block_size: int = 1024              # maximum sequence length
-    vocab_size_img: int = 8192          # vocab size of images
-    vocab_size_act: int = 1024          # vocab size of actions
-    vocab_size_spatial: int  = (576+3)  # vocab size of spatial positions
+    block_size: int = 8                 # maximum sequence length
+    vocab_size: int = 1104
+    nb_tokens_per_timestep: int  = 352  # nb_tokens_per_timestep = hw + act_sz
     n_layer: int = 12                   # number of transformer blocks
     n_head: int = 16                    # number of attention heads
     n_embd: int = 256                   # embedding dimension for the world model    
     dropout: float = 0.15                # dropout rate
     bias: bool = True                   # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
-class GPT(nn.Module):
-
+class GPT2_Core(nn.Module):
     def __init__(self, config):
         super().__init__()
-        assert config.vocab_size_img is not None
-        assert config.vocab_size_act is not None
-        assert config.vocab_size_spatial is not None
+        assert config.vocab_size is not None
+        assert config.nb_tokens_per_timestep is not None
         assert config.block_size is not None
         self.config = config
 
         self.transformer = nn.ModuleDict(dict(
-            wie = nn.Embedding(config.vocab_size_img, config.n_embd),       # image embeddings
-            wae = nn.Embedding(config.vocab_size_act, config.n_embd),       # action embeddings
-            wse = nn.Embedding(config.vocab_size_spatial, config.n_embd),   # spatial position embeddings
-            wte = nn.Embedding(config.block_size, config.n_embd),           # temporal position embeddings
+            wie = nn.Embedding(config.vocab_size, config.n_embd),               # token embeddings
+            wse = nn.Embedding(config.nb_tokens_per_timestep, config.n_embd),   # spatial position embeddings
+            wte = nn.Embedding(config.block_size, config.n_embd),               # temporal position embeddings
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
-        self.lm_head_img = nn.Linear(config.n_embd, config.vocab_size_img, bias=False)
-        self.lm_head_act = nn.Linear(config.n_embd, config.vocab_size_act, bias=False)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
         # https://paperswithcode.com/method/weight-tying
-        self.transformer.wie.weight = self.lm_head_img.weight
-        self.transformer.wae.weight = self.lm_head_act.weight
+        self.transformer.wie.weight = self.lm_head.weight
 
         # init all weights
         self.apply(self._init_weights)
@@ -183,35 +177,26 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, img, act, targets=None):
+    def forward(self, tokens_sequence, inference=False):
         # Inputs:
-        #   - img sequence of shape (b x t x hw)
-        #   - action of shape       (b x t x act_sz)
+        #   - token sequence of shape (b x t*(hw+act_sz))
         
-        device = img.device
-        b, t, hw = img.size()
-        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
-        _, _, act_sz = act.size()
+        device = tokens_sequence.device
+        b, nb_tokens_per_seq = tokens_sequence.size()
+        assert nb_tokens_per_seq + 1 == self.config.block_size * self.config.nb_tokens_per_timestep
         
         # compute spatio-temporal position embeddings
-        temporal_pos = torch.arange(0, t, dtype=torch.long, device=device)
-        spatial_pos = torch.arange(0, hw+act_sz, dtype=torch.long, device=device)
+        temporal_pos = torch.arange(0, self.config.block_size, dtype=torch.long, device=device)
+        spatial_pos = torch.arange(0, self.config.nb_tokens_per_timestep, dtype=torch.long, device=device)
         temporal_pos_emb = self.transformer.wte(temporal_pos)                               # (t        x n_embd)
         spatial_pos_emb = self.transformer.wse(spatial_pos)                                 # (hw+act_sz x n_embd)
         spatio_temporal_emb = torch.einsum('td,nd->tnd', temporal_pos_emb, spatial_pos_emb) # (t x hw+act_sz x n_embd)
-        
-        # image input to world model: (B, T*H*W, D)
-        # action input to world model: (B, T*3, D)
-        # all input to world model: (B, T*[H*W+3], D)
-        # output of world model:    (B, T*[H*W+3], D)
+        spatio_temporal_emb = spatio_temporal_emb.view(-1, self.config.n_embd)[:-1,:]       # ((t*(hw+act_sz)-1) x n_embd)
         
         # compute image and action embeddings
-        img_emb = self.transformer.wie(img)                                 # token embeddings of shape (b x t x hw x n_embd)
-        act_emb = self.transformer.wae(act)                                 # token embeddings of shape (b x t x act_sz x n_embd)
-        tok_emb = torch.cat((img_emb, act_emb), dim=2)                      # (b x t x (hw+act_sz) x n_embd)
-        # resize tok_emb to marge the two last dimensions
-        emb_in = tok_emb + spatio_temporal_emb                              # (b x t x (hw+act_sz) x n_embd)
-        emb_in = emb_in.view(b, -1, self.config.n_embd)                     # (b x t*(hw+act_sz) x n_embd)
+        tok_emb = self.transformer.wie(tokens_sequence)                                     # token embeddings of shape (b x t x (hw+act_sz) x n_embd)
+        emb_in = tok_emb + spatio_temporal_emb                                              # (b x t x (hw+act_sz) x n_embd)
+        emb_in = emb_in.view(b, -1, self.config.n_embd)                                     # (b x t*(hw+act_sz) x n_embd)
         
         # forward world embeddings to the transformer
         x = self.transformer.drop(emb_in)
@@ -219,23 +204,11 @@ class GPT(nn.Module):
             x = block(x)
         emb_out = self.transformer.ln_f(x)                                  # (b x t*(hw+act_sz) x n_embd)
         
-        # split emb_out into image and action embeddings
-        emb_out = emb_out.view(b, t, -1, self.config.n_embd)                # (b x t x (hw+act_sz) x n_embd)
-        img_emb_out, act_emb_out = emb_out.split([hw, act_sz], dim=2)
-
-        if targets is not None:
-            # if we are given some desired targets also calculate the loss
-            img_logits = self.lm_head_img(img_emb_out) # (b x t x hw x vocab_size_img)
-            act_logits = self.lm_head_act(act_emb_out) # (b x t x act_sz x vocab_size_act)
-            # loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
-            loss = None
+        if not inference:
+            img_logits = self.lm_head(emb_out)
         else:
-            # inference-time mini-optimization: only forward the lm_head on the very last position
-            img_logits = self.lm_head_img(img_emb_out[:, [-1], :]) # note: using list [-1] to preserve the time dim
-            act_logits = self.lm_head_act(act_emb_out[:, [-1], :]) # note: using list [-1] to preserve the time dim
-            loss = None
-
-        return img_logits, act_logits, loss
+            img_logits = self.lm_head(emb_out[:, [-1], :]) # note: using list [-1] to preserve the time dim
+        return img_logits
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -392,22 +365,35 @@ class GPT(nn.Module):
 
         return img
 
-# test the model
-if __name__ == '__main__':
-    # create a GPT model
-    m = GPT(GPTConfig())
-    # put m to device
-    m.to('cuda')
-    # create a dummy input
-    img = torch.randint(0, 8192, (2, 10, 576), dtype=torch.long).to('cuda')
-    act = torch.randint(0, 256, (2, 10, 3), dtype=torch.long).to('cuda')
-    # forward the model
-    img_logits, act_logits, loss = m(img, act, None)
-    # print the output shapes
-    print(img_logits.shape, act_logits.shape, loss)
-    # generate some random tokens
-    img = torch.randint(0, 8192, (2, 10, 576), dtype=torch.long).to('cuda')
-    act = torch.randint(0, 256, (2, 10, 3), dtype=torch.long).to('cuda')
-    img = m.generate(img, act, 20, temperature=1.0, top_k=10)
-    print(img.shape)
-    breakpoint()
+class GPT2(nn.Module):
+    
+    def __init__(
+        self, 
+        embedding_dim,
+        num_heads,
+        num_layers, 
+        vocabulary_size,    
+        nb_timesteps, # not used in DummyGPT
+        nb_tokens_per_timestep, # not used in DummyGPT
+        dropout_rate = 0.15,
+        bias = True
+    ):
+        super().__init__()
+        config_args = dict(
+            block_size=8,                 
+            vocab_size=vocabulary_size,
+            nb_tokens_per_timestep=nb_tokens_per_timestep, 
+            n_layer=num_layers,                   
+            n_head=num_heads,                    
+            n_embd=embedding_dim,
+            dropout=dropout_rate,
+            bias=bias
+        )
+        configs = GPTConfig(**config_args)
+        self.network = GPT2_Core(configs)
+        
+    def forward(self, tokens_sequence):
+        return self.network.forward(tokens_sequence)
+    
+    def inference_forward(self, tokens_sequence):
+        return self.network.forward(tokens_sequence, inference=True)
