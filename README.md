@@ -16,7 +16,7 @@ For now two "quantized nuscenes" are available on the valeo's cluster. Both are 
 
 Simple command to launch a debug run on valeo's cluster
 ```
-cluster jobs add --name=worldmodel --restricted-to-machines=urus --cpu-memory=80 --gpus=1 -f Dockerfile_scene_token "export HYDRA_FULL_ERROR=1 && cd /home/fbartocc/workspace/scene_tokenization/NextTokenPrediction && pip install . && python ./world_model/train.py paths=valeo_debug experiment=DummyGPT_vqgan_imagenet_f16_1024 debug=gpu_limit_batches"
+cluster jobs add --name=worldmodel --restricted-to-machines=urus --cpu-memory=80 --gpus=1 -f Dockerfile_scene_token "export HYDRA_FULL_ERROR=1 && cd /home/fbartocc/workspace/scene_tokenization/NextTokenPrediction && pip install -e . && python ./world_model/train.py paths=valeo_debug experiment=GPT2_vqgan_imagenet_f16_1024 debug=gpu_limit_batches"
 ```
 
 Use:
@@ -34,11 +34,11 @@ callbacks: callbacks_debug, callbacks_training, early_stopping, learning_rate_mo
 data: tokenized_sequence_nuscenes
 data/transform: crop_and_resize
 debug: default, fast_dev_run, gpu_limit_batches, gpu_overfit, overfit, profiler
-experiment: DummyGPT_vqgan_imagenet_f16_1024, DummyGPT_vqgan_open_image_f8_16384
+experiment: GPT2_vqgan_imagenet_f16_1024
 logger: csv, many_loggers, none, tensorboard, wandb
 model: next_token_predictor
 model/action_quantizer: random_speed_and_curvature
-model/network: dummy_gpt
+model/network: gpt2
 model/sequence_adapter: gpt_adapter
 optimizer: adam, adamW
 paths: adastra, adastra_debug, default, valeo, valeo_debug
