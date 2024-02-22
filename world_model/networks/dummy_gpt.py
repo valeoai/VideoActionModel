@@ -22,8 +22,8 @@ class DummyGPT(nn.Module):
 
         self.predictor = nn.Linear(embedding_dim, vocabulary_size)
         
-    def forward(self, tokens_sequence):
-        embedding_sequence = self.embedding(tokens_sequence)
+    def forward(self, token_sequence, *args, **kwargs):
+        embedding_sequence = self.embedding(token_sequence)
         
         processed_sequence = self.transformer_encoder(embedding_sequence)
         
@@ -31,8 +31,8 @@ class DummyGPT(nn.Module):
         
         return logits_sequence
     
-    def inference_forward(self, tokens_sequence):
-        embedding_sequence = self.embedding(tokens_sequence)
+    def inference_forward(self, token_sequence, *args, **kwargs):
+        embedding_sequence = self.embedding(token_sequence)
         
         processed_sequence = self.transformer_encoder(embedding_sequence)
         

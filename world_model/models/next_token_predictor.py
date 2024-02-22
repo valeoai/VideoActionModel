@@ -66,30 +66,36 @@ class NextTokenPredictor(LightningModule):
     
     def create_inputs_and_target(self, batch):
         
+        visual_tokens = batch['codebook_indices']
+        
         action_tokens = self.action_quantizer(**batch)
         
-        tokens_sequence, visual_tokens_mask = self.sequence_adapter(batch['codebook_indices'], action_tokens)
+        sequence_data = self.sequence_adapter(visual_tokens, action_tokens)
+        
+        # Create input_tokens by taking all but the last token (shifting by one)
+        input_data = {
+            'token_sequence': sequence_data['token_sequence'][:, :-1],
+            'spatial_positions': sequence_data['spatial_positions'][:, :-1],
+            'temporal_positions': sequence_data['temporal_positions'][:, :-1],
+        }
         
         # Create target_tokens by taking all but the first token (shifting by one)
-        input_tokens = tokens_sequence[:, :-1]
-        target_tokens = tokens_sequence[:, 1:]
-        target_visual_tokens_mask = visual_tokens_mask[:, 1:]
-        
-        return {
-            'input_tokens': input_tokens,
-            'target_tokens': target_tokens,
-            'target_visual_tokens_mask': target_visual_tokens_mask
+        target_data = {
+            'token_sequence': sequence_data['token_sequence'][:, 1:],
+            'visual_tokens_mask': sequence_data['visual_tokens_mask'][:, 1:]
         }
+      
+        return input_data, target_data
         
     def model_step(self, batch: Any) -> torch.Tensor:
         """Perform a single model step on a batch of data."""
         
-        sequence_data = self.create_inputs_and_target(batch)
+        input_data, target_data = self.create_inputs_and_target(batch)
                 
-        logits_sequence = self.network(sequence_data['input_tokens'])
+        logits_sequence = self.network(**input_data)
+        visual_logits = logits_sequence[target_data['visual_tokens_mask']]
         
-        visual_logits = logits_sequence[sequence_data['target_visual_tokens_mask']]
-        visual_target_tokens = sequence_data['target_tokens'][sequence_data['target_visual_tokens_mask']]
+        visual_target_tokens = target_data['token_sequence'][target_data['visual_tokens_mask']]
         
         loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
         
