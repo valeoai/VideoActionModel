@@ -1,0 +1,190 @@
+import torch
+import torchvision.transforms.v2 as transforms
+from PIL import Image
+from pathlib import Path
+from typing import List, Optional, Callable, Dict
+import numpy as np
+from collections import defaultdict
+import pickle
+
+from world_model.dataloader.components.transforms import Normalize
+from world_model.utils import  RankedLogger
+
+terminal_log = RankedLogger(__name__, rank_zero_only=True)
+
+class SceneBasedNuscenesDataset(torch.utils.data.Dataset):
+    """
+    A PyTorch dataset class for the NuScenes dataset designed for evaluating world models, which typically require 
+    sequences of context frames for input and subsequent frames for prediction.
+
+    The dataset is structured to provide sequences of images, where each sequence is divided into two 
+    parts: context frames that a model uses to understand the scene, and frames to predict, which are the target 
+    of the model's predictions.
+
+    Example:
+        context_to_prediction_index = 4
+        nb_context_frames = 3
+        nb_prediction_frames = 4
+    
+        Original Sequence:  
+                            0  1  2  3  4  5  6  7  8  9
+                           |-----------|-----------------|
+                               Context      Prediction 
+    
+        Extracted context and prediction frames with given prediction starting index:
+        
+                               Context | Prediction
+                               v         v
+                            0 [1  2  3] [4  5  6  7] 8  9
+
+    Args:
+        nuscenes_root_dir: The root directory where the NuScenes data is stored.
+        quantized_nuscenes_root_dir: The directory where quantized representations of the NuScenes images are stored.
+        nuscene_pickle_data_path: The path to a pickle file containing preprocessed data from the NuScenes dataset.
+        transform: A function/transform that takes in a PIL image and returns a transformed version. 
+            If None, defaults to standard transforms (ToTensor and Normalize).
+        sequence_max_length: The maximum length for a sequence to be considered, cutting longer sequences to this length.
+        context_to_prediction_index: Defines the position of the split index between context and prediction frames within the original sequence.
+        nb_context_frames: The exact number of frames to be used as context within the percentage specified by `percent_as_context`.
+        nb_prediction_frames: The number of frames to be used for prediction following the context frames.
+        load_image: If True, actual image data will be loaded; otherwise, the key is not present in the dataset. Defaults to False.
+        camera: The camera identifier to specify which camera's data to use. Defaults to 'CAM_FRONT'.
+
+    The `__getitem__` method returns a dictionary containing the following keys:
+        - 'images_paths': A list of paths for the images in the sequence.
+        - 'scene_names': The names of the scenes corresponding to each frame in the sequence.
+        - 'images': A tensor containing the loaded and transformed images, if `load_image` is set to True.
+        - 'codebook_indices': The quantized representations of the images.
+        - 'ego_to_world_tran': The translation of the ego vehicle to the world coordinate frame for each frame.
+        - 'ego_to_world_rot': The rotation of the ego vehicle to the world coordinate frame for each frame.
+        - 'timestamps': The timestamps for each frame in the sequence, normalized to the first frame's timestamp.
+        - 'context_end_index': An integer indicating the context sequence ending and prediction starting.
+    """
+    def __init__(
+        self,
+        nuscenes_root_dir: str,
+        quantized_nuscenes_root_dir: str,
+        nuscene_pickle_data: List[Dict],
+        sequence_max_length: int,
+        context_to_prediction_index: int,
+        nb_context_frames: int,
+        nb_prediction_frames: int,
+        transform: Optional[Callable] = None,
+        load_image: bool = False,
+        camera: str = 'CAM_FRONT'
+    ):
+        # Validate parameters to ensure coherence
+        assert context_to_prediction_index > 0, "context_to_prediction_index must be positive"
+        assert sequence_max_length > 0, "sequence_max_length must be positive"
+        assert nb_prediction_frames > 0, "nb_prediction_frames must be positive"
+        assert nb_context_frames > 0, "nb_context_frames must be positive"
+        assert nb_context_frames + nb_prediction_frames <= sequence_max_length, (
+            "The sum of nb_context_frames and nb_prediction_frames should not exceed sequence_max_length."
+        )
+
+        self.load_image = load_image
+        self.camera = camera
+        self.nuscenes_root_dir = Path(nuscenes_root_dir)
+        self.quantized_nuscenes_root_dir = Path(quantized_nuscenes_root_dir)
+        self.sequence_max_length = sequence_max_length
+        self.context_to_prediction_index = context_to_prediction_index
+        self.nb_context_frames = nb_context_frames
+        self.nb_prediction_frames = nb_prediction_frames
+
+        if transform is None:            
+            terminal_log.warning('No data `transform` configured, defaults to converting images to tensors and normalizing to [-1, 1]')
+            self.transform = transforms.Compose([
+                transforms.ToImage(),
+                transforms.ToDtype(torch.float32, scale=True),
+                Normalize()  # Normalize to [-1, 1]
+            ])
+        else:
+            self.transform = transform
+
+        self.scenes = self._organize_scenes(nuscene_pickle_data)
+        self.scene_indices = list(self.scenes.keys())
+
+        # Calculate context and prediction split and validate indices
+        self.start_context_index = self.context_to_prediction_index - self.nb_context_frames
+        self.end_prediction_index = self.context_to_prediction_index + self.nb_prediction_frames
+
+        assert self.start_context_index >= 0, f'index overflow: start_context_index={self.start_context_index}'
+        assert self.end_prediction_index < self.sequence_max_length, f'index overflow: end_prediction_index={self.end_prediction_index}'
+
+    def _organize_scenes(self, nuscene_pickle_data):
+        """Organizes samples by scene and sorts them by timestamp for chronological processing."""
+        scenes = defaultdict(list)
+        for sample in nuscene_pickle_data:
+            scene_name = sample['scene']['name']
+            scenes[scene_name].append(sample)
+        for scene in scenes.values():
+            scene.sort(key=lambda x: x[self.camera]['timestamp'])
+        return scenes
+
+    def __len__(self):
+        """Returns the number of scenes in the dataset."""
+        return len(self.scene_indices)
+
+    def __getitem__(self, index):
+        scene_name = self.scene_indices[index]
+        frames = self.scenes[scene_name][:self.sequence_max_length]
+
+        context_frames = frames[self.start_context_index:self.context_to_prediction_index]
+        prediction_frames = frames[self.context_to_prediction_index:self.end_prediction_index]
+
+        combined_frames = context_frames + prediction_frames
+        data = self._load_data(combined_frames)
+
+        return data
+
+    def _load_data(self, samples: List) -> Dict:
+        """
+        Loads and processes data for a given sequence of frames, including images, quantized data,
+        ego motion data, and timestamps.
+
+        Args:
+            samples: The list of frames to process.
+
+        Returns:
+            Processed data for the sequence.
+        """
+        
+        data = defaultdict(list)
+        first_frame_timestamp = None
+
+        for sample in samples:
+            cam_data = sample[self.camera]
+            relative_img_path = cam_data['file_path']
+            data['images_paths'].append(relative_img_path)
+            data['scene_names'].append(sample['scene']['name'])
+
+            if self.load_image:
+                img_path = self.nuscenes_root_dir / relative_img_path
+                image = Image.open(img_path)
+                image = self.transform(image)
+                data['images'].append(image)
+
+            quantized_data_path = (self.quantized_nuscenes_root_dir / relative_img_path).with_suffix('.pkl')
+            with open(quantized_data_path, 'rb') as f:
+                quantized_data = pickle.load(f)
+            data['codebook_indices'].append(quantized_data['codebook_indices'])
+
+            ego_to_world_tran = torch.tensor(cam_data['ego_to_world_tran'])
+            ego_to_world_rot = torch.tensor(cam_data['ego_to_world_rot'])
+            data['ego_to_world_tran'].append(ego_to_world_tran)
+            data['ego_to_world_rot'].append(ego_to_world_rot)
+
+            unix_timestamp = cam_data['timestamp']
+            if first_frame_timestamp is None:
+                first_frame_timestamp = unix_timestamp
+            normalized_timestamp = (unix_timestamp - first_frame_timestamp) * 1e-6
+            normalized_timestamp = torch.tensor(normalized_timestamp)
+            data['timestamps'].append(normalized_timestamp)
+
+        data['context_end_index'] = self.nb_context_frames
+
+        for key in ['images', 'codebook_indices', 'ego_to_world_tran', 'ego_to_world_rot', 'timestamps']:
+            if key in data:
+                data[key] = torch.stack(data[key], dim=0)
+
+        return data
