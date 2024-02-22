@@ -35,8 +35,8 @@ paths:
 model:
   network:
     embedding_dim: 512
-    num_heads: 4
-    num_layers: 2
+    nb_heads: 4
+    nb_layers: 2
     vocabulary_size: 1104 # 1024 + 50 + 30 | visual_vocab_size + sum(action_vocab_sizes)
     nb_timesteps: ${data.sequence_length}
     nb_tokens_per_timestep: 352 # 14*25 + 2 | visual + action tokens
