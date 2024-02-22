@@ -12,7 +12,7 @@ from world_model.utils import  RankedLogger
 
 terminal_log = RankedLogger(__name__, rank_zero_only=True)
 
-class TokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
+class RandomTokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
     """
     This class provides a way to extract sequences of images from the NuScenes dataset's frontal camera
     and load the corresponding tokenized data, ego motion data and (optionally) rgb images.
@@ -26,16 +26,17 @@ class TokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
     It also requires the path to a directory containing quantized image data (see project's README).
 
     Args:
-        nuscenes_root_dir: The root directory where the NuScenes data is stored.
         quantized_nuscenes_root_dir: The directory where quantized representations of the NuScenes images are stored.
         nuscene_pickle_data: A list of dictionaries, each containing metadata for a single frame in the dataset.
         transform: An optional transform to be applied on a sample image.
             If None, defaults to converting images to tensors and normalizing to [-1, 1].
         sequence_length: The number of consecutive frames to include in each data sample. Defaults to 1.
+        nuscenes_root_dir: The root directory where the NuScenes data is stored. Require if load_image = True
         load_image: A flag indicating whether to load images from disk. Defaults to True.
 
     The `__getitem__` method returns a dictionary containing the following keys:
         - images_paths: A list of file paths to the images in the sequence (relative to nuscenes root dir).
+        - scene_name: A list of string indicating to which scene the frame belongs.
         - images: A tensor containing the loaded and transformed images, if `load_image` is True.
         - codebook_indices: The quantized representations of the images (maps of integers).
         - ego_to_world_tran: The translation of the ego vehicle to the world coordinate frame 
@@ -47,11 +48,11 @@ class TokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
     
     def __init__(
         self, 
-        nuscenes_root_dir: str, 
         quantized_nuscenes_root_dir: str,
-        nuscene_pickle_data: str, 
+        nuscenes_pickle_data: str, 
         transform: Optional[Callable] = None,
         sequence_length: int = 1,
+        nuscenes_root_dir: str = None, 
         load_image: bool = True
     ):
         
@@ -60,15 +61,18 @@ class TokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
         self.load_image = load_image
         self.sequence_length = sequence_length
         
-        self.nuscenes_root_dir = Path(nuscenes_root_dir)
+        if load_image:
+            assert nuscenes_root_dir is not None, "Define `nuscenes_root_dir` if you set load_image=True."
+            self.nuscenes_root_dir = Path(nuscenes_root_dir)
+        
         self.quantized_nuscenes_root_dir = Path(quantized_nuscenes_root_dir)
         
         # sort by scene and timestamp
-        nuscene_pickle_data.sort(key=lambda x: (x['scene']['name'], x['CAM_FRONT']['timestamp']))
-        self.nuscenes_data = nuscene_pickle_data
+        nuscenes_pickle_data.sort(key=lambda x: (x['scene']['name'], x[self.camera]['timestamp']))
+        self.nuscenes_data = nuscenes_pickle_data
 
         if transform is None:            
-            #terminal_log.warning('No data `transform` configured, defaults to converting images to tensors and normalizing to [-1, 1]')
+            terminal_log.warning('No data `transform` configured, defaults to converting images to tensors and normalizing to [-1, 1]')
             self.transform = transforms.Compose([
                 transforms.ToImage(),
                 transforms.ToDtype(torch.float32, scale=True),
@@ -96,7 +100,9 @@ class TokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
             previous_sample = None
             sequence_indices = []
 
-            for t in range(self.sequence_length):
+            # sequence_length + 1 because we need the position of one more frame
+            # to compute `sequence_length` actions (change in pose between two frame)
+            for t in range(self.sequence_length + 1):
                 temporal_index = sequence_start_index + t
 
                 # Going over the dataset size limit.
@@ -127,16 +133,20 @@ class TokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
         first_frame_timestamp = 0
 
         # Loop over all the frames in the temporal extent.
-        for i, temporal_index in enumerate(self.sequences_indices[index]):
+        temporal_indices = self.sequences_indices[index][:self.sequence_length]
+        for i, temporal_index in enumerate(temporal_indices):
             sample = self.nuscenes_data[temporal_index][self.camera]
 
             ####### get file path
             relative_img_path = sample['file_path']       
-            img_path = self.nuscenes_root_dir / relative_img_path
             data['images_paths'].append(relative_img_path)
+            
+            ####### get scene name
+            data['scene_names'].append(self.nuscenes_data[temporal_index]['scene']['name'])
             
             ####### load image
             if self.load_image:
+                img_path = self.nuscenes_root_dir / relative_img_path
                 image = Image.open(img_path)
                 image = self.transform(image)
                 data['images'].append(image)
@@ -166,6 +176,17 @@ class TokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
             unix_timestamp = (unix_timestamp - first_frame_timestamp) * 1e-6
             unix_timestamp = torch.tensor(unix_timestamp)
             data['timestamps'].append(unix_timestamp)
+            
+        additional_temporal_index = self.sequences_indices[index][self.sequence_length]
+        additional_sample = self.nuscenes_data[temporal_index][self.camera]
+        ego_to_world_tran =  additional_sample['ego_to_world_tran']
+        ego_to_world_tran =  torch.tensor(ego_to_world_tran)
+        
+        ego_to_world_rot = sample['ego_to_world_rot']
+        ego_to_world_rot = torch.tensor(ego_to_world_rot)
+        
+        data['ego_to_world_tran'].append(ego_to_world_tran)
+        data['ego_to_world_rot'].append(ego_to_world_rot)
         
         keys_to_stack = ['images', 'codebook_indices', 'ego_to_world_tran', 'ego_to_world_rot', 'timestamps']
         for key in keys_to_stack:

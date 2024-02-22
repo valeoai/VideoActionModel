@@ -15,13 +15,13 @@ class RandSpeedAndCurvatureTokens(nn.Module):
         speed_tokens = torch.randint(
             low=0, 
             high=self.speed_vocab_size, 
-            size=(b,t), 
+            size=(b,t-1), 
             device=timestamps.device
         )
         curvature_tokens = torch.randint(
             low=0, 
             high=self.curvature_vocab_size,
-            size=(b,t), 
+            size=(b,t-1), 
             device=timestamps.device
         )
         

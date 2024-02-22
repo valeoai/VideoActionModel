@@ -1,7 +1,7 @@
 
 import torch
 import torch.nn as nn
-from einops import rearrange
+from einops import rearrange, repeat
 from typing import List
 
 class GPTAdapter(nn.Module):
@@ -69,16 +69,28 @@ class GPTAdapter(nn.Module):
         """
         B, T, H, W = visual_tokens.shape
         _, _, K = action_tokens.shape
+        
+        device = visual_tokens.device
 
         visual_tokens = rearrange(visual_tokens, 'b t h w -> b t (h w)')
         action_tokens_shifted = action_tokens + self.action_shifts
         
         combined_tokens = torch.cat((visual_tokens, action_tokens_shifted), dim=-1)
-        interleaved_tokens_sequence = rearrange(combined_tokens, 'b t s -> b (t s)')
-        
-        visual_tokens_mask = torch.ones_like(visual_tokens)
-        action_tokens_mask = torch.zeros_like(action_tokens)
-        visual_tokens_mask = torch.cat((visual_tokens_mask, action_tokens_mask), dim=-1)
-        visual_tokens_mask = rearrange(visual_tokens_mask, 'b t s -> b (t s)')
+        interleaved_token_sequence = rearrange(combined_tokens, 'b t s -> b (t s)')
 
-        return interleaved_tokens_sequence, visual_tokens_mask.bool()
+        spatial_position_visual = torch.arange(H*W, device=device)
+        spatial_position_action = torch.arange(K, device=device) + H*W
+        spatial_position = torch.cat((spatial_position_visual, spatial_position_action), dim=0)
+        spatial_positions = repeat(spatial_position, 's -> b (t s)', b=B, t=T)
+
+        temporal_positions = torch.arange(T, device=device)
+        temporal_positions = repeat(temporal_positions, 't -> b (t s)', b=B, s=H*W+K)
+        
+        visual_tokens_mask = spatial_positions < H * W
+        
+        return {
+            'token_sequence': interleaved_token_sequence,
+            'spatial_positions': spatial_positions,
+            'temporal_positions': temporal_positions, 
+            'visual_tokens_mask': visual_tokens_mask
+        }
