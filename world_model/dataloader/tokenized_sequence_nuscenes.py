@@ -27,6 +27,11 @@ def custom_collate(batch_items):
     # Use default_collate for other fields
     batch = default_collate(batch_items)
     
+    # When available, context_end_index is an integer indicating which frames in the sequence
+    # are part of the context. It is the same for all elements of the batch
+    if 'context_end_index' in batch: 
+        batch['context_end_index'] = batch['context_end_index'][0]
+
     # And put back the the specially processed entries
     batch = {**batch, **special_dict}
 
