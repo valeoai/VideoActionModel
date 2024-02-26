@@ -1,0 +1,9 @@
+_target_: world_model.networks.gpt2.GPT2
+embedding_dim: 512
+nb_heads: 4
+nb_layers: 2
+vocabulary_size: ???
+nb_timesteps: ${data.sequence_length}
+nb_tokens_per_timestep: ???
+dropout_rate: 0.15
+bias: true
