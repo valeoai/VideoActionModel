@@ -5,7 +5,7 @@ defaults:
   - override /model: next_token_predictor
   - override /model/network: dummy_gpt
   - override /model/sequence_adapter: gpt_adapter
-  - override /model/action_quantizer: random_speed_and_curvature
+  - override /model/action_tokenizer: random_speed_and_curvature
   - override /callbacks: callbacks_training
   - override /trainer: gpu
   - override /logger: many_loggers
@@ -40,13 +40,13 @@ model:
     vocabulary_size: 16384 # 16384 + 50 + 30 | visual_vocab_size + sum(action_vocab_sizes)
     nb_timesteps: ${data.sequence_length}
     nb_tokens_per_timestep: 1402 # 28*50 + 2 | visual + action tokens
-  action_quantizer:
+  action_tokenizer:
     speed_vocab_size: 50
     curvature_vocab_size: 30
   sequence_adapter:
     visual_vocab_size: 16384
     action_vocab_sizes:  # speed and curvature
-      - ${model.action_quantizer.speed_vocab_size}
-      - ${model.action_quantizer.curvature_vocab_size}
+      - ${model.action_tokenizer.speed_vocab_size}
+      - ${model.action_tokenizer.curvature_vocab_size}
 
 

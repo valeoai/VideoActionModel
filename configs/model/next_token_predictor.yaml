@@ -1,7 +1,7 @@
 defaults:
   - network: dummy_gpt
   - sequence_adapter: gpt_adapter
-  - action_quantizer: random_speed_and_curvature
+  - action_tokenizer: random_speed_and_curvature
 
 _target_: world_model.models.next_token_predictor.NextTokenPredictor
 compile: False # compile model for faster training with pytorch 2.0

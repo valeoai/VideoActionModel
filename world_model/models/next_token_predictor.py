@@ -27,7 +27,7 @@ class NextTokenPredictor(LightningModule):
     def __init__(
         self,
         network: DictConfig,
-        action_quantizer: DictConfig,
+        action_tokenizer: DictConfig,
         sequence_adapter: DictConfig,
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
@@ -36,7 +36,7 @@ class NextTokenPredictor(LightningModule):
         """
         Args:
             network: The configuration of the model to train.
-            action_quantizer: The configuration for a callable that takes as input the ego motion data and produce discrete tokens.
+            action_tokenizer: The configuration for a callable that takes as input the ego motion data and produce discrete tokens.
             sequence_adapter: The configuration of an adapter the produce a unified sequence of tokens from visual and action tokens.
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
@@ -51,7 +51,7 @@ class NextTokenPredictor(LightningModule):
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
         self.network = hydra.utils.instantiate(network)
-        self.action_quantizer = hydra.utils.instantiate(action_quantizer)
+        self.action_tokenizer = hydra.utils.instantiate(action_tokenizer)
         self.sequence_adapter = hydra.utils.instantiate(sequence_adapter)
         
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
@@ -75,7 +75,7 @@ class NextTokenPredictor(LightningModule):
         
         visual_tokens = batch['visual_tokens']
         
-        action_tokens = self.action_quantizer(**batch)
+        action_tokens = self.action_tokenizer(**batch)
         
         sequence_data = self.sequence_adapter(visual_tokens, action_tokens)
         

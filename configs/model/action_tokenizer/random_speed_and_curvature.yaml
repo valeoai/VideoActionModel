@@ -1,0 +1,3 @@
+_target_: world_model.action_tokenizers.random_speed_and_curvature.RandSpeedAndCurvatureTokens
+speed_vocab_size: 50
+curvature_vocab_size: 30

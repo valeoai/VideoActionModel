@@ -1,0 +1,5 @@
+_target_: world_model.action_tokenizers.speed_and_curvature_tokenizer.SpeedCurvatureTokenizer
+vocab_size: 150
+centroids_file: ./configs/model/action_tokenizer/centroids_Kmeans_vocab150.txt
+data_min: [-1.2643393278121948, -0.37658029794692993]
+data_max: [20.165857315063477, 0.37658029794692993]
