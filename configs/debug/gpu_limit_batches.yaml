@@ -4,22 +4,21 @@
 
 defaults:
   - default
-  - override /callbacks: callbacks_debug.yaml
-  - override /logger: tensorboard.yaml
+  - override /callbacks: callbacks_training.yaml
+  - override /logger: many_loggers.yaml
 
 trainer:
   max_epochs: 10
   limit_train_batches: 50
-  limit_val_batches: 50
-  limit_test_batches: 50
-  log_every_n_steps: 10
+  limit_val_batches: 3
+  limit_test_batches: 3
   strategy: auto
   accelerator: gpu
   devices: 1
 
 data:
   dataloader_params:
-    num_workers: 4
-    batch_size: 2
+    num_workers: 6
     pin_memory: True
-    prefetch_factor: 3
+    shuffle: null
+    prefetch_factor: 1

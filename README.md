@@ -9,7 +9,7 @@ Change the relevant paths in configs/paths
 ## DATA
 
 For now two "quantized nuscenes" are available on the valeo's cluster. Both are accesible under `/master_datasets_preprocessed/nuscenes_quantized`
-- VQGAN_ImageNet_f16_1024   available in `/datasets_local` on `[urus,viper]`
+- VQGAN_ImageNet_f16_1024   available in `/datasets_local` on `[urus,viper,jaguar,spider_20_3sm,mustang]`
 - VQGAN_OpenImage_f8_16384  available in `/datasets_local` on `[urus,mustang]`
 
 ## Run

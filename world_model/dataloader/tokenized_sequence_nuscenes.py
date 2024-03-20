@@ -1,13 +1,14 @@
 import collections
 import pickle
 import numpy as np
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 import torch
 from torch.utils.data import DataLoader, default_collate
 
 from lightning import LightningDataModule
 
 from world_model.dataloader.components.random_tokenized_sequence_nuscenes import RandomTokenizedSequenceNuscenesDataset
+from world_model.dataloader.components.scene_tokenized_sequence_nuscenes import SceneBasedNuscenesDataset
 
 
 
@@ -65,6 +66,7 @@ class TokenizedSequenceNuscenesDataModule(LightningDataModule):
         dataloader_params: Dict,
         train_dataset_params: Dict,
         val_dataset_params: Dict, 
+        transform: Optional[Callable] = None,
         **kwargs,
     ) -> None:
         """
@@ -81,11 +83,13 @@ class TokenizedSequenceNuscenesDataModule(LightningDataModule):
         self.save_hyperparameters(logger=False)
         
         self.nuscenes_pickle_path = nuscenes_pickle_path
+        
+        self.transform = transform
 
         self.dataloader_params = dataloader_params
         self.train_dataset_params = train_dataset_params
         self.val_dataset_params = val_dataset_params
-
+        
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
@@ -106,12 +110,14 @@ class TokenizedSequenceNuscenesDataModule(LightningDataModule):
         # Training dataset
         self.train_dataset = RandomTokenizedSequenceNuscenesDataset(
             nuscenes_pickle_data=self.train_data,
+            transform=self.transform,
             **self.train_dataset_params
         )
 
         # Validation dataset
-        self.val_dataset = RandomTokenizedSequenceNuscenesDataset(
+        self.val_dataset = SceneBasedNuscenesDataset(
             nuscenes_pickle_data=self.val_data,
+            transform=self.transform,
             **self.val_dataset_params
         )
 

@@ -20,6 +20,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from einops import rearrange
+
 # Building blocks for GPT-2: LayerNorm, SelfAttention, MLP, TransformerBlock
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -208,7 +210,7 @@ class GPT2(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, token_sequence, temporal_positions, spatial_positions, inference=False):
+    def forward(self, token_sequence, spatial_positions, temporal_positions, inference=False):
         """
         Args:
             token_sequence: A tensor of interleaved visual and action tokens.
@@ -218,22 +220,23 @@ class GPT2(nn.Module):
                 example: [0,0,0,0,1,1,1,1]
         """
         
-        b, nb_tokens_per_seq = token_sequence.size()
+        assert spatial_positions.max() <  self.nb_tokens_per_timestep
+        assert temporal_positions.max() <  self.nb_timesteps
         
         # compute spatio-temporal position embeddings
-        temporal_pos_emb = self.transformer.wte(temporal_positions)
         spatial_pos_emb = self.transformer.wse(spatial_positions)
+        temporal_pos_emb = self.transformer.wte(temporal_positions)
         
-        # compute image and action embeddings
-        tok_emb = self.transformer.wie(token_sequence)                                      # token embeddings of shape (b x t x (hw+act_sz) x n_embd)
-        emb_in = tok_emb + temporal_pos_emb + spatial_pos_emb                               # (b x t x (hw+act_sz) x n_embd)
-        emb_in = emb_in.view(b, -1, self.embedding_dim)                                     # (b x t*(hw+act_sz) x n_embd)
+        
+        tok_emb = self.transformer.wie(token_sequence)
+        
+        emb_in = tok_emb + temporal_pos_emb + spatial_pos_emb         
         
         # forward world embeddings to the transformer
         x = self.transformer.drop(emb_in)
         for block in self.transformer.h:
             x = block(x)
-        emb_out = self.transformer.ln_f(x)                                                  # (b x t*(hw+act_sz) x n_embd)
+        emb_out = self.transformer.ln_f(x)
         
         if not inference:
             img_logits = self.lm_head(emb_out)

@@ -22,7 +22,11 @@ trainer:
 
 
 data:
-  sequence_length: 8
+  train_dataset_params:
+    sequence_length: 8
+  val_dataset_params:
+    nb_context_frames: 7 # always lower than training sequence_length to avoid temporal index overflow during sliding window
+    nb_prediction_frames: 1
   dataloader_params:
     batch_size: 2
     num_workers: 4
@@ -34,11 +38,11 @@ paths:
 # VQGAN_ImageNet_f16_1024/metadata.json indicates 14x25 quantized image features
 model:
   network:
-    embedding_dim: 512
+    embedding_dim: 128
     nb_heads: 4
     nb_layers: 2
     vocabulary_size: 1104 # 1024 + 50 + 30 | visual_vocab_size + sum(action_vocab_sizes)
-    nb_timesteps: ${data.sequence_length}
+    nb_timesteps: ${data.train_dataset_params.sequence_length}
     nb_tokens_per_timestep: 352 # 14*25 + 2 | visual + action tokens
   action_quantizer:
     speed_vocab_size: 50

@@ -17,16 +17,8 @@ log = RankedLogger(__name__, rank_zero_only=True)
 @rank_zero_only
 def print_config_tree(
     config: DictConfig,
-    print_order: Sequence[str] = (
-        "data",
-        "model",
-        "callbacks",
-        "logger",
-        "trainer",
-        "paths",
-    ),
+    print_order: Sequence[str] = [],
     resolve: bool = False,
-    save_to_file: bool = False,
 ) -> None:
     """Prints the contents of a DictConfig as a tree structure using the Rich library.
 
@@ -35,7 +27,6 @@ def print_config_tree(
         print_order: Determines in what order config components are printed. Default is ``("data", "model",
             "callbacks", "logger", "trainer", "paths")``.
         resolve: Whether to resolve reference fields of DictConfig. Default is ``False``.
-        save_to_file: Whether to export config to the hydra output folder. Default is ``False``.
     """
     style = "dim"
     tree = rich.tree.Tree("CONFIG", style=style, guide_style=style)
@@ -67,8 +58,3 @@ def print_config_tree(
 
     # print config tree
     rich.print(tree)
-
-    # save config tree to file
-    #if save_to_file:
-    #    with open(Path(config.paths.output_dir, "config_tree.log"), "w") as file:
-    #        rich.print(tree, file=file)

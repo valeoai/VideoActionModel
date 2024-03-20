@@ -7,8 +7,8 @@ setup(
     version="0.0.1",
     description="",
     author="",
-    author_email="",
-    url="https://github.com/user/project",
+    author_email="florent.bartoccioni@valeo.com",
+    url="https://github.com/valeoai/NextTokenPredictor",
     install_requires=["lightning", "hydra-core"],
     packages=find_packages(),
     # use this to customize global commands available in the terminal after installing the package

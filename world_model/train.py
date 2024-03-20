@@ -110,7 +110,17 @@ def main(config: DictConfig) -> Optional[float]:
     """
     # apply extra utilities
     # (e.g. print config tree, etc.)
-    extras(config)
+    extras(
+        config, 
+        print_order = (
+            "data",
+            "model",
+            "callbacks",
+            "logger",
+            "trainer",
+            "paths",
+        )
+    )
 
     # train the model
     metric_dict, _ = train(config)

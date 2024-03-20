@@ -24,8 +24,3 @@ data:
     pin_memory: True
     shuffle: False
     prefetch_factor: 1
-
-callbacks:
-  image_logging:
-    train_log_every_n_step: 1
-    num_images_to_log: 1

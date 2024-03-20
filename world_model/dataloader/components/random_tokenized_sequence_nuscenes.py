@@ -38,7 +38,7 @@ class RandomTokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
         - images_paths: A list of file paths to the images in the sequence (relative to nuscenes root dir).
         - scene_name: A list of string indicating to which scene the frame belongs.
         - images: A tensor containing the loaded and transformed images, if `load_image` is True.
-        - codebook_indices: The quantized representations of the images (maps of integers).
+        - visual_tokens: The quantized representations of the images (maps of integers).
         - ego_to_world_tran: The translation of the ego vehicle to the world coordinate frame 
             in meters: x, y, z. Note that z is always 0.
         - ego_to_world_rot: The rotation of the ego vehicle to the world coordinate frame 
@@ -61,25 +61,25 @@ class RandomTokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
         self.load_image = load_image
         self.sequence_length = sequence_length
         
-        if load_image:
-            assert nuscenes_root_dir is not None, "Define `nuscenes_root_dir` if you set load_image=True."
-            self.nuscenes_root_dir = Path(nuscenes_root_dir)
-        
         self.quantized_nuscenes_root_dir = Path(quantized_nuscenes_root_dir)
         
         # sort by scene and timestamp
         nuscenes_pickle_data.sort(key=lambda x: (x['scene']['name'], x[self.camera]['timestamp']))
         self.nuscenes_data = nuscenes_pickle_data
 
-        if transform is None:            
-            terminal_log.warning('No data `transform` configured, defaults to converting images to tensors and normalizing to [-1, 1]')
-            self.transform = transforms.Compose([
-                transforms.ToImage(),
-                transforms.ToDtype(torch.float32, scale=True),
-                Normalize()  # Normalize to [-1, 1]
-            ])
-        else:
-            self.transform = transform
+        if load_image:
+            assert nuscenes_root_dir is not None, "Define `nuscenes_root_dir` if you set load_image=True."
+            self.nuscenes_root_dir = Path(nuscenes_root_dir)
+            
+            if transform is None:            
+                terminal_log.warning('No data `transform` configured, defaults to converting images to tensors and normalizing to [-1, 1]')
+                self.transform = transforms.Compose([
+                    transforms.ToImage(),
+                    transforms.ToDtype(torch.float32, scale=True),
+                    Normalize()  # Normalize to [-1, 1]
+                ])
+            else:
+                self.transform = transform
 
         self.sequences_indices = self.get_sequence_indices()
 
@@ -131,7 +131,7 @@ class RandomTokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
         
         data = defaultdict(list)
         first_frame_timestamp = 0
-
+        
         # Loop over all the frames in the temporal extent.
         temporal_indices = self.sequences_indices[index][:self.sequence_length]
         for i, temporal_index in enumerate(temporal_indices):
@@ -155,8 +155,8 @@ class RandomTokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
             quantized_data_path = (self.quantized_nuscenes_root_dir / relative_img_path).with_suffix('.pkl')
             with open(quantized_data_path, 'rb') as f:
                 quantized_data = pickle.load(f)
-            data['codebook_indices'].append(quantized_data['codebook_indices'])
-              
+            data['visual_tokens'].append(quantized_data)
+            
             ####### load ego motion data
             # Note that in nuscenes, z is always 0
             ego_to_world_tran =  sample['ego_to_world_tran']
@@ -178,17 +178,17 @@ class RandomTokenizedSequenceNuscenesDataset(torch.utils.data.Dataset):
             data['timestamps'].append(unix_timestamp)
             
         additional_temporal_index = self.sequences_indices[index][self.sequence_length]
-        additional_sample = self.nuscenes_data[temporal_index][self.camera]
+        additional_sample = self.nuscenes_data[additional_temporal_index][self.camera]
         ego_to_world_tran =  additional_sample['ego_to_world_tran']
         ego_to_world_tran =  torch.tensor(ego_to_world_tran)
         
-        ego_to_world_rot = sample['ego_to_world_rot']
+        ego_to_world_rot = additional_sample['ego_to_world_rot']
         ego_to_world_rot = torch.tensor(ego_to_world_rot)
         
         data['ego_to_world_tran'].append(ego_to_world_tran)
         data['ego_to_world_rot'].append(ego_to_world_rot)
         
-        keys_to_stack = ['images', 'codebook_indices', 'ego_to_world_tran', 'ego_to_world_rot', 'timestamps']
+        keys_to_stack = ['images', 'visual_tokens', 'ego_to_world_tran', 'ego_to_world_rot', 'timestamps']
         for key in keys_to_stack:
             if key in data.keys():
                 data[key] = torch.stack(data[key], dim=0)

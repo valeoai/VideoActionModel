@@ -2,7 +2,7 @@ defaults:
   - transform: crop_and_resize
 
 _target_: world_model.dataloader.tokenized_sequence_nuscenes.TokenizedSequenceNuscenesDataModule
-nuscenes_pickle_path: ${paths.nuscene_pickle_path}
+nuscenes_pickle_path: ${paths.nuscenes_pickle_path}
 train_dataset_params:
   nuscenes_root_dir: ${paths.data_dir}
   quantized_nuscenes_root_dir: ${paths.quantized_nuscenes_root_dir}
@@ -11,7 +11,10 @@ train_dataset_params:
 val_dataset_params:
   nuscenes_root_dir: ${paths.data_dir}
   quantized_nuscenes_root_dir: ${paths.quantized_nuscenes_root_dir}
-  sequence_length: 4 # always lower than training sequence_length to avoid temporal index overflow during sliding window
+  extracted_sequence_length: 39 
+  context_to_prediction_index: 19 
+  nb_context_frames: 4 # always lower than training sequence_length to avoid temporal index overflow during sliding window
+  nb_prediction_frames: 2
   load_image: False
 dataloader_params: 
   batch_size: 1

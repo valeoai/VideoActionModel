@@ -1,6 +1,6 @@
 import warnings
 from importlib.util import find_spec
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Sequence
 
 from omegaconf import DictConfig
 
@@ -10,7 +10,10 @@ from world_model.utils.cmd_line_logging import RankedLogger
 log = RankedLogger(__name__, rank_zero_only=True)
 
 
-def extras(config: DictConfig) -> None:
+def extras(
+    config: DictConfig, 
+    print_order: Sequence[str] = [], 
+) -> None:
     """Applies optional utilities before the task is started.
 
     Utilities:
@@ -28,7 +31,7 @@ def extras(config: DictConfig) -> None:
     # pretty print config tree using Rich library
     if config.get("print_config"):
         log.info("Printing config tree with Rich! <config.print_config=True>")
-        print_config_tree(config, resolve=True, save_to_file=True)
+        print_config_tree(config, print_order=print_order, resolve=True)
 
 
 def task_wrapper(task_func: Callable) -> Callable:

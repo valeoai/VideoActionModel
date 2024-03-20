@@ -3,6 +3,8 @@ import hydra
 from omegaconf import DictConfig
 from typing import Optional
 import matplotlib.pyplot as plt
+from einops import rearrange
+import git
 
 import torch
 import torch.nn as nn
@@ -11,7 +13,9 @@ import lightning
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 
-from torchmetrics import MeanMetric
+from torchmetrics.text import Perplexity
+
+from world_model.utils.generation import TopKSampler, autoregressive_image_sequence_generation
 
 
 class NextTokenPredictor(LightningModule):
@@ -52,8 +56,11 @@ class NextTokenPredictor(LightningModule):
         
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
         
-        # for averaging loss across batches
-        self.mean_val_loss = MeanMetric()
+        self.top5_sampler = TopKSampler(k=5)
+        
+        # https://huggingface.co/docs/transformers/en/perplexity
+        # https://lightning.ai/docs/torchmetrics/stable/text/perplexity.html
+        self.perplexity = Perplexity()
     
     def on_before_optimizer_step(self, optimizer):
         """
@@ -64,9 +71,9 @@ class NextTokenPredictor(LightningModule):
         """
         pass
     
-    def create_inputs_and_target(self, batch):
+    def create_training_inputs_and_target(self, batch):
         
-        visual_tokens = batch['codebook_indices']
+        visual_tokens = batch['visual_tokens']
         
         action_tokens = self.action_quantizer(**batch)
         
@@ -87,22 +94,6 @@ class NextTokenPredictor(LightningModule):
       
         return input_data, target_data
         
-    def model_step(self, batch: Any) -> torch.Tensor:
-        """Perform a single model step on a batch of data."""
-        
-        input_data, target_data = self.create_inputs_and_target(batch)
-                
-        logits_sequence = self.network(**input_data)
-        visual_logits = logits_sequence[target_data['visual_tokens_mask']]
-        
-        visual_target_tokens = target_data['token_sequence'][target_data['visual_tokens_mask']]
-        
-        loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
-        
-        return {
-            'loss': loss
-        }
-        
     def on_train_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
         pass
@@ -118,7 +109,14 @@ class NextTokenPredictor(LightningModule):
          A tensor of losses between model predictions and targets.
         """
         
-        loss = self.model_step(batch)['loss']
+        input_data, target_data = self.create_training_inputs_and_target(batch)
+                
+        logits_sequence = self.network(**input_data)
+        visual_logits = logits_sequence[target_data['visual_tokens_mask']]
+        
+        visual_target_tokens = target_data['token_sequence'][target_data['visual_tokens_mask']]
+        
+        loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
 
         # log losses
         self.log("train/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
@@ -128,11 +126,11 @@ class NextTokenPredictor(LightningModule):
 
     def on_train_epoch_end(self) -> None:
         "Lightning hook that is called when a training epoch ends."
-        pass
+        pass    
         
     def on_validation_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
-        self.mean_val_loss.reset()
+        self.perplexity.reset()
         
     def validation_step(self, batch: Any, batch_idx: int) -> None:
         """Perform a single validation step on a batch of data from the validation set.
@@ -141,13 +139,30 @@ class NextTokenPredictor(LightningModule):
             batch: A batch of data.
             batch_idx: The index of the current batch.
         """
-        loss = self.model_step(batch)['loss']
+        context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
+        target_visual_tokens = batch['visual_tokens'][:, batch['context_end_index']:]
 
-        # update metric aggregator
-        self.mean_val_loss(loss)
+        action_tokens = self.action_tokenizer(**batch)
+        context_action_tokens = action_tokens[:, :batch['context_end_index']]
+        future_action_tokens = action_tokens[:, batch['context_end_index']:]
+        
+        generated_data = autoregressive_image_sequence_generation(
+            self.network,
+            self.top5_sampler, 
+            self.sequence_adapter,
+            context_visual_tokens,
+            context_action_tokens,
+            future_action_tokens,
+            return_logits=True
+        )
+        
+        self.perplexity(
+            rearrange(generated_data['visual_logits'], 'b t h w vocab_size -> b (t h w) vocab_sier'),
+            rearrange(target_visual_tokens, 'b t h w -> b (t h w)')
+        )
         
         # log metric object at each epoch, metric is automatically reset by lightning after each epoch
-        self.log("val/loss", self.mean_val_loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
+        self.log("val/perplexity", self.perplexity, on_step=False, on_epoch=True, logger=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends. Useful to log images for example."
@@ -164,7 +179,12 @@ class NextTokenPredictor(LightningModule):
             stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
         if self.hparams.compile and stage == "fit":
-            self.net = torch.compile(self.network)
+            # torch.compile tries to compile all code in a model's forward() method. 
+            # Sections not compilable automatically cause "graph breaks", 
+            # splitting the code into optimized and unoptimized parts.
+            # fullgraph=True to force an error if there is a graph break in the model, 
+            # calling for manual optimization of the code to get it compiled.
+            self.net = torch.compile(self.network, fullgraph=True)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
@@ -220,6 +240,11 @@ class NextTokenPredictor(LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
     def on_save_checkpoint(self, checkpoint):
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha
+        
+        checkpoint["git_sha"] = sha
+        
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = (
             self.__module__ + "." + self.__class__.__qualname__

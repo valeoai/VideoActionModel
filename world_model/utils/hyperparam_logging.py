@@ -1,8 +1,13 @@
 from typing import Any, Dict
+from omegaconf import OmegaConf
+import git
+import torch
+from pathlib import Path
 
 from lightning_utilities.core.rank_zero import rank_zero_only
-from omegaconf import OmegaConf
+from lightning.pytorch.core.saving import save_hparams_to_yaml
 from world_model.utils.cmd_line_logging import RankedLogger
+
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
@@ -39,15 +44,33 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     hparams["model/params/non_trainable"] = sum(
         p.numel() for p in model.parameters() if not p.requires_grad
     )
+    
+    hparams["paths"] = config["paths"]
 
     hparams["data"] = config["data"]
     hparams["trainer"] = config["trainer"]
 
+    hparams["optimizer"] = config.get("optimizer")
+    hparams["scheduler"] = config.get("scheduler")
+
     hparams["callbacks"] = config.get("callbacks")
     hparams["name"] = config.get("name")
-    hparams["ckpt_path"] = config.get("ckpt_path")
     hparams["seed"] = config.get("seed")
+    
+    hparams["training_device"] = torch.cuda.get_device_name(0)
+    
+    repo = git.Repo(search_parent_directories=True)
+    sha = repo.head.object.hexsha
+    hparams["git_sha"] = sha
 
     # send hparams to all loggers
     for logger in trainer.loggers:
         logger.log_hyperparams(hparams)
+
+    resolved_config = OmegaConf.to_container(object_dict["config"], resolve=True)
+    output_dir = Path(config["paths"]["output_dir"]) / resolved_config['run_name']
+    save_hparams_to_yaml(output_dir / 'hparams.yaml', hparams, use_omegaconf=True)
+    
+    if not output_dir.exists():
+        log.info(f'"{output_dir}" does not exists... creating it.')
+        output_dir.mkdir(parents=True, exist_ok=True)    
