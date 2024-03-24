@@ -1,0 +1,2 @@
+device_stats_monitor:
+  _target_:  lightning.pytorch.callbacks.DeviceStatsMonitor

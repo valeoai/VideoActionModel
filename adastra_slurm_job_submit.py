@@ -2,16 +2,18 @@ import os
 from argparse import ArgumentParser
 from pathlib import Path
 
-WORK_DIR = Path(os.path.expandvars("$SHAREDWORKDIR"))
-REPO_DIR = WORK_DIR / "code/NextTokenPrediction/"
-ENVS_ROOT_DIR = WORK_DIR / "code/env"
+WORK_DIR = Path(os.path.expandvars("$HOMEDIR"))
+REPO_DIR = WORK_DIR / "NextTokenPredictor"
+
+# Adastra have 1 AMD Trento EPYC 7A53 64 cores processors for one node (4GPU)
+# Distribute 64 cores evenly across 4 tasks(GPUs) = 16 CPUs/GPU
+default_cpu_per_task = 16
 
 if __name__ == "__main__":
     parser = ArgumentParser(prog="PROG")
     parser.add_argument("--run_name", "-n", type=str, required=True)
     parser.add_argument("--python_cmd", "-p", type=str, required=True)
     parser.add_argument("--gpus_per_node", type=int, default=1)
-    parser.add_argument("--cpus_per_node", type=int, default=1)
     parser.add_argument("--nodes", type=int, default=1)
     parser.add_argument("--wall_time", "-wt", type=int, default=20)
     parser.add_argument("--allow_hyper_threading", action='store_true')
@@ -25,7 +27,7 @@ if __name__ == "__main__":
     if args.nodes * args.gpus_per_node > 1:
         devices_args = "trainer=ddp " +  devices_args
     
-    slurm_ressources = f"--ntasks={args.nodes * args.gpus_per_node} --ntasks-per-node={args.gpus_per_node} --cpus-per-task={args.cpus_per_node}"
+    slurm_ressources = f"--ntasks={args.nodes * args.gpus_per_node} --ntasks-per-node={args.gpus_per_node} --cpus-per-task={default_cpu_per_task}"
     if not args.allow_hyper_threading:
         slurm_ressources += " --threads-per-core=1"
 
@@ -37,24 +39,22 @@ if __name__ == "__main__":
         f"#SBATCH --gpus-per-node={args.gpus_per_node}",
         f"#SBATCH --ntasks={args.nodes * args.gpus_per_node}",
         f"#SBATCH --ntasks-per-node={args.gpus_per_node}",
-        
-        # Adastra have 1 AMD Trento EPYC 7A53 64 cores processors for one node (4GPU)
-        # Distribute 64 cores evenly across 4 tasks/GPUs
-        f"#SBATCH --cpus-per-task=16", 
+        f"#SBATCH --cpus-per-task={default_cpu_per_task}", 
         
         # /!\ Caution, 'multithread' in Slurm vocabulary refers to hyperthreading.
         # see https://dci.dci-gitlab.cines.fr/webextranet/user_support/index.html#shared-mode-vs-exclusive-mode
         # 1 process per physical core, no hyperthreading, per default
-        "#SBATCH --hint=nomultithread" if args.allow_hyper_threading else '', 
+        "#SBATCH --hint=nomultithread" if not args.allow_hyper_threading else '', 
+        "#SBATCH --threads-per-core=1" if not args.allow_hyper_threading else '', 
         
         f"#SBATCH --time={args.wall_time}:00:00",
         # name of output and error files
-        f"#SBATCH --output={WORK_DIR}/launched_slurm_cmds/{args.run_name}_%j.out",
-        f"#SBATCH --error={WORK_DIR}/launched_slurm_cmds/{args.run_name}_%j.out ",
+        f"#SBATCH --output={WORK_DIR}/slurm_jobs_logs/stdout/{args.run_name}_%j.out",
+        f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/{args.run_name}_%j.out ",
         
         "module purge", # cleans out the modules loaded in interactive and inherited by default
         f"cd {REPO_DIR}",
-        f"source ./scripts/activate_world_model_env.sh"
+        f"source {REPO_DIR}/scripts/activate_world_model_env.sh",
         "pip install .",
         
         "export MPICH_GPU_SUPPORT_ENABLED=1",
@@ -76,12 +76,16 @@ if __name__ == "__main__":
         "# echo of launched commands",
         "set -x",
         
-        f'srun {slurm_ressources} python ./world_model/train.py  {devices_args} {args.python_cmd}  name={args.run_name}',
+        f'srun {slurm_ressources} python {REPO_DIR}/world_model/train.py  {devices_args} {args.python_cmd}  name={args.run_name}',
     ]
 
     slurm_cmd = "\n".join(slurm_cmd)
 
-    slurm_cmd_file = f"{WORK_DIR}/slurm_cmds/{args.run_name}_slurm_cmd.sh"
+    slurm_cmd_file = f"{WORK_DIR}/slurm_jobs_logs/commands/{args.run_name}_slurm_cmd.sh"
+
+    assert WORK_DIR.exists()
+    (WORK_DIR / 'slurm_jobs_logs/commands').mkdir(parents=True, exist_ok=True)
+    (WORK_DIR / 'slurm_jobs_logs/stdout').mkdir(parents=True, exist_ok=True)
 
     with open(slurm_cmd_file, mode="w") as file:
         file.write(slurm_cmd)

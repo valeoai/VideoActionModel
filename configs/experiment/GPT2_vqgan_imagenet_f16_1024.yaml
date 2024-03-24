@@ -19,7 +19,7 @@ trainer:
   max_epochs: 30
   # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
   gradient_clip_val: 1.0
-  accumulate_grad_batches: 2
+  accumulate_grad_batches: 1
 
 data:
   train_dataset_params:

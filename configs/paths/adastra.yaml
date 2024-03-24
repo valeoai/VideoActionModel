@@ -1,9 +1,9 @@
 # Path to the directory where checkpoints and logs will be saved
-output_dir: ???
+output_dir: /lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor
 
 # Path to the directory where data is located
-data_dir: /lus/scratch/NAT/gda2214/SHARED/datasets/nuscenes
+data_dir: /lus/work/CT10/cin4181/SHARED/datasets/nuscenes
 
-nuscenes_pickle_path: ???
+nuscenes_pickle_path: /lus/work/CT10/cin4181/SHARED/datasets_processed/nuscenes_pickle/trainval_data.pkl
 
-quantized_nuscenes_root_dir: ???
+quantized_nuscenes_root_dir: /lus/work/CT10/cin4181/SHARED/datasets_processed/nuscenes_tokenized/VQGAN_ImageNet_f16_1024

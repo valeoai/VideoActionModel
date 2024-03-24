@@ -2,4 +2,4 @@ defaults:
   - adastra
 
 # Path to the directory where checkpoints and logs will be saved
-output_dir: ???
+output_dir: /lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_debug

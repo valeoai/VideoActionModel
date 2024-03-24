@@ -5,4 +5,5 @@ defaults:
 
 _target_: world_model.models.next_token_predictor.NextTokenPredictor
 compile: False # compile model for faster training with pytorch 2.0
+log_norm: False # For debuging purposes, log gradients norm to loggers
 

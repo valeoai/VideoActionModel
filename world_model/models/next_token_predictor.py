@@ -1,15 +1,12 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict
 import hydra
 from omegaconf import DictConfig
 from typing import Optional
-import matplotlib.pyplot as plt
 from einops import rearrange
 import git
 
 import torch
-import torch.nn as nn
 
-import lightning
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 
