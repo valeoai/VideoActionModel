@@ -56,7 +56,7 @@ class NextTokenPredictor(LightningModule):
         
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
         
-        self.top5_sampler = TopKSampler(k=5)
+        self.topk_sampler = TopKSampler(k=3)
         
         # https://huggingface.co/docs/transformers/en/perplexity
         # https://lightning.ai/docs/torchmetrics/stable/text/perplexity.html
@@ -148,7 +148,7 @@ class NextTokenPredictor(LightningModule):
         
         generated_data = autoregressive_image_sequence_generation(
             self.network,
-            self.top5_sampler, 
+            self.topk_sampler, 
             self.sequence_adapter,
             context_visual_tokens,
             context_action_tokens,
@@ -157,7 +157,7 @@ class NextTokenPredictor(LightningModule):
         )
         
         self.perplexity(
-            rearrange(generated_data['visual_logits'], 'b t h w vocab_size -> b (t h w) vocab_sier'),
+            rearrange(generated_data['visual_logits'], 'b t h w vocab_size -> b (t h w) vocab_size'),
             rearrange(target_visual_tokens, 'b t h w -> b (t h w)')
         )
         

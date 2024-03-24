@@ -23,9 +23,9 @@ trainer:
 
 data:
   train_dataset_params:
-    sequence_length: 8
+    sequence_length: 6
   val_dataset_params:
-    nb_context_frames: 5 # always lower than training sequence_length to avoid temporal index overflow during sliding window
+    nb_context_frames: 2 # always lower than training sequence_length to avoid temporal index overflow during sliding window
     nb_prediction_frames: 1
   dataloader_params:
     batch_size: 2
@@ -33,18 +33,18 @@ data:
     prefetch_factor: 2
 
 paths:
-  quantized_nuscenes_root_dir: /datasets_local/nuscenes_tokenized/VQGAN_ImageNet_f16_1024
+  quantized_nuscenes_root_dir: /datasets_local/nuscenes_tokenized/VQGAN_OpenImages_f8_16384
 
 # VQGAN_ImageNet_f16_1024/metadata.json indicates 14x25 quantized image features
 model:
   network:
-    embedding_dim: 128
+    embedding_dim: 256
     nb_heads: 4
     nb_layers: 2
-    vocabulary_size: 1174 # 1024 + 150 | visual_vocab_size + sum(action_vocab_sizes)
+    vocabulary_size: 16534 # 8096 + 150 visual_vocab_size + sum(action_vocab_sizes)
     nb_timesteps: ${data.train_dataset_params.sequence_length}
-    nb_tokens_per_timestep: 351 # 14*25 + 1 | visual + action tokens
+    nb_tokens_per_timestep: 1401 # 28*50 + 1 | visual + action tokens
   sequence_adapter:
-    visual_vocab_size: 1024
+    visual_vocab_size: 16384
     action_vocab_sizes:
       - ${model.action_tokenizer.vocab_size}
