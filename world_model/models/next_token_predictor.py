@@ -32,6 +32,7 @@ class NextTokenPredictor(LightningModule):
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
         compile: bool = False,
+        log_norm: bool = False
     ) -> None:
         """
         Args:
@@ -41,6 +42,7 @@ class NextTokenPredictor(LightningModule):
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
             compile: Compile model for faster training with pytorch 2.0, registered with save_hyperparameters
+            log_norm: log grad norm of model's parameters to loggers
         """
         super().__init__()
 
@@ -63,13 +65,11 @@ class NextTokenPredictor(LightningModule):
         self.perplexity = Perplexity()
     
     def on_before_optimizer_step(self, optimizer):
-        """
-        # Compute the 2-norm for each layer
-        # If using mixed precision, the gradients are already unscaled here
-        norms = grad_norm(self, norm_type=2)
-        self.log_dict(norms)
-        """
-        pass
+        if self.hparams.log_norm:
+            # Compute the 2-norm for each layer
+            # If using mixed precision, the gradients are already unscaled here
+            norms = grad_norm(self, norm_type=2)
+            self.log_dict(norms)
     
     def create_training_inputs_and_target(self, batch):
         
