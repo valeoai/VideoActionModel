@@ -68,7 +68,7 @@ class NextTokenPredictor(LightningModule):
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
     
-    def create_training_inputs_and_target(self, batch):
+    def create_inputs_and_target(self, batch):
         
         visual_tokens = batch['visual_tokens']
         
@@ -106,7 +106,7 @@ class NextTokenPredictor(LightningModule):
          A tensor of losses between model predictions and targets.
         """
         
-        input_data, target_data = self.create_training_inputs_and_target(batch)
+        input_data, target_data = self.create_inputs_and_target(batch)
                 
         logits_sequence = self.network(**input_data)
         visual_logits = logits_sequence[target_data['visual_tokens_mask']]
@@ -136,30 +136,20 @@ class NextTokenPredictor(LightningModule):
             batch: A batch of data.
             batch_idx: The index of the current batch.
         """
-        context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
-        target_visual_tokens = batch['visual_tokens'][:, batch['context_end_index']:]
+        input_data, target_data = self.create_inputs_and_target(batch)
+                
+        logits_sequence = self.network(**input_data)
+        visual_logits = logits_sequence[target_data['visual_tokens_mask']]
+        
+        visual_target_tokens = target_data['token_sequence'][target_data['visual_tokens_mask']]
+        
+        loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
 
-        action_tokens = self.action_tokenizer(**batch)
-        context_action_tokens = action_tokens[:, :batch['context_end_index']]
-        future_action_tokens = action_tokens[:, batch['context_end_index']:]
-        
-        generated_data = autoregressive_image_sequence_generation(
-            self.network,
-            self.topk_sampler, 
-            self.sequence_adapter,
-            context_visual_tokens,
-            context_action_tokens,
-            future_action_tokens,
-            return_logits=True
-        )
-        
-        self.perplexity(
-            rearrange(generated_data['visual_logits'], 'b t h w vocab_size -> b (t h w) vocab_size'),
-            rearrange(target_visual_tokens, 'b t h w -> b (t h w)')
-        )
-        
-        # log metric object at each epoch, metric is automatically reset by lightning after each epoch
-        self.log("val/perplexity", self.perplexity, on_step=False, on_epoch=True, logger=True, prog_bar=True)
+        # log losses at the end of epoch, rest is automatic
+        self.log("val/loss", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
+
+        # return loss to apply backpropagation
+        return loss
 
     def on_validation_epoch_end(self) -> None:
         "Lightning hook that is called when a validation epoch ends. Useful to log images for example."

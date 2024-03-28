@@ -11,10 +11,7 @@ train_dataset_params:
 val_dataset_params:
   nuscenes_root_dir: ${paths.data_dir}
   quantized_nuscenes_root_dir: ${paths.quantized_nuscenes_root_dir}
-  extracted_sequence_length: 39 
-  context_to_prediction_index: 19 
-  nb_context_frames: 4 # always lower than training sequence_length to avoid temporal index overflow during sliding window
-  nb_prediction_frames: 2
+  sequence_length: ${data.train_dataset_params.sequence_length}
   load_image: False
 dataloader_params: 
   batch_size: 1

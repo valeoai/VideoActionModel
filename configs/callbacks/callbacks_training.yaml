@@ -8,6 +8,6 @@ defaults:
 
 model_checkpoint:
   dirpath: "${paths.output_dir}/${run_name}/checkpoints/"
-  filename: "epoch_{epoch:03d}_val_perplexity_{val/perplexity:.4f}"
-  monitor: "val/perplexity"
+  filename: "epoch_{epoch:03d}_val_loss_{val/loss:.4f}"
+  monitor: "val/loss"
   mode: "min"
