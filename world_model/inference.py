@@ -121,21 +121,21 @@ def load_model(checkpoint_path, model_config, device, inference_sha, set_net_to_
 
     network = instantiate(model_config.network)
     sequence_adapter = instantiate(model_config.sequence_adapter)
-    action_quantizer = instantiate(model_config.action_quantizer)
+    action_tokenizer = instantiate(model_config.action_tokenizer)
 
     state_dict = remove_prefix(checkpoint_data['state_dict'], 'network')
     network.load_state_dict(state_dict, strict=True)
     
     network.to(device)
     sequence_adapter.to(device)
-    action_quantizer.to(device)
+    action_tokenizer.to(device)
     
     if set_net_to_eval:
         network.eval()
         sequence_adapter.eval()
-        action_quantizer.eval()
+        action_tokenizer.eval()
     
-    return network, sequence_adapter, action_quantizer
+    return network, sequence_adapter, action_tokenizer
 
 def load_data(nuscenes_pickle_path, dataset_config, dataloader_config):
     with open(nuscenes_pickle_path, 'rb') as f:
@@ -150,7 +150,6 @@ def load_data(nuscenes_pickle_path, dataset_config, dataloader_config):
     
     dataloader = DataLoader(
         dataset,
-        drop_last=False,
         worker_init_fn=worker_rnd_init,
         collate_fn=custom_collate,
         **dataloader_config
@@ -216,7 +215,13 @@ def infer(inference_config: DictConfig) -> None:
     print_log_and_current_config(inference_config, training_logged_config)
     
     log.info(f"Instantiating the model...")
-    network, sequence_adapter, action_quantizer = load_model(checkpoint_path, model_config, device, inference_sha, set_net_to_eval=True)
+    network, sequence_adapter, action_tokenizer = load_model(
+        checkpoint_path, 
+        model_config, 
+        device, 
+        inference_sha, 
+        set_net_to_eval=True
+    )
     
     log.info(f"Instantiating the dataset...")
     nuscenes_pickle_path = inference_config.paths.nuscenes_pickle_path
@@ -234,7 +239,7 @@ def infer(inference_config: DictConfig) -> None:
             
             batch = move_data_to_device(batch, device=device)
 
-            action_tokens = action_quantizer(**batch)
+            action_tokens = action_tokenizer(**batch)
             
             context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
             
