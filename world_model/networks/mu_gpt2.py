@@ -1,6 +1,4 @@
 """
-Copyright: valeo.ai
-Author: Tuan-Hung Vu
 A modified GPT for the adastra project on world model.
 Original code: https://github.com/karpathy/nanoGPT/blob/master/model.py
 
@@ -13,8 +11,6 @@ https://github.com/huggingface/transformers/blob/main/src/transformers/models/gp
 """
 
 import math
-import inspect
-from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
@@ -22,28 +18,22 @@ from torch.nn import functional as F
 
 from einops import rearrange
 
-# Building blocks for GPT-2: LayerNorm, SelfAttention, MLP, TransformerBlock
-class LayerNorm(nn.Module):
-    """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
+from world_model.networks.gpt2 import MLP
 
-    def __init__(self, ndim, bias):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
+from mup import MuReadout, MuSharedReadout, normal_
 
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, n_embd, n_head, bias, dropout, block_size):
+    def __init__(self, n_embd, n_head, bias, dropout, block_size, attn_mult):
         super().__init__()
         assert n_embd % n_head == 0
         
         self.n_head = n_head
         self.n_embd = n_embd
         
-        ### muP coord check
+        ########### muP ###########
+        self.attn_mult = attn_mult
         self.attn_score = nn.Identity() # just for coordcheck
         self.query = nn.Identity() # just for coordcheck
         self.key = nn.Identity() # just for coordcheck
@@ -71,16 +61,19 @@ class CausalSelfAttention(nn.Module):
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        # calculate query, key, values for all heads in batch
+        x = self.c_attn(x)
+        
+        # split into qkv and heads
+        q, k, v = rearrange(x, "b seq (n n_head dim_head) -> n b n_head seq dim_head", n=3, n_head=self.n_head)
         
         ### muP: just for coord check (debug)
         q = self.query(q)
         k = self.key(k)
         v = self.value(v)
+        
+        ### muP: attention scaling
+        attn_scaling = self.attn_mult / v.size(-1)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
@@ -89,11 +82,12 @@ class CausalSelfAttention(nn.Module):
                 q, k, v,
                 attn_mask=None, 
                 dropout_p=self.dropout if self.training else 0,
-                is_causal=True
+                is_causal=True,
+                scale=attn_scaling ### muP: attention scaling
             )
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        else:            
+            ### muP: attention scaling
+            att = (q @ k.transpose(-2, -1)) * attn_scaling
             
             ### muP no-op, but allows tracking for coord check
             att = self.attn_score(att)
@@ -101,36 +95,24 @@ class CausalSelfAttention(nn.Module):
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
+            
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        
+        y = rearrange(y, "b n_head seq dim_v -> b seq (n_head dim_v)") # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
+        
         return y
 
-class MLP(nn.Module):
-
-    def __init__(self, n_embd, bias, dropout):
-        super().__init__()
-        self.c_fc    = nn.Linear(n_embd, 4 * n_embd, bias=bias)
-        self.gelu    = nn.GELU()
-        self.c_proj  = nn.Linear(4 * n_embd, n_embd, bias=bias)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
-        x = self.dropout(x)
-        return x
 
 class Block(nn.Module):
 
-    def __init__(self, n_embd, n_head, bias, dropout, block_size):
+    def __init__(self, n_embd, n_head, bias, dropout, block_size, attn_mult):
         super().__init__()
-        self.ln_1 = LayerNorm(n_embd, bias=bias)
-        self.attn = CausalSelfAttention(n_embd, n_head, bias, dropout, block_size)
-        self.ln_2 = LayerNorm(n_embd, bias=bias)
+        self.ln_1 = nn.LayerNorm(n_embd, bias=bias)
+        self.attn = CausalSelfAttention(n_embd, n_head, bias, dropout, block_size, attn_mult)
+        self.ln_2 = nn.LayerNorm(n_embd, bias=bias)
         self.mlp = MLP(n_embd, bias, dropout)
 
     def forward(self, x):
@@ -138,7 +120,7 @@ class Block(nn.Module):
         x = x + self.mlp(self.ln_2(x))
         return x
 
-class GPT2(nn.Module):
+class MuGPT2(nn.Module):
     """
     GPT2 implementation following the original formulation to be able to load existing pre-trained weights    
     
@@ -156,11 +138,15 @@ class GPT2(nn.Module):
         embedding_dim: int = 256,
         nb_layers: int = 12,
         nb_heads: int = 16,
+        attn_mult: float = 1.0,
         vocabulary_size: int = 1104,
         nb_timesteps: int = 8,
         nb_tokens_per_timestep: int  = 352,
         dropout_rate: float = 0.15,
-        bias: bool = True,             
+        init_std: float = 0.02,
+        bias: bool = True,   
+        output_mult: float = 1.0,
+        output_tied: bool = True      
     ):
         
         super().__init__()
@@ -168,38 +154,44 @@ class GPT2(nn.Module):
         assert nb_tokens_per_timestep is not None
         assert nb_timesteps is not None
         
+        self.init_std = init_std
+        
         self.nb_timesteps = nb_timesteps
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
         
+        self.nb_layers = nb_layers
         self.block_size = nb_timesteps*nb_tokens_per_timestep
         self.embedding_dim = embedding_dim
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
 
         self.transformer = nn.ModuleDict(dict(
-            wie = nn.Embedding(vocabulary_size, embedding_dim),               # token embeddings
-            wse = nn.Embedding(nb_tokens_per_timestep, embedding_dim),   # spatial position embeddings
-            wte = nn.Embedding(nb_timesteps, embedding_dim),               # temporal position embeddings
+            wie = nn.Embedding(vocabulary_size, embedding_dim),         # token embeddings
+            wse = nn.Embedding(nb_tokens_per_timestep, embedding_dim),  # spatial position embeddings
+            wte = nn.Embedding(nb_timesteps, embedding_dim),            # temporal position embeddings
             drop = nn.Dropout(dropout_rate),
             h = nn.ModuleList([
-                Block(embedding_dim, nb_heads, bias, dropout_rate, self.block_size)
+                Block(embedding_dim, nb_heads, bias, dropout_rate, self.block_size,attn_mult)
                 for _ in range(nb_layers)
             ]),
-            ln_f = LayerNorm(embedding_dim, bias=bias),
+            ln_f = nn.LayerNorm(embedding_dim, bias=bias),
         ))
-        self.lm_head = nn.Linear(embedding_dim, vocabulary_size, bias=False)
+        
+        if output_tied:
+            self.lm_head = MuSharedReadout(self.wie.weight, bias=False, output_mult=output_mult)
+        else:
+            self.lm_head = MuReadout(embedding_dim, vocabulary_size, bias=False, output_mult=output_mult)
+        
+        # init all weights
+        self.apply(self._init_weights)
+        
+        
+        ### muP no weight tying ???
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
-        # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        # https://paperswithcode.com/method/weight-tying
-        self.transformer.wie.weight = self.lm_head.weight
-
-        # init all weights
-        self.apply(self._init_weights)
-        # apply special scaled init to the residual projections, per GPT-2 paper
-        for pn, p in self.named_parameters():
-            if pn.endswith('c_proj.weight'):
-                torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * nb_layers))
+        # not 100% sure what this is, so far seems to be harmless. 
+        # TODO investigate https://paperswithcode.com/method/weight-tying
+        # self.transformer.wie.weight = self.lm_head.weight
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -218,12 +210,74 @@ class GPT2(nn.Module):
         return n_params
 
     def _init_weights(self, module):
-        if isinstance(module, nn.Linear):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+        
+        ################## /!\ IMPORTANT READ ##################
+        ### muP: swap constant std normal init with normal_ from `mup.init`.
+        ### Because `_init_weights` is called in `__init__`, before `infshape` is set,
+        ### we need to manually call `self.apply(self._init_weights)` after calling
+        ### `set_base_shape(model, base)` 
+        ###
+        ### for proper muP init
+        ### 1. instantiate model and then 
+        ### 2. set_base_shape(model, base)
+        ### 3. reinit manually with model.apply(model._init_weights)
+        
+        
+        # MuReadout zero init          
+        if isinstance(module, MuReadout) and not self.output_tied:
+            module.weight.data.zero_()
+            
+        elif isinstance(module, nn.Linear):
+            # Slightly different from the TF version which uses truncated_normal for initialization
+            # cf https://github.com/pytorch/pytorch/pull/5617
+            if hasattr(module.weight, 'infshape'):
+                normal_(module.weight, mean=0.0, std=self.init_std)
+            else:
+                module.weight.data.normal_(mean=0.0, std=self.init_std)
+                
             if module.bias is not None:
-                torch.nn.init.zeros_(module.bias)
+                module.bias.data.zero_()
+                
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            module.weight.data.normal_(mean=0.0, std=self.init_std)
+            if module.padding_idx is not None:
+                module.weight.data[module.padding_idx].zero_()
+                
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+
+        ### muP query zero init
+        if isinstance(module, CausalSelfAttention):
+            
+            # if attention uses nn.Linear fanout is first dim
+            # because nn.Linear applies y=xA.T+b
+            # if using Conv1D as in hugginfaces transformers, fanout is last dim
+            fanout, _ = module.c_attn.weight.shape
+            assert fanout % 3 == 0 # assert matrix is used for query, key and value
+            
+            # if attention uses, nn.Linear change init in first dim
+            # if using Conv1D, change init in last dim
+            module.c_attn.weight.data[:fanout//3, :] = 0
+            
+            
+        # Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
+        #
+        #   > A modified initialization which accounts for the accumulation on the residual path with model depth. Scale
+        #   > the weights of residual layers at initialization by a factor of 1/√N where N is the # of residual layers.
+        #   >   -- GPT-2 :: https://openai.com/blog/better-language-models/
+        #
+        depth_std = self.init_std / math.sqrt(2 * self.nb_layers)
+        
+        for p_name, p in module.named_parameters():
+            if p_name.endswith('c_proj.weight'):
+                ### muP Special Scaled Initialization --> There are 2 Layer Norms per Transformer Block
+                if hasattr(p, 'infshape'):
+                    normal_(p, mean=0.0, std=depth_std)
+                else:
+                    p.data.normal_(mean=0.0, std=depth_std)
+                    
 
     def forward(self, token_sequence, spatial_positions, temporal_positions, inference=False):
         """
