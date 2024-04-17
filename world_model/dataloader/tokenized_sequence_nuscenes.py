@@ -8,9 +8,6 @@ from torch.utils.data import DataLoader, default_collate
 from lightning import LightningDataModule
 
 from world_model.dataloader.components.random_tokenized_sequence_nuscenes import RandomTokenizedSequenceNuscenesDataset
-from world_model.dataloader.components.scene_tokenized_sequence_nuscenes import SceneBasedNuscenesDataset
-
-
 
 
 # overrinding default_collate for list of strings (e.g., list of image paths).
@@ -115,7 +112,7 @@ class TokenizedSequenceNuscenesDataModule(LightningDataModule):
         )
 
         # Validation dataset
-        self.val_dataset = SceneBasedNuscenesDataset(
+        self.val_dataset = RandomTokenizedSequenceNuscenesDataset(
             nuscenes_pickle_data=self.val_data,
             transform=self.transform,
             **self.val_dataset_params

@@ -24,9 +24,6 @@ trainer:
 data:
   train_dataset_params:
     sequence_length: 8
-  val_dataset_params:
-    nb_context_frames: 5 # always lower than training sequence_length to avoid temporal index overflow during sliding window
-    nb_prediction_frames: 1
   dataloader_params:
     batch_size: 2
     num_workers: 5
