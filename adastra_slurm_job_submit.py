@@ -24,9 +24,6 @@ if __name__ == "__main__":
 
     devices_args = f'++trainer.accelerator="gpu" ++trainer.devices={args.gpus_per_node} ++trainer.num_nodes={args.nodes}'
     
-    if args.nodes * args.gpus_per_node > 1:
-        devices_args = "trainer=ddp " +  devices_args
-    
     slurm_ressources = f"--ntasks={args.nodes * args.gpus_per_node} --ntasks-per-node={args.gpus_per_node} --cpus-per-task={default_cpu_per_task}"
     if not args.allow_hyper_threading:
         slurm_ressources += " --threads-per-core=1"
@@ -74,7 +71,7 @@ if __name__ == "__main__":
         "# echo of launched commands",
         "set -x",
         
-        f'srun {slurm_ressources} python {REPO_DIR}/world_model/train.py  {devices_args} {args.python_cmd}  name={args.run_name}_`date "+%m%d_%H%M_%s"`',
+        f'srun {slurm_ressources} python {REPO_DIR}/world_model/train.py {args.python_cmd}  {devices_args}  name={args.run_name}_`date "+%m%d_%H%M_%s"`',
     ]
 
     slurm_cmd = "\n".join(slurm_cmd)
