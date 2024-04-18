@@ -28,8 +28,6 @@ defaults:
 # run name, determines output directory path
 name: "default"
 
-run_name: "${name}_${now:%m%d_%H%M%S%f}" # dynamically generated from name
-
 # set False to skip model training
 train: True
 

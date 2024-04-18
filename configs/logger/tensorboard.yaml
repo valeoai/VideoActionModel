@@ -3,7 +3,7 @@
 tensorboard:
   _target_: lightning.pytorch.loggers.tensorboard.TensorBoardLogger
   save_dir: "${paths.output_dir}"
-  name: "${run_name}/tensorboard/" # to differentiate the tensorboard log from other loggers
+  name: "${name}/tensorboard/" # to differentiate the tensorboard log from other loggers
   log_graph: False
   default_hp_metric: True
   prefix: ""

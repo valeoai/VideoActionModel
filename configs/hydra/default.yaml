@@ -7,8 +7,8 @@ defaults:
 
 # output directory, generated dynamically on each run
 run:
-  dir: ${paths.output_dir}/${run_name}/
+  dir: ${paths.output_dir}/${name}/
 sweep:
-  dir: ${paths.output_dir}/${run_name}/multiruns
+  dir: ${paths.output_dir}/${name}/multiruns
   subdir: ${hydra.job.num}
   

@@ -76,7 +76,7 @@ if __name__ == "__main__":
         "# echo of launched commands",
         "set -x",
         
-        f'srun {slurm_ressources} python {REPO_DIR}/world_model/train.py  {devices_args} {args.python_cmd}  name={args.run_name}',
+        f'srun {slurm_ressources} python {REPO_DIR}/world_model/train.py  {devices_args} {args.python_cmd}  name={args.run_name}_`date "+%m%d_%H%M_%s"`',
     ]
 
     slurm_cmd = "\n".join(slurm_cmd)
