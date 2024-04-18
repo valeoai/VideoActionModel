@@ -53,9 +53,7 @@ if __name__ == "__main__":
         f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/{args.run_name}_%j.out",
         
         "module purge", # cleans out the modules loaded in interactive and inherited by default
-        f"cd {REPO_DIR}",
         f"source {REPO_DIR}/scripts/activate_world_model_env.sh",
-        "pip install .",
         
         "export MPICH_GPU_SUPPORT_ENABLED=1",
 
