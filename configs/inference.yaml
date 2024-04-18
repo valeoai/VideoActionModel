@@ -5,7 +5,7 @@ defaults:
   - paths: default
   - hydra: default
 
-run_name: "inference" # used by hydra in case of error looging
+name: "inference" # used by hydra in case of error looging
 
 # The directory where model logs are stored (the folder `checkpoints`, `tensorboard`, etc.. are under it).
 model_log_dir: ???

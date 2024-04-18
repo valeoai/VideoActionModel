@@ -67,8 +67,7 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     for logger in trainer.loggers:
         logger.log_hyperparams(hparams)
 
-    resolved_config = OmegaConf.to_container(object_dict["config"], resolve=True)
-    output_dir = Path(config["paths"]["output_dir"]) / resolved_config['run_name']
+    output_dir = Path(config["paths"]["output_dir"]) / config['name']
     save_hparams_to_yaml(output_dir / 'hparams.yaml', hparams, use_omegaconf=True)
     
     if not output_dir.exists():

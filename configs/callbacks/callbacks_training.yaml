@@ -7,7 +7,7 @@ defaults:
   - _self_
 
 model_checkpoint:
-  dirpath: "${paths.output_dir}/${run_name}/checkpoints/"
+  dirpath: "${paths.output_dir}/${name}/checkpoints/"
   filename: "epoch_{epoch:03d}_val_loss_{val/loss:.4f}"
   monitor: "val/loss"
   mode: "min"
