@@ -26,8 +26,9 @@ data:
     sequence_length: 8
   dataloader_params:
     batch_size: 2
-    num_workers: 5
-    prefetch_factor: 2
+    num_workers: 2
+    prefetch_factor: 1
+    multiprocessing_context: spawn
 
 paths:
   quantized_nuscenes_root_dir: /datasets_local/nuscenes_tokenized/VQGAN_ImageNet_f16_1024

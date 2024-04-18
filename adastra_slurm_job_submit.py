@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     devices_args = f'++trainer.accelerator="gpu" ++trainer.devices={args.gpus_per_node} ++trainer.num_nodes={args.nodes}'
     
-    slurm_ressources = f"--ntasks={args.nodes * args.gpus_per_node} --ntasks-per-node={args.gpus_per_node} --cpus-per-task={default_cpu_per_task}"
+    slurm_ressources = f"--exclusive --ntasks={args.nodes * args.gpus_per_node} --ntasks-per-node={args.gpus_per_node} --cpus-per-task={default_cpu_per_task}"
     if not args.allow_hyper_threading:
         slurm_ressources += " --threads-per-core=1"
 
@@ -50,7 +50,8 @@ if __name__ == "__main__":
         f"#SBATCH --gpus-per-node={args.gpus_per_node}",
         f"#SBATCH --ntasks={args.nodes * args.gpus_per_node}",
         f"#SBATCH --ntasks-per-node={args.gpus_per_node}",
-        f"#SBATCH --cpus-per-task={default_cpu_per_task}", 
+        f"#SBATCH --cpus-per-task={default_cpu_per_task}", # Logical cores per MPI task 
+        "#SBATCH --exclusive" if args.gpus_per_node == 8 else '',
         
         # /!\ Caution, 'multithread' in Slurm vocabulary refers to hyperthreading.
         # see https://dci.dci-gitlab.cines.fr/webextranet/user_support/index.html#shared-mode-vs-exclusive-mode
