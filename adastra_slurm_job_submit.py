@@ -5,9 +5,9 @@ from pathlib import Path
 WORK_DIR = Path(os.path.expandvars("$HOMEDIR"))
 REPO_DIR = WORK_DIR / "NextTokenPredictor"
 
-# Adastra have 1 AMD Trento EPYC 7A53 64 cores processors for one node (4GPU)
-# Distribute 64 cores evenly across 4 tasks(GPUs) = 16 CPUs/GPU
-default_cpu_per_task = 16
+# Adastra have 1 AMD Trento EPYC 7A53 64 cores processors for one node (8GPUs)
+# Distribute 64 cores evenly across 8 tasks(GPUs) = 8 CPUs/GPU
+default_cpu_per_task = 8
 
 if __name__ == "__main__":
     parser = ArgumentParser(prog="PROG")
@@ -50,7 +50,7 @@ if __name__ == "__main__":
         f"#SBATCH --time={args.wall_time}:00:00",
         # name of output and error files
         f"#SBATCH --output={WORK_DIR}/slurm_jobs_logs/stdout/{args.run_name}_%j.out",
-        f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/{args.run_name}_%j.out ",
+        f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/{args.run_name}_%j.out",
         
         "module purge", # cleans out the modules loaded in interactive and inherited by default
         f"cd {REPO_DIR}",
