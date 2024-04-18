@@ -1,0 +1,11 @@
+defaults:
+  - default
+
+strategy: deepspeed_stage_2
+
+precision: "bf16-mixed"
+
+accelerator: gpu
+devices: 4
+num_nodes: 1
+sync_batchnorm: True
