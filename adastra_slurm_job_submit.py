@@ -2,6 +2,9 @@ import os
 from argparse import ArgumentParser
 from pathlib import Path
 
+from datetime import datetime
+import time
+
 WORK_DIR = Path(os.path.expandvars("$HOMEDIR"))
 REPO_DIR = WORK_DIR / "NextTokenPredictor"
 
@@ -28,6 +31,17 @@ if __name__ == "__main__":
     if not args.allow_hyper_threading:
         slurm_ressources += " --threads-per-core=1"
 
+
+    # Combining these, the format produces a string like "0418_1530_1650295200", where:
+    # "0418" indicates April 18th,
+    # "1530" indicates 3:30 PM,
+    # "1650295200" indicates the number of seconds since the Unix Epoch 
+    # (January 1, 1970 00:00:00 UTC), typically referred to as Unix time.
+    current_time = datetime.now()
+    time_code = current_time.strftime("%m%d_%H%M_") + str(int(time.mktime(current_time.timetuple())))
+    
+    run_name = f'{args.run_name}_{time_code}'
+    
     slurm_cmd = [
         "#!/bin/bash",
         "#SBATCH --account=cin4181",
@@ -71,12 +85,12 @@ if __name__ == "__main__":
         "# echo of launched commands",
         "set -x",
         
-        f'srun {slurm_ressources} python {REPO_DIR}/world_model/train.py {args.python_cmd}  {devices_args}  name={args.run_name}_`date "+%m%d_%H%M_%s"`',
+        f'srun {slurm_ressources} python {REPO_DIR}/world_model/train.py {args.python_cmd}  {devices_args}  name={run_name}',
     ]
 
     slurm_cmd = "\n".join(slurm_cmd)
 
-    slurm_cmd_file = f"{WORK_DIR}/slurm_jobs_logs/commands/{args.run_name}_slurm_cmd.sh"
+    slurm_cmd_file = f"{WORK_DIR}/slurm_jobs_logs/commands/{run_name}_slurm_cmd.sh"
 
     assert WORK_DIR.exists()
     (WORK_DIR / 'slurm_jobs_logs/commands').mkdir(parents=True, exist_ok=True)
