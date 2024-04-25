@@ -25,13 +25,6 @@ if __name__ == "__main__":
 
     print("RUN NAME: ", args.run_name)
 
-    devices_args = f'++trainer.accelerator="gpu" ++trainer.devices={args.gpus_per_node} ++trainer.num_nodes={args.nodes}'
-    
-    slurm_ressources = f"--exclusive --ntasks={args.nodes * args.gpus_per_node} --ntasks-per-node={args.gpus_per_node} --cpus-per-task={default_cpu_per_task}"
-    if not args.allow_hyper_threading:
-        slurm_ressources += " --threads-per-core=1"
-
-
     # Combining these, the format produces a string like "0418_1530_1650295200", where:
     # "0418" indicates April 18th,
     # "1530" indicates 3:30 PM,
@@ -42,15 +35,16 @@ if __name__ == "__main__":
     
     run_name = f'{args.run_name}_{time_code}'
     
+    devices_args = f'++trainer.devices={args.gpus_per_node} ++trainer.num_nodes={args.nodes}'
+
     slurm_cmd = [
         "#!/bin/bash",
         "#SBATCH --account=cin4181",
         "#SBATCH --constraint=MI250",
         f"#SBATCH --nodes={args.nodes}",
         f"#SBATCH --gpus-per-node={args.gpus_per_node}",
-        f"#SBATCH --ntasks={args.nodes * args.gpus_per_node}",
         f"#SBATCH --ntasks-per-node={args.gpus_per_node}",
-        f"#SBATCH --cpus-per-task={default_cpu_per_task}", # Logical cores per MPI task 
+        f"#SBATCH --cpus-per-task={default_cpu_per_task}", # Logical cores per MPI task  
         "#SBATCH --exclusive" if args.gpus_per_node == 8 else '',
         
         # /!\ Caution, 'multithread' in Slurm vocabulary refers to hyperthreading.
@@ -69,24 +63,12 @@ if __name__ == "__main__":
         
         "export MPICH_GPU_SUPPORT_ENABLED=1",
 
-        'echo "SLURM_JOBID="$SLURM_JOBID',
-        'echo "SLURM_PROCID="$SLURM_PROCID',
-        "export MASTER_PORT=$(expr 10000 + $(echo -n $SLURM_JOBID | tail -c 4))",
-        'echo "MASTER_PORT="$MASTER_PORT',
-        'master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)',
-        "export MASTER_ADDR=$master_addr",
-        'echo "MASTER_ADDR="$MASTER_ADDR',
-        "export MIOPEN_USER_DB_PATH=/tmp/miopen_${MASTER_ADDR}_${SLURM_PROCID}",
-        'echo "MIOPEN_USER_DB_PATH="$MIOPEN_USER_DB_PATH',
-        "export MIOPEN_CUSTOM_CACHE_DIR=/tmp/miopen_${MASTER_ADDR}_${SLURM_PROCID}_cache/",
-        'echo "MIOPEN_CUSTOM_CACHE_DIR"=$MIOPEN_CUSTOM_CACHE_DIR',
-
         "export HYDRA_FULL_ERROR=1",
         
         "# echo of launched commands",
         "set -x",
         
-        f'srun {slurm_ressources} python {REPO_DIR}/world_model/train.py {args.python_cmd}  {devices_args}  name={run_name}',
+        f'srun python {REPO_DIR}/world_model/train.py {args.python_cmd}  {devices_args}  name={run_name}',
     ]
 
     slurm_cmd = "\n".join(slurm_cmd)
