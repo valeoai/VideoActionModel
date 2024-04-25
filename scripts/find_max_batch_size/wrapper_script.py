@@ -1,9 +1,9 @@
 import subprocess
 import sys
 
-def run_pytorch_script(script_path, batch_size):
+def run_pytorch_script(script_path):
     # Build the command to run the PyTorch script with the provided batch size
-    command = ['python', script_path, str(batch_size)]
+    command = ['python', script_path]
     
     try:
         # Run the command and capture standard output and standard error
@@ -31,13 +31,14 @@ def run_pytorch_script(script_path, batch_size):
         print(f"An exception occurred while running the script: {e}")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python wrapper_script.py <path_to_pytorch_script> <batch_size>")
+    if len(sys.argv) != :
+        print("Usage: python wrapper_script.py <path_to_pytorch_script>")
         sys.exit(1)
+
+    print("/"*60)
 
     # Get the script path and batch size from command line arguments
     script_path = sys.argv[1]
-    batch_size = sys.argv[2]
 
     # Call the function to run the PyTorch script
-    run_pytorch_script(script_path, batch_size)
+    run_pytorch_script(script_path)
