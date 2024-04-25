@@ -18,3 +18,4 @@ dataloader_params:
   num_workers: 1
   pin_memory: True
   prefetch_factor: 1
+  multiprocessing_context: fork # default, try spawn if forking becomes a bottleneck/issue
