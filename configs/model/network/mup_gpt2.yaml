@@ -7,3 +7,7 @@ nb_timesteps: ${data.sequence_length}
 nb_tokens_per_timestep: ???
 dropout_rate: 0.
 bias: true
+init_std: 0.02
+output_mult: 1.0
+output_tied: True 
+attn_mult: 1.0     

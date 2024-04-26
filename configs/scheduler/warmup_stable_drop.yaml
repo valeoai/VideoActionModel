@@ -1,5 +1,5 @@
 _target_ : world_model.lr_schedulers.warmup_stable_drop.WarmupStableDrop
-start_lr: 1e-3
+start_lr: ???
 warmup_iter: ???
 end_iter: ??? # = len(dataset) / (bs * gpus * nodes * grad_acc)
 drop_iter: ??? # typically 0.1 * total_nb_of_steps

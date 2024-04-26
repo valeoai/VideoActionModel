@@ -1,6 +1,8 @@
+from typing import Dict, Any
+
 class WarmupStableDrop:
     def __init__(
-        self, optimizer, start_lr, warmup_iter, end_iter, drop_iter=0, num_iter=0,
+        self, optimizer, start_lr, warmup_iter, end_iter, drop_iter=0, num_iter=-1,
     ) -> None:
         self.warmup_iter = warmup_iter
         self.end_iter = end_iter

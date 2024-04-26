@@ -145,7 +145,8 @@ class MuGPT2(nn.Module):
         init_std: float = 0.02,
         bias: bool = True,   
         output_mult: float = 1.0,
-        output_tied: bool = True      
+        output_tied: bool = True,
+        attn_mult: float = 1.0     
     ):
         
         super().__init__()
@@ -153,7 +154,10 @@ class MuGPT2(nn.Module):
         assert nb_tokens_per_timestep is not None
         assert nb_timesteps is not None
         
+        self.bias = bias
         self.init_std = init_std
+        self.attn_mult = attn_mult
+        self.output_mult = output_mult
         
         self.nb_timesteps = nb_timesteps
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
@@ -170,14 +174,14 @@ class MuGPT2(nn.Module):
             wte = nn.Embedding(nb_timesteps, embedding_dim),            # temporal position embeddings
             drop = nn.Dropout(dropout_rate),
             h = nn.ModuleList([
-                Block(embedding_dim, nb_heads, bias, dropout_rate, self.block_size,attn_mult)
+                Block(embedding_dim, nb_heads, bias, dropout_rate, self.block_size, self.attn_mult)
                 for _ in range(nb_layers)
             ]),
             ln_f = nn.LayerNorm(embedding_dim, bias=bias),
         ))
         
         if output_tied:
-            self.lm_head = MuSharedReadout(self.transformer.wie.weight, bias=False, output_mult=output_mult)
+            self.lm_head = MuSharedReadout(self.transformer.wie.weight, bias=False, output_mult=self.output_mult)
         else:
             self.lm_head = MuReadout(embedding_dim, vocabulary_size, bias=False, output_mult=output_mult)
         

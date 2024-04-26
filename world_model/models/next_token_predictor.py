@@ -233,6 +233,16 @@ class NextTokenPredictor(LightningModule):
         }
 
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
+    
+    def lr_scheduler_step(self, scheduler, metric) -> None:
+        """
+        Copy-pasting of Lightning code
+        Manual override necessary for using custom LR schedulers otherwise it throws errors
+        """
+        if metric is None:
+            scheduler.step()  # type: ignore[call-arg]
+        else:
+            scheduler.step(metric)
 
     def on_save_checkpoint(self, checkpoint):
         repo = git.Repo(search_parent_directories=True)

@@ -25,9 +25,10 @@ trainer:
   log_every_n_steps: 5
 
 scheduler:
-  warmup_iter: 35 # total_batch_size * 35 = 256 * 35 = 8960
+  start_lr: ${optimizer.lr}
+  warmup_iter: 98 # 1% ~ end_iter * 0.01
   end_iter: 9857 # len_dataset // 256 = 2523392 // 256 = 9857
-  drop_iter: 8871 # ~ end_iter * 0.9
+  drop_iter: 985 # 10% ~ end_iter * 0.1
 
 data:
   train_dataset_params:
@@ -56,6 +57,7 @@ model:
     bias: True
     output_mult: 1.0
     output_tied: True
+    attn_mult: 1.0
   sequence_adapter:
     visual_vocab_size: 1024
     action_vocab_sizes:
