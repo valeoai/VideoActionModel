@@ -8,7 +8,7 @@ defaults:
 before_drop_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
   dirpath: "${paths.output_dir}/${name}/checkpoints/"
-  filename: "epoch_{epoch:03d}_step_{global_step:07d}"
+  filename: "before_drop_epoch_{epoch:03d}_step_{global_step:07d}"
   monitor: "global_step"
   mode: "max"
   every_n_train_steps: 8871
@@ -16,7 +16,18 @@ before_drop_checkpoint:
 every_quarter_epoch_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
   dirpath: "${paths.output_dir}/${name}/checkpoints/"
-  filename: "epoch_{epoch:03d}_step_{global_step:07d}"
+  filename: "quarters_epoch_{epoch:03d}_step_{global_step:07d}"
   monitor: "global_step"
   mode: "max"
   every_n_train_steps: 2464
+
+last_hours_checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: "${paths.output_dir}/${name}/checkpoints/"
+  filename: "last_hours_epoch_{epoch:03d}_step_{global_step:07d}"
+  monitor: "global_step"
+  mode: "max"
+  save_top_k: 1
+  train_time_interval:
+    _target_: datetime.timedelta
+    hours: 8
