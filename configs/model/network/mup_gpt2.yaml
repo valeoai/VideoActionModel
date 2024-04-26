@@ -1,0 +1,9 @@
+_target_: world_model.networks.mup_gpt2.MuGPT2
+embedding_dim: 256
+nb_heads: 4
+nb_layers: 12
+vocabulary_size: ???
+nb_timesteps: ${data.sequence_length}
+nb_tokens_per_timestep: ???
+dropout_rate: 0.
+bias: true

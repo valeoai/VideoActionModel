@@ -14,6 +14,8 @@ from torchmetrics.text import Perplexity
 
 from world_model.utils.generation import TopKSampler, autoregressive_image_sequence_generation
 
+from mup import make_base_shapes, set_base_shapes
+
 
 class NextTokenPredictor(LightningModule):
     """
@@ -29,7 +31,8 @@ class NextTokenPredictor(LightningModule):
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
         compile: bool = False,
-        log_norm: bool = False
+        log_norm: bool = False,
+        mup_base_shapes = None
     ) -> None:
         """
         Args:
@@ -52,6 +55,11 @@ class NextTokenPredictor(LightningModule):
         self.network = hydra.utils.instantiate(network)
         self.action_tokenizer = hydra.utils.instantiate(action_tokenizer)
         self.sequence_adapter = hydra.utils.instantiate(sequence_adapter)
+        
+        if mup_base_shapes is not None:
+            _ = set_base_shapes(self.network, mup_base_shapes)
+            # re-initialize after set_base_shapes
+            self.network.apply(self.network._init_weights)
         
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
         
@@ -205,7 +213,7 @@ class NextTokenPredictor(LightningModule):
             # The unit of the scheduler's step size, could also be 'step'.
             # 'epoch' updates the scheduler on epoch end whereas 'step'
             # updates it after a optimizer update.
-            "interval": "epoch",
+            "interval": "step",
             
             # How many epochs/steps should pass between calls to
             # `scheduler.step()`. 1 corresponds to updating the learning
