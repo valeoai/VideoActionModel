@@ -6,11 +6,12 @@ defaults:
   - override /model/network: mup_gpt2
   - override /model/sequence_adapter: gpt_adapter
   - override /model/action_tokenizer: nuplan_speed_and_curvature_Kmeans_vocab250
-  - override /callbacks: callbacks_training
+  - override /callbacks: callbacks_nuplan_training
   - override /trainer: deepspeed2
   - override /logger: many_loggers
-  - override /paths: adastra
+  - override /paths: adastra_nuplan
   - override /optimizer: muAdamW
+  - override /scheduler: warmup_stable_drop
 
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
@@ -35,16 +36,16 @@ data:
 paths:
   quantized_nuscenes_root_dir: /lus/work/CT10/cin4181/SHARED/datasets_processed/nuplan_tokenized/VQGAN_ImageNet_f16_1024
 
-# VQGAN_ImageNet_f16_1024/metadata.json indicates 14x25 quantized image features
+# VQGAN_ImageNet_f16_1024/metadata.json indicates 16x30 quantized image features for nuplan
 model:
-  mup_base_shapes: ./mup_shapes/gpt2_12layers_16timesteps_basewidth128
+  mup_base_shapes: ./mup_shapes/gpt2_12layers_16timesteps_basewidth128.bsh
   network:
     embedding_dim: 128
     nb_heads: 2
     nb_layers: 12
     vocabulary_size: 1274 # 1024 + 250 | visual_vocab_size + sum(action_vocab_sizes)
     nb_timesteps: ${data.train_dataset_params.sequence_length}
-    nb_tokens_per_timestep: 351 # 14*25 + 1 | visual + action tokens
+    nb_tokens_per_timestep: 481 # 16*30 + 1 | visual + action tokens
   sequence_adapter:
     visual_vocab_size: 1024
     action_vocab_sizes:

@@ -163,6 +163,7 @@ class MuGPT2(nn.Module):
         self.block_size = nb_timesteps*nb_tokens_per_timestep
         self.embedding_dim = embedding_dim
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
+        self.output_tied=output_tied
 
         self.transformer = nn.ModuleDict(dict(
             wie = nn.Embedding(vocabulary_size, embedding_dim),         # token embeddings
@@ -177,7 +178,7 @@ class MuGPT2(nn.Module):
         ))
         
         if output_tied:
-            self.lm_head = MuSharedReadout(self.wie.weight, bias=False, output_mult=output_mult)
+            self.lm_head = MuSharedReadout(self.transformer.wie.weight, bias=False, output_mult=output_mult)
         else:
             self.lm_head = MuReadout(embedding_dim, vocabulary_size, bias=False, output_mult=output_mult)
         
