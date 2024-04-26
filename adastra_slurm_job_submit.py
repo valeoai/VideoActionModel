@@ -10,7 +10,10 @@ REPO_DIR = WORK_DIR / "NextTokenPredictor"
 
 # Adastra have 1 AMD Trento EPYC 7A53 64 cores processors for one node (8GPUs)
 # Distribute 64 cores evenly across 8 tasks(GPUs) = 8 CPUs/GPU
-default_cpu_per_task = 8
+# Because Adastra GPU nodes only have 256Gb of RAM and 
+# NuPlan pickle is quite big  we set 
+# default_cpu_per_task the number of logical cores per MPI task =4
+default_cpu_per_task = 4
 
 if __name__ == "__main__":
     parser = ArgumentParser(prog="PROG")
@@ -18,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("--python_cmd", "-p", type=str, required=True)
     parser.add_argument("--gpus_per_node", type=int, default=1)
     parser.add_argument("--nodes", type=int, default=1)
-    parser.add_argument("--wall_time", "-wt", type=int, default=20)
+    parser.add_argument("--wall_time", "-wt", type=int, default=24) # adastra has max time of 24h
     parser.add_argument("--allow_hyper_threading", action='store_true')
     # parse params
     args = parser.parse_args()
