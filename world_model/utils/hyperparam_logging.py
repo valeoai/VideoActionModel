@@ -57,7 +57,11 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     hparams["name"] = config.get("name")
     hparams["seed"] = config.get("seed")
     
-    hparams["training_device"] = torch.cuda.get_device_name(0)
+    # Check if CUDA is available
+    if torch.cuda.is_available():
+        hparams["training_device"] = torch.cuda.get_device_name(0)
+    else:
+        hparams["training_device"] = "cpu"  # or handle the situation appropriately
     
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
