@@ -5,7 +5,7 @@ defaults:
   - override /model: next_token_predictor
   - override /model/network: gpt2
   - override /model/sequence_adapter: gpt_adapter
-  - override /model/action_tokenizer: nuscenes_speed_and_curvature_Kmeans_vocab150
+  - override /model/action_tokenizer: nuplan_speed_and_curvature_Kmeans_vocab250
   - override /callbacks: callbacks_training
   - override /trainer: deepspeed2
   - override /logger: many_loggers
@@ -40,7 +40,7 @@ model:
     embedding_dim: 128
     nb_heads: 4
     nb_layers: 12
-    vocabulary_size: 16534 # 8096 + 150 visual_vocab_size + sum(action_vocab_sizes)
+    vocabulary_size: 16634 # 16384 + 250 visual_vocab_size + sum(action_vocab_sizes)
     nb_timesteps: ${data.train_dataset_params.sequence_length}
     nb_tokens_per_timestep: 1401 # 28*50 + 1 | visual + action tokens
   sequence_adapter:
