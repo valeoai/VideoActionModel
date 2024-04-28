@@ -16,6 +16,7 @@ every_quarter_epoch_checkpoint:
   dirpath: "${paths.output_dir}/${name}/checkpoints/"
   filename: "quarters_epoch_{epoch:03d}_step_{step:010d}"
   every_n_train_steps: 2464
+  save_top_k: -1
 
 last_hours_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
