@@ -55,9 +55,9 @@ model:
     dropout_rate: 0.0
     init_std: 0.02
     bias: True
-    output_mult: 1.0
+    output_mult: 8.0
     output_tied: True
-    attn_mult: 1.0
+    attn_mult: 8.0
   sequence_adapter:
     visual_vocab_size: 1024
     action_vocab_sizes:
