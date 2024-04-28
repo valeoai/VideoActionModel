@@ -57,9 +57,12 @@ class NextTokenPredictor(LightningModule):
         self.sequence_adapter = hydra.utils.instantiate(sequence_adapter)
         
         if mup_base_shapes is not None:
+            print("mup_base_shapes configured")
             _ = set_base_shapes(self.network, mup_base_shapes)
             # re-initialize after set_base_shapes
             self.network.apply(self.network._init_weights)
+        else:
+            print('Network NOT mu-Parametrized')
         
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
         
