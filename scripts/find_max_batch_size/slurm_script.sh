@@ -43,7 +43,7 @@ set -x
 
 # Path to your wrapper script and PyTorch script
 WRAPPER_SCRIPT=${REPO_DIR}"/scripts/find_max_batch_size/wrapper_script.py"
-PYTORCH_SCRIPT=${REPO_DIR}"/scripts/find_max_batch_size/pytorch_lightning_script.py"
+PYTORCH_SCRIPT="${REPO_DIR}/world_model/train.py experiment=GPT2_vqgan_imagenet_f16_1024 trainer=deepspeed2 ++trainer.limit_train_batches=5 ++trainer.limit_val_batches=2 ++trainer.max_epochs=2 paths.quantized_nuscenes_root_dir=/scratch/sshfs3/ML-AI/world_model_project/data_preprocessed/nuscenes_tokenized/VQGAN_ImageNet_f16_1024/  model.network.nb_layers=12  data.train_dataset_params.sequence_length=16 data.dataloader_params.multiprocessing_context='fork' model.network.embedding_dim=768 model.network.nb_heads=12 data.dataloader_params.batch_size=${BAYCH_SIZE}  ++trainer.devices=2 ++trainer.num_nodes=1  name=GPT2_atnorth_nuscenes_test_`date '+%m%d_%H%M_%s'`"
 
 # Iterate over batch sizes
 for BATCH_SIZE in {1..10}

@@ -16,10 +16,11 @@
 
 # Load required modules and source your Python environment
 REPO_DIR="/lus/home/CT10/cin4181/fbartoccioni/NextTokenPredictor"
+TOKENIZED_DATA_DIR="/lus/work/CT10/cin4181/SHARED/datasets_processed/nuscenes_tokenized"
 
 module purge
 
-source ${REPO_DIR}/scripts/activate_world_model_env.sh
+source ${REPO_DIR}/scripts/activate_world_model_env_adastra.sh
 
 WRAPPER_SCRIPT=${REPO_DIR}"/scripts/find_max_batch_size/wrapper_script.py"
 
@@ -41,7 +42,7 @@ for TOTAL_BATCH_SIZE in 64 128 256; do
 
             NB_HEADS=$(($LAYER_DIM / 64))
 
-            PYTORCH_SCRIPT="$REPO_DIR/world_model/train.py experiment=GPT2_vqgan_imagenet_f16_1024 trainer=deepspeed2 ++trainer.limit_train_batches=5 ++trainer.limit_val_batches=2 ++trainer.max_epochs=2 paths.quantized_nuscenes_root_dir=/scratch/sshfs3/ML-AI/world_model_project/data_preprocessed/nuscenes_tokenized/VQGAN_ImageNet_f16_1024/  model.network.nb_layers=12  data.train_dataset_params.sequence_length=16 data.dataloader_params.multiprocessing_context='fork' model.network.embedding_dim=$LAYER_DIM model.network.nb_heads=$NB_HEADS data.dataloader_params.batch_size=$PER_GPU_BATCH_SIZE  ++trainer.devices=$NUM_GPUS ++trainer.num_nodes=$USE_NODES  name=GPT2_atnorth_nuscenes_test_`date '+%m%d_%H%M_%s'`"
+            PYTORCH_SCRIPT="$REPO_DIR/world_model/train.py experiment=GPT2_vqgan_imagenet_f16_1024 trainer=deepspeed2 ++trainer.limit_train_batches=5 ++trainer.limit_val_batches=2 ++trainer.max_epochs=2 paths.quantized_nuscenes_root_dir=$TOKENIZED_DATA_DIR/VQGAN_ImageNet_f16_1024/  model.network.nb_layers=12  data.train_dataset_params.sequence_length=16 data.dataloader_params.multiprocessing_context='fork' model.network.embedding_dim=$LAYER_DIM model.network.nb_heads=$NB_HEADS data.dataloader_params.batch_size=$PER_GPU_BATCH_SIZE  ++trainer.devices=$NUM_GPUS ++trainer.num_nodes=$USE_NODES  name=GPT2_atnorth_nuscenes_test_`date '+%m%d_%H%M_%s'`"
 
             # Run the job with srun adjusting the number of nodes dynamically
             srun --nodes=$USE_NODES --ntasks-per-node=$NUM_GPUS \
