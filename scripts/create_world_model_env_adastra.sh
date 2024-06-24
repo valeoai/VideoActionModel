@@ -20,8 +20,10 @@ chmod +x ${ENVS_ROOT_DIR}/${env_name}/bin/activate
 # Activate environment and update pip
 source ${ENVS_ROOT_DIR}/${env_name}/bin/activate
 
-# this script load all necessary module for wm_metrics
-source ./activate_world_model_env.sh
+# load all necessary module for wm_metrics
+module load craype-accel-amd-gfx90a craype-x86-trento # Compiler ?
+module load PrgEnv-cray # devkit ?
+module load amd-mixed # AMD hardware
 
 # install all necessary python packages
 python3 -m pip install --upgrade pip --no-cache-dir
@@ -31,4 +33,4 @@ pip3 install lightning==2.2.0 --no-cache-dir
 pip3 install torchmetrics==0.11.4 --no-cache-dir
 pip3 install hydra-core>=1.1.0 --no-cache-dir
 pip3 install hydra-colorlog>=1.1.0 --no-cache-dir
-pip3 install fairscale opencv-python-headless matplotlib pyquaternion wandb python-dotenv rich torch-summary timm lpips tensorboard --no-cache-dir
+pip3 install fairscale opencv-python-headless matplotlib pyquaternion wandb python-dotenv rich torch-summary timm lpips tensorboard deepspeed mup --no-cache-dir
