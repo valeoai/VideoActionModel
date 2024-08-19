@@ -5,7 +5,7 @@ defaults:
   - override /model: next_token_predictor
   - override /model/network: mup_gpt2
   - override /model/sequence_adapter: gpt_adapter
-  - override /model/action_tokenizer: nuplan_speed_and_curvature_Kmeans_vocab250
+  - override /model/action_tokenizer: zero_speed_and_curvature
   - override /callbacks: callbacks_nuplan_training
   - override /trainer: deepspeed2
   - override /logger: many_loggers
@@ -57,7 +57,7 @@ model:
     mlp_dim_mult: 4
     vocabulary_size: 16385 # 16384 + 1 | visual_vocab_size + sum(action_vocab_sizes)
     nb_timesteps: ${data.train_dataset_params.sequence_length}
-    nb_tokens_per_timestep: 481 # 18*32 + 2 | visual tokens + action embedding 
+    nb_tokens_per_timestep: 481 # 18*32 + 2 | visual tokens + action embeddings 
     dropout_rate: 0.0
     init_std: 0.02
     bias: False
@@ -65,6 +65,6 @@ model:
     output_scale: 8.0
     attn_scale: 8.0
   sequence_adapter:
-    visual_vocab_size: 1024
+    visual_vocab_size: 16384
     action_vocab_sizes:
-      - 2
+      - 1
