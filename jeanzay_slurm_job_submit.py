@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 
 WORK_DIR = Path(os.path.expandvars("$WORK"))
-REPO_DIR = WORK_DIR / 'NextTokenPrediction'
+REPO_DIR = WORK_DIR / 'NextTokenPredictor'
 
 default_cpu_per_task = 24
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         
         "module purge", # cleans out the modules loaded in interactive and inherited by default
-        f"source {WORK_DIR}/python_envs/world_model/bin/activate",
+        f"source {WORK_DIR}/python_envs/worldmodel/bin/activate",
         
         "export MPICH_GPU_SUPPORT_ENABLED=1",
 

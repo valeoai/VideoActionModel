@@ -10,10 +10,6 @@ import torch
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 
-from torchmetrics.text import Perplexity
-
-from world_model.utils.generation import TopKSampler, autoregressive_image_sequence_generation
-
 from mup import set_base_shapes
 
 
@@ -65,12 +61,6 @@ class NextTokenPredictor(LightningModule):
             print('Network NOT mu-Parametrized')
         
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
-        
-        self.topk_sampler = TopKSampler(k=3)
-        
-        # https://huggingface.co/docs/transformers/en/perplexity
-        # https://lightning.ai/docs/torchmetrics/stable/text/perplexity.html
-        self.perplexity = Perplexity()
     
     def on_before_optimizer_step(self, optimizer):
         if self.hparams.log_norm:
