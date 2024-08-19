@@ -1,16 +1,18 @@
 defaults:
   - transform: crop_and_resize
 
-_target_: world_model.dataloader.tokenized_sequence_nuscenes.TokenizedSequenceNuscenesDataModule
-nuscenes_pickle_path: ${paths.nuscenes_pickle_path}
+_target_: world_model.dataloader.tokenized_sequence_nuplan.TokenizedSequenceNuplanDataModule
+pickle_path: ${paths.pickle_path}
+train_pickle_name: ???
+val_pickle_name: ???
 train_dataset_params:
-  nuscenes_root_dir: ${paths.data_dir}
-  quantized_nuscenes_root_dir: ${paths.quantized_nuscenes_root_dir}
+  data_root_dir: ${paths.data_root_dir}
+  quantized_data_root_dir: ${paths.quantized_data_root_dir}
   sequence_length: 5
   load_image: False
 val_dataset_params:
-  nuscenes_root_dir: ${paths.data_dir}
-  quantized_nuscenes_root_dir: ${paths.quantized_nuscenes_root_dir}
+  data_root_dir: ${paths.data_root_dir}
+  quantized_data_root_dir: ${paths.quantized_data_root_dir}
   sequence_length: ${data.train_dataset_params.sequence_length}
   load_image: False
 dataloader_params: 

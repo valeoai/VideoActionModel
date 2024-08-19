@@ -1,0 +1,9 @@
+# Path to the directory where checkpoints and logs will be saved
+output_dir: /lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor
+
+# Path to the directory where data is located
+data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/nuplan/nuplan-v1.1/sensor_blobs/
+
+pickle_path: /lustre/fswork/projects/rech/ycy/commun/nuplan_pickling/generated_files/
+
+quantized_data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/nuplan_tokenized/VQGAN_ImageNet_f16_1024

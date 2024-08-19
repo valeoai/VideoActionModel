@@ -2,8 +2,8 @@
 output_dir: null
 
 # Path to the directory where data is located
-data_dir: null
+data_root_dir: null
 
-nuscenes_pickle_path: null
+pickle_path: null
 
-quantized_nuscenes_root_dir: null
+quantized_data_root_dir: null
