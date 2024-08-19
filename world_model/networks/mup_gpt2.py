@@ -8,6 +8,12 @@ References:
 https://github.com/openai/gpt-2/blob/master/src/model.py
 2) huggingface/transformers PyTorch implementation:
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
+
+mup:
+LayerNorm elementwise_affine=False  (see https://arxiv.org/abs/2404.05728)
+MuReadout
+MuSharedReadout
+normal_ init
 """
 
 import math
@@ -18,32 +24,48 @@ from torch.nn import functional as F
 
 from einops import rearrange
 
-from world_model.networks.gpt2 import MLP
 
 from mup import MuReadout, MuSharedReadout, normal_
 
 
+class MLP(nn.Module):
+
+    def __init__(self, dim_model, bias, dropout, hidden_dim_mult=4):
+        super().__init__()
+        self.c_fc    = nn.Linear(dim_model, hidden_dim_mult * dim_model, bias=bias)
+        self.gelu    = nn.GELU()
+        self.c_proj  = nn.Linear(hidden_dim_mult * dim_model, dim_model, bias=bias)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = self.c_fc(x)
+        x = self.gelu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x)
+        return x
+
+
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, n_embd, n_head, bias, dropout, block_size, attn_mult):
+    def __init__(self, dim_model, nb_heads, bias, dropout, block_size, attn_scale):
         super().__init__()
-        assert n_embd % n_head == 0
+        assert dim_model % nb_heads == 0
         
-        self.n_head = n_head
-        self.n_embd = n_embd
+        self.nb_heads = nb_heads
+        self.dim_model = dim_model
         
         ########### muP ###########
-        self.attn_mult = attn_mult
+        self.attn_scale = attn_scale
         self.attn_score = nn.Identity() # just for coordcheck
         self.query = nn.Identity() # just for coordcheck
         self.key = nn.Identity() # just for coordcheck
         self.value = nn.Identity() # just for coordcheck
         
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(n_embd, 3 * n_embd, bias=bias)
+        self.c_attn = nn.Linear(dim_model, 3 * dim_model, bias=bias)
         
         # output projection
-        self.c_proj = nn.Linear(n_embd, n_embd, bias=bias)
+        self.c_proj = nn.Linear(dim_model, dim_model, bias=bias)
         
         # regularization
         self.attn_dropout = nn.Dropout(dropout)
@@ -59,46 +81,32 @@ class CausalSelfAttention(nn.Module):
                                         .view(1, 1, block_size, block_size))
 
     def forward(self, x):
-        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (dim_model)
 
         # calculate query, key, values for all heads in batch
         x = self.c_attn(x)
         
         # split into qkv and heads
-        q, k, v = rearrange(x, "b seq (n n_head dim_head) -> n b n_head seq dim_head", n=3, n_head=self.n_head)
+        q, k, v = rearrange(x, "b seq (n nb_heads dim_head) -> n b nb_heads seq dim_head", n=3, nb_heads=self.nb_heads)
         
         ### muP: just for coord check (debug)
         q = self.query(q)
         k = self.key(k)
         v = self.value(v)
         
-        ### muP: attention scaling
-        attn_scaling = self.attn_mult / v.size(-1)
+        ### muP: attention scaling 1/dim_head instead of 1/sqrt(dim_head)
+        attn_scaling = self.attn_scale / v.size(-1)
 
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
-            # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(
-                q, k, v,
-                attn_mask=None, 
-                dropout_p=self.dropout if self.training else 0,
-                is_causal=True,
-                scale=attn_scaling ### muP: attention scaling
-            )
-        else:            
-            ### muP: attention scaling
-            att = (q @ k.transpose(-2, -1)) * attn_scaling
-            
-            ### muP no-op, but allows tracking for coord check
-            att = self.attn_score(att)
-            
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        # efficient attention using Flash Attention CUDA kernels
+        y = torch.nn.functional.scaled_dot_product_attention(
+            q, k, v,
+            attn_mask=None, 
+            dropout_p=self.dropout if self.training else 0,
+            is_causal=True,
+            scale=attn_scaling ### muP: attention scaling
+        )
         
-        y = rearrange(y, "b n_head seq dim_v -> b seq (n_head dim_v)") # re-assemble all head outputs side by side
+        y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)") # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
@@ -108,12 +116,12 @@ class CausalSelfAttention(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, n_embd, n_head, bias, dropout, block_size, attn_mult):
+    def __init__(self, dim_model, nb_heads, bias, dropout, block_size, attn_scale, learnable_gains=False, mlp_dim_mult=4):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(n_embd, bias=bias)
-        self.attn = CausalSelfAttention(n_embd, n_head, bias, dropout, block_size, attn_mult)
-        self.ln_2 = nn.LayerNorm(n_embd, bias=bias)
-        self.mlp = MLP(n_embd, bias, dropout)
+        self.ln_1 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
+        self.attn = CausalSelfAttention(dim_model, nb_heads, bias, dropout, block_size, attn_scale)
+        self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
+        self.mlp = MLP(dim_model, bias, dropout, mlp_dim_mult)
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
@@ -132,21 +140,23 @@ class MuGPT2(nn.Module):
         nb_timesteps: maximum number of timesteps found in one sequence
         nb_tokens_per_timestep: number of tokens ithi each timestep
         dropout_rate: dropout rate
-        bias: True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+        bias: True: bias in Linears. False: a bit better and faster
     """
     def __init__(self, 
         embedding_dim: int = 256,
         nb_layers: int = 12,
         nb_heads: int = 16,
+        mlp_dim_mult: int = 4,
         vocabulary_size: int = 1104,
         nb_timesteps: int = 8,
         nb_tokens_per_timestep: int  = 352,
         dropout_rate: float = 0.0,
         init_std: float = 0.02,
         bias: bool = True,   
-        output_mult: float = 1.0,
         output_tied: bool = True,
-        attn_mult: float = 1.0     
+        output_scale: float = 1.0,
+        attn_scale: float = 1.0,  
+        learnable_gains: bool = False   
     ):
         
         super().__init__()
@@ -154,19 +164,19 @@ class MuGPT2(nn.Module):
         assert nb_tokens_per_timestep is not None
         assert nb_timesteps is not None
         
+        self.embedding_dim = embedding_dim
         self.bias = bias
         self.init_std = init_std
-        self.attn_mult = attn_mult
-        self.output_mult = output_mult
+        self.attn_scale = attn_scale
+        self.output_scale = output_scale
+        self.mlp_dim_mult = mlp_dim_mult
+        self.nb_layers = nb_layers
+        self.output_tied = output_tied
         
         self.nb_timesteps = nb_timesteps
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
-        
-        self.nb_layers = nb_layers
         self.block_size = nb_timesteps*nb_tokens_per_timestep
-        self.embedding_dim = embedding_dim
-        self.nb_tokens_per_timestep = nb_tokens_per_timestep
-        self.output_tied=output_tied
+        
 
         self.transformer = nn.ModuleDict(dict(
             wie = nn.Embedding(vocabulary_size, embedding_dim),         # token embeddings
@@ -174,22 +184,33 @@ class MuGPT2(nn.Module):
             wte = nn.Embedding(nb_timesteps, embedding_dim),            # temporal position embeddings
             drop = nn.Dropout(dropout_rate),
             h = nn.ModuleList([
-                Block(embedding_dim, nb_heads, bias, dropout_rate, self.block_size, self.attn_mult)
+                Block(embedding_dim, nb_heads, bias, dropout_rate, self.block_size, attn_scale, learnable_gains, mlp_dim_mult)
                 for _ in range(nb_layers)
             ]),
-            ln_f = nn.LayerNorm(embedding_dim, bias=bias),
+            ln_f = nn.LayerNorm(embedding_dim, elementwise_affine=learnable_gains),
         ))
         
         if output_tied:
-            self.lm_head = MuSharedReadout(self.transformer.wie.weight, bias=False, output_mult=self.output_mult)
+            self.lm_head = MuSharedReadout(self.transformer.wie.weight, bias=False, output_mult=output_scale)
         else:
-            self.lm_head = MuReadout(embedding_dim, vocabulary_size, bias=False, output_mult=output_mult)
+            self.lm_head = MuReadout(embedding_dim, vocabulary_size, bias=False, output_mult=output_scale)
         
         # init all weights
+        ################## /!\ IMPORTANT READ ##################
+        ### muP: swap constant std normal init with `normal_` from `mup.init`.
+        ### Because `_init_weights` is called in `__init__`, before `infshape` is set,
+        ### we need to manually call `self.apply(self._init_weights)` after calling
+        ### `set_base_shape(model, base)` 
+        ###
+        ### for proper muP init
+        ### 1. instantiate model
+        ### 2. call set_base_shape(model, base_shape.bsh)
+        ### 3. reinit manually with model.apply(model._init_weights)
         self.apply(self._init_weights)
         
         # report number of parameters
-        print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+        print("number of non-embedding parameters: %.2fM" % (self.get_num_params()/1e6,))
+
 
     def get_num_params(self, non_embedding=True):
         """
@@ -202,33 +223,81 @@ class MuGPT2(nn.Module):
         if non_embedding:
             n_params -= self.transformer.wse.weight.numel()
             n_params -= self.transformer.wte.weight.numel()
+        if not self.output_tied:
+            n_params -= self.transformer.wie.weight.numel()
         return n_params
+    
+    
+    def _init_c_proj_residual(self, module, is_mlp):
+        '''
+        Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
+        
+            > A modified initialization which accounts for the accumulation on the residual path with model depth. Scale
+            > the weights of residual layers at initialization by a factor of 1/√N where N is the # of residual layers.
+            >   -- GPT-2 :: https://openai.com/blog/better-language-models/
+            
+        This is combined with the muP initilization that is scaling init_std by 1/sqrt(width).
+        
+        Note: for the MLP c_proj, the scaling is 1/sqrt(width * mlp_hidden_mult)
+        '''
+        # times 2 because in a block there are 2 residual paths, attn & mlp 
+        scaling = 2 * self.nb_layers * self.embedding_dim
+        
+        if is_mlp:
+            scaling *= self.mlp_dim_mult
+        
+        depth_std = self.init_std * scaling**-0.5
+        
+        for p_name, p in module.named_parameters():
+            if p_name.endswith('c_proj.weight'):
+                p.data.normal_(mean=0.0, std=depth_std)
 
     def _init_weights(self, module):
+        '''
+        This function is called using model.apply(model._init_weights)
         
-        ################## /!\ IMPORTANT READ ##################
-        ### muP: swap constant std normal init with normal_ from `mup.init`.
-        ### Because `_init_weights` is called in `__init__`, before `infshape` is set,
-        ### we need to manually call `self.apply(self._init_weights)` after calling
-        ### `set_base_shape(model, base)` 
-        ###
-        ### for proper muP init
-        ### 1. instantiate model and then 
-        ### 2. set_base_shape(model, base)
-        ### 3. reinit manually with model.apply(model._init_weights)
+        This will apply `_init_weights` recursively to every submodule.
+        Children are seen first and then Parents.
         
+        Example with the model=MLP(), if we print every module seen it gives:
+
+            Linear(in_features=128, out_features=512, bias=False)
+            ------------------------------
+            GELU(approximate='none')
+            ------------------------------
+            Linear(in_features=512, out_features=128, bias=False)
+            ------------------------------
+            Dropout(p=0.0, inplace=False)
+            ------------------------------
+            MLP(
+            (c_fc): Linear(in_features=128, out_features=512, bias=False)
+            (gelu): GELU(approximate='none')
+            (c_proj): Linear(in_features=512, out_features=128, bias=False)
+            (dropout): Dropout(p=0.0, inplace=False)
+            )
+        
+        This means that specific initialization to MLP using isinstance(module, MLP)
+        will override the initialization from isinstance(module, nn.Linear)
+        
+        We use this fact apply specific initialization rules in some modules.
+        For example the init scaling of the MLP hidden nn.Linear layer is different
+        than other nn.Linear layers.
+        '''        
         
         # MuReadout zero init          
         if isinstance(module, MuReadout) and not self.output_tied:
+            # https://arxiv.org/abs/2404.05728 | 4.2.6 SP Unembedding Initialization
+            # A simple alternative to either initialization is a zeroinitialized unembedding projection [15],
+            # which we found to perform similarly to the µP initialization and to also facilitate transfer
             module.weight.data.zero_()
             
         elif isinstance(module, nn.Linear):
-            # Slightly different from the TF version which uses truncated_normal for initialization
-            # cf https://github.com/pytorch/pytorch/pull/5617
+
             if hasattr(module.weight, 'infshape'):
                 normal_(module.weight, mean=0.0, std=self.init_std)
             else:
-                module.weight.data.normal_(mean=0.0, std=self.init_std)
+                
+                module.weight.data.normal_(mean=0.0, std=self.init_std * self.embedding_dim**-0.5)
                 
             if module.bias is not None:
                 module.bias.data.zero_()
@@ -239,12 +308,14 @@ class MuGPT2(nn.Module):
                 module.weight.data[module.padding_idx].zero_()
                 
         elif isinstance(module, nn.LayerNorm):
-            module.bias.data.zero_()
-            module.weight.data.fill_(1.0)
+            if module.bias is not None:
+                module.bias.data.zero_()
+            if module.weight is not None:
+                module.weight.data.fill_(1.0)
 
-
-        ### muP query zero init
-        if isinstance(module, CausalSelfAttention):
+        elif isinstance(module, CausalSelfAttention):
+            ### muP query zero init
+            # yield equal attention weights over all past timesteps at initialization
             
             # if attention uses nn.Linear fanout is first dim
             # because nn.Linear applies y=xA.T+b
@@ -256,22 +327,10 @@ class MuGPT2(nn.Module):
             # if using Conv1D, change init in last dim
             module.c_attn.weight.data[:fanout//3, :] = 0
             
+            self._init_c_proj_residual(module, is_mlp=False)
             
-        # Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
-        #
-        #   > A modified initialization which accounts for the accumulation on the residual path with model depth. Scale
-        #   > the weights of residual layers at initialization by a factor of 1/√N where N is the # of residual layers.
-        #   >   -- GPT-2 :: https://openai.com/blog/better-language-models/
-        #
-        depth_std = self.init_std / math.sqrt(2 * self.nb_layers)
-        
-        for p_name, p in module.named_parameters():
-            if p_name.endswith('c_proj.weight'):
-                ### muP Special Scaled Initialization --> There are 2 Layer Norms per Transformer Block
-                if hasattr(p, 'infshape'):
-                    normal_(p, mean=0.0, std=depth_std)
-                else:
-                    p.data.normal_(mean=0.0, std=depth_std)
+        elif isinstance(module, MLP):
+            self._init_c_proj_residual(module, is_mlp=True)
                     
 
     def forward(self, token_sequence, spatial_positions, temporal_positions, inference=False):

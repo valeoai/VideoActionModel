@@ -1,0 +1,70 @@
+# @package _global_
+
+defaults:
+  - override /data: tokenized_sequence_nuplan
+  - override /model: next_token_predictor
+  - override /model/network: mup_gpt2
+  - override /model/sequence_adapter: gpt_adapter
+  - override /model/action_tokenizer: nuplan_speed_and_curvature_Kmeans_vocab250
+  - override /callbacks: callbacks_nuplan_training
+  - override /trainer: deepspeed2
+  - override /logger: many_loggers
+  - override /paths: jeanzay_nuplan
+  - override /optimizer: muAdamW
+  - override /scheduler: warmup_stable_drop
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+
+trainer:
+  max_epochs: 5
+  # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
+  # gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  log_every_n_steps: 5
+
+scheduler:
+  start_lr: ${optimizer.lr}
+  warmup_iter: 98 # 1% ~ end_iter * 0.01
+  end_iter: 9857 # len_dataset // 256 = 2523392 // 256 = 9857
+  drop_iter: 985 # 10% ~ end_iter * 0.1
+
+data:
+  train_pickle_name: nuplan_train_front_camera_data.pkl
+  val_pickle_name: nuplan_val_front_camera_data.pkl
+  train_dataset_params:
+    sequence_length: 20
+    subsampling_factor: 2
+  val_dataset_params:
+    subsampling_factor: 2
+  dataloader_params:
+    batch_size: 2
+    num_workers: 7
+    prefetch_factor: 1
+    multiprocessing_context: spawn 
+
+paths:
+  quantized_data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/nuplan_tokenized/VQ_ds16_16384_llamagen
+
+# VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
+model:
+  mup_base_shapes: ./mup_shapes/gpt2_24layers_nobias_basewidth128.bsh
+  network:
+    embedding_dim: 128
+    nb_heads: 1
+    nb_layers: 24
+    mlp_dim_mult: 4
+    vocabulary_size: 16385 # 16384 + 1 | visual_vocab_size + sum(action_vocab_sizes)
+    nb_timesteps: ${data.train_dataset_params.sequence_length}
+    nb_tokens_per_timestep: 481 # 18*32 + 2 | visual tokens + action embedding 
+    dropout_rate: 0.0
+    init_std: 0.02
+    bias: False
+    output_tied: True
+    output_scale: 8.0
+    attn_scale: 8.0
+  sequence_adapter:
+    visual_vocab_size: 1024
+    action_vocab_sizes:
+      - 2
