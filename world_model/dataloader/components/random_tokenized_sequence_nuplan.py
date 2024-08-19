@@ -106,8 +106,8 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
 
             # sequence_length + 1 because we need the position of one more frame
             # to compute `sequence_length` actions (change in pose between two frame)
-            max_temporal_index = subsampling_factor * (self.sequence_length + 1)
-            for t in range(0, max_temporal_index, subsampling_factor):
+            max_temporal_index = self.subsampling_factor * (self.sequence_length + 1)
+            for t in range(0, max_temporal_index, self.subsampling_factor):
                 temporal_index = sequence_start_index + t
 
                 # Going over the dataset size limit.

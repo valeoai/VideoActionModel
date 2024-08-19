@@ -98,6 +98,7 @@ class SceneBasedNuplanDataset(torch.utils.data.Dataset):
         self.context_to_prediction_index = context_to_prediction_index
         self.nb_context_frames = nb_context_frames
         self.nb_prediction_frames = nb_prediction_frames
+        self.subsampling_factor = subsampling_factor
 
         if load_image:
             if transform is None:            
@@ -138,8 +139,8 @@ class SceneBasedNuplanDataset(torch.utils.data.Dataset):
         scene_name = self.scene_indices[index]
         frames = self.scenes[scene_name][:self.extracted_sequence_length]
 
-        context_frames = frames[self.start_context_index:self.context_to_prediction_index][::subsampling_factor]
-        prediction_frames = frames[self.context_to_prediction_index:self.end_prediction_index][::subsampling_factor]
+        context_frames = frames[self.start_context_index:self.context_to_prediction_index][::self.subsampling_factor]
+        prediction_frames = frames[self.context_to_prediction_index:self.end_prediction_index][::self.subsampling_factor]
 
         combined_frames = context_frames + prediction_frames
         data = self._load_data(combined_frames)
