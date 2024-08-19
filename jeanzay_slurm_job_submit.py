@@ -40,10 +40,9 @@ if __name__ == "__main__":
         f"#SBATCH --job-name={args.run_name}",
         "#SBATCH -C h100",
         f"#SBATCH --nodes={args.nodes}",
-        f"#SBATCH --gpus-per-node={args.gpus_per_node}",
+        f"#SBATCH --gres=gpu:{args.gpus_per_node}",
         f"#SBATCH --ntasks-per-node={args.gpus_per_node}",
         f"#SBATCH --cpus-per-task={default_cpu_per_task}", # Logical cores per MPI task  
-        "#SBATCH --exclusive" if args.gpus_per_node == 8 else '',
         
         # nomultithred to get more RAM per GPU
         # see https://github.com/valeoai/VisualQuantization/blob/dev/scripts/SLURM_PREPOST.md

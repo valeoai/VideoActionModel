@@ -174,9 +174,9 @@ class SceneBasedNuplanDataset(torch.utils.data.Dataset):
                 image = self.transform(image)
                 data['images'].append(image)
 
-            quantized_data_path = (self.quantized_data_root_dir / relative_img_path).with_suffix('.pkl')
-            with open(quantized_data_path, 'rb') as f:
-                quantized_data = pickle.load(f)
+            quantized_data_path = (self.quantized_data_root_dir / relative_img_path).with_suffix('.npy')
+            quantized_data = np.load(quantized_data_path)
+            quantized_data = torch.tensor(quantized_data)
             data['visual_tokens'].append(quantized_data)
 
             ego_to_world_tran = torch.tensor(cam_data['ego_to_world_tran'])

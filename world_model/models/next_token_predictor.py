@@ -128,7 +128,7 @@ class NextTokenPredictor(LightningModule):
         
     def on_validation_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
-        self.perplexity.reset()
+        pass
         
     def validation_step(self, batch: Any, batch_idx: int) -> None:
         """Perform a single validation step on a batch of data from the validation set.

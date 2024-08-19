@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import List, Optional, Callable, Dict
 import numpy as np
 from collections import defaultdict
-import pickle
 
 from world_model.dataloader.components.transforms import Normalize
 from world_model.utils import  RankedLogger
@@ -157,9 +156,9 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
                 data['images'].append(image)
             
             ####### load image tokens
-            quantized_data_path = (self.quantized_data_root_dir / relative_img_path).with_suffix('.pkl')
-            with open(quantized_data_path, 'rb') as f:
-                quantized_data = pickle.load(f)
+            quantized_data_path = (self.quantized_data_root_dir / relative_img_path).with_suffix('.npy')
+            quantized_data = np.load(quantized_data_path)
+            quantized_data = torch.tensor(quantized_data)
             data['visual_tokens'].append(quantized_data)
             
             ####### load ego motion data
