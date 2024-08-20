@@ -62,8 +62,8 @@ model:
     init_std: 0.02
     bias: False
     output_tied: True
-    output_scale: 8.0
-    attn_scale: 8.0
+    output_scale: 1.0
+    attn_scale: 1.0
   sequence_adapter:
     visual_vocab_size: 16384
     action_vocab_sizes:
