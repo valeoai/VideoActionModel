@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 import time
 
+SCRATCH_DIR = Path(os.path.expandvars("$SCRATCH"))
 WORK_DIR = Path(os.path.expandvars("$WORK"))
 REPO_DIR = WORK_DIR / 'NextTokenPredictor'
 
@@ -58,6 +59,11 @@ if __name__ == "__main__":
         f"export PYTHONUSERBASE={WORK_DIR}/python_envs/worldmodel",
         
         "export MPICH_GPU_SUPPORT_ENABLED=1",
+        
+        # Important change when using deepspeed (which now uses triton)
+        # By default the cache dir will be $HOME/.triton
+        # We point it to $SCRATCH because the inodes quota is very limited on JeanZay
+        f"export TRITON_CACHE_DIR={SCRATCH_DIR}/.triton",
 
         "export HYDRA_FULL_ERROR=1",
         
