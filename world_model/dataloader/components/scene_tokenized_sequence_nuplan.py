@@ -56,6 +56,7 @@ class SceneBasedNuplanDataset(torch.utils.data.Dataset):
         load_image: If True, actual image data will be loaded; otherwise, the key is not present in the dataset. Defaults to False.
         camera: The camera identifier to specify which camera's data to use. Defaults to 'CAM_FRONT'.
         subsampling_factor: only keep one frame every `subsampling_factor` frames. 
+        camera: Name of the camera to extract data for (e.g., 'CAM_F0', 'CAM_FRONT' this is dataset dependant)
 
     The `__getitem__` method returns a dictionary containing the following keys:
         - 'images_paths': A list of paths for the images in the sequence.
@@ -78,8 +79,8 @@ class SceneBasedNuplanDataset(torch.utils.data.Dataset):
         nb_prediction_frames: int,
         transform: Optional[Callable] = None,
         load_image: bool = False,
-        camera: str = 'CAM_F0',
-        subsampling_factor: int = 1
+        subsampling_factor: int = 1,
+        camera: str = 'CAM_F0'
     ):
         # Validate parameters to ensure coherence
         assert context_to_prediction_index > 0, "context_to_prediction_index must be positive"

@@ -33,6 +33,7 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
         data_root_dir: The root directory where the sensor data is stored. Require if load_image = True
         load_image: A flag indicating whether to load images from disk. Defaults to True.
         subsampling_factor: only keep one frame every `subsampling_factor` frames. 
+        camera: Name of the camera to extract data for (e.g., 'CAM_F0', 'CAM_FRONT' this is dataset dependant)
 
     The `__getitem__` method returns a dictionary containing the following keys:
         - images_paths: A list of file paths to the images in the sequence (relative to data root dir).
