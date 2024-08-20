@@ -1,42 +1,42 @@
 #!/bin/bash 
 
-python adastra_slurm_job_submit.py -n GS256000_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.0229_lr0.0974 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.0229 optimizer.lr=0.0974 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256000_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.0228_lr0.0335 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.0228 optimizer.lr=0.0335 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256001_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.1098_lr0.0209 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.1098 optimizer.lr=0.0209 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256001_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.0523_lr0.0022 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.0523 optimizer.lr=0.0022 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256002_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.0526_lr0.0064 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.0526 optimizer.lr=0.0064 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256002_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.0678_lr0.0013 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.0678 optimizer.lr=0.0013 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256003_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.0852_lr0.0512 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.0852 optimizer.lr=0.0512 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256003_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.0328_lr0.0045 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.0328 optimizer.lr=0.0045 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256004_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.1342_lr0.0725 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.1342 optimizer.lr=0.0725 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256004_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.1525_lr0.0048 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.1525 optimizer.lr=0.0048 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256005_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.1886_lr0.0085 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.1886 optimizer.lr=0.0085 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256005_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.0274_lr0.0011 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.0274 optimizer.lr=0.0011 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256006_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.0849_lr0.0025 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.0849 optimizer.lr=0.0025 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256006_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.3530_lr0.0902 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.3530 optimizer.lr=0.0902 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256007_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.0970_lr0.0019 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.0970 optimizer.lr=0.0019 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256007_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.2245_lr0.0417 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.2245 optimizer.lr=0.0417 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256008_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.0158_lr0.0389 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.0158 optimizer.lr=0.0389 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256008_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.0218_lr0.0032 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.0218 optimizer.lr=0.0032 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
-python adastra_slurm_job_submit.py -n GS256009_muP_GPT2_Nodes1_BSperGPU32_totalBS256_dim256_std0.2686_lr0.0056 --gpus_per_node 8 --nodes 1  -p 'experiment=muP_GPT2_vqgan_imagenet_f16_1024 model.network.init_std=0.2686 optimizer.lr=0.0056 model.network.embedding_dim=256 model.network.nb_heads=4 data.dataloader_params.batch_size=32 paths.output_dir=/lus/work/CT10/cin4181/SHARED/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 data.dataloader_params.num_workers=2'
+python jeanzay_slurm_job_submit.py -n GS256009_muP_GPT2_Nodes4_BSperGPU24_totalBS384_dim256_std0.0465_lr0.0116 --gpus_per_node 4 --nodes 4  -p 'experiment=muP_GPT2_VQ_ds16_16384_llamagen_nuplan_noaction model.network.init_std=0.0465 optimizer.lr=0.0116 model.network.embedding_dim=256 model.network.nb_heads=2 data.dataloader_params.batch_size=24 paths.output_dir=/lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_grid_search ++trainer.max_epochs=1 optimizer.weight_decay=0.0 data.dataloader_params.num_workers=4'
 
 sleep 1
 
