@@ -20,15 +20,15 @@ defaults:
 trainer:
   max_epochs: 5
   # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
-  # gradient_clip_val: 1.0
+  gradient_clip_val: 1.0
   accumulate_grad_batches: 1
   log_every_n_steps: 5
 
 scheduler:
   start_lr: ${optimizer.lr}
-  warmup_iter: 98 # 1% ~ end_iter * 0.01
-  end_iter: 9857 # len_dataset // 256 = 2523392 // 256 = 9857
-  drop_iter: 985 # 10% ~ end_iter * 0.1
+  warmup_iter: 73 # 1% ~ end_iter * 0.01
+  end_iter: 7269 # len_dataset // BATCH_SIZE = 2791296 // 384 = 7269
+  drop_iter: 726 # 10% ~ end_iter * 0.1
 
 data:
   train_pickle_name: nuplan_train_front_camera_data.pkl
