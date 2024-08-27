@@ -59,6 +59,8 @@ if __name__ == "__main__":
         f"export PYTHONUSERBASE={WORK_DIR}/python_envs/worldmodel",
         
         "export MPICH_GPU_SUPPORT_ENABLED=1",
+        "NCCL_DEBUG=INFO",
+        "CUDA_LAUNCH_BLOCKING=1",
         
         # Important change when using deepspeed (which now uses triton)
         # By default the cache dir will be $HOME/.triton
