@@ -2,15 +2,13 @@ from typing import Dict, Any
 
 class WarmupStableDrop:
     def __init__(
-        self, optimizer, start_lr, warmup_iter, end_iter, drop_iter=0, num_iter=-1,
+        self, optimizer, warmup_iter, end_iter, drop_iter=0, num_iter=0,
     ) -> None:
         self.warmup_iter = warmup_iter
         self.end_iter = end_iter
         self.drop_iter = drop_iter
         self.optimizer = optimizer
         self.num_iter = num_iter
-        self._current_lr = None
-        self._start_lr = start_lr
         self.start_lr = []
         self.resume_step = num_iter
         for group in self.optimizer.param_groups:
@@ -35,6 +33,9 @@ class WarmupStableDrop:
         return base_lr * (0.1 + max(0.9 * (self.end_iter - num_iter) / self.drop_iter, 0))
 
     def get_lr(self, base_lr):
+        
+        assert self.num_iter >= 0
+        
         if self.num_iter < self.warmup_iter and self.warmup_iter > 0:
             return self.get_lr_warmup(self.num_iter, base_lr, self.warmup_iter)
 
@@ -48,6 +49,5 @@ class WarmupStableDrop:
             num_iter = self.num_iter + 1
         self.num_iter = num_iter
 
-        self._current_lr = self.get_lr(self._start_lr)
         for group, base_lr in zip(self.optimizer.param_groups, self.start_lr):
             group["lr"] = self.get_lr(base_lr)
