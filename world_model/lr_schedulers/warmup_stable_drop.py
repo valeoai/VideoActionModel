@@ -35,7 +35,7 @@ class WarmupStableDrop:
         return base_lr * (0.1 + max(0.9 * (self.end_iter - num_iter) / self.drop_iter, 0))
 
     def get_lr(self, base_lr):
-        if self.num_iter < self.warmup_iter:
+        if self.num_iter < self.warmup_iter and self.warmup_iter > 0:
             return self.get_lr_warmup(self.num_iter, base_lr, self.warmup_iter)
 
         if self.num_iter > self.end_iter - self.drop_iter and self.drop_iter > 0:
