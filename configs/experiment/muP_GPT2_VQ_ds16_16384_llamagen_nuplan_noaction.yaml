@@ -27,7 +27,7 @@ trainer:
 scheduler:
   start_lr: ${optimizer.lr}
   warmup_iter: 73 # 1% ~ end_iter * 0.01
-  end_iter: 7269 # len_dataset // BATCH_SIZE = 2791296 // 384 = 7269
+  end_iter: 7269 # len_dataset // BATCH_SIZE * nb_epochs = 2791296 // 384 = 7269
   drop_iter: 726 # 10% ~ end_iter * 0.1
 
 data:
