@@ -48,6 +48,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, wait
 from einops import rearrange
 import sys
+import mup
 
 import hydra
 from hydra.utils import instantiate
@@ -60,8 +61,8 @@ from torch.utils.data import DataLoader
 
 from lightning.pytorch.utilities import move_data_to_device
 
-from world_model.dataloader.components.scene_tokenized_sequence_nuscenes import SceneBasedNuscenesDataset
-from world_model.dataloader.tokenized_sequence_nuscenes import custom_collate
+from world_model.dataloader.components.scene_tokenized_sequence_nuplan import SceneBasedNuplanDataset
+from world_model.dataloader.tokenized_sequence_nuplan import custom_collate
 from world_model.utils.generation import TopKSampler, autoregressive_image_sequence_generation
 from world_model.utils import  RankedLogger, extras, instantiate_samplers
 
@@ -72,23 +73,22 @@ def worker_rnd_init(x):
     
 def print_log_and_current_config(inference_config, training_logged_config):
     print('ORIGINAL train dataset configuration')
-    print('\t nuscenes_pickle_path: \t\t', training_logged_config.data.nuscenes_pickle_path)
-    print('\t nuscenes_root_dir: \t\t', training_logged_config.data.train_dataset_params.nuscenes_root_dir)
-    print('\t quantized_nuscenes_root_dir: \t', training_logged_config.data.train_dataset_params.quantized_nuscenes_root_dir)
+    print('\t pickle_path: \t\t\t', training_logged_config.data.pickle_path)
+    print('\t train_pickle_name: \t\t', training_logged_config.data.train_pickle_name)
+    print('\t val_pickle_name: \t\t', training_logged_config.data.val_pickle_name)
+    print('\t data_root_dir: \t\t', training_logged_config.data.train_dataset_params.data_root_dir)
+    print('\t quantized_data_root_dir: \t', training_logged_config.data.train_dataset_params.quantized_data_root_dir)
     print('\t sequence_length: \t\t', training_logged_config.data.train_dataset_params.sequence_length)
+    print('\t subsampling_factor: \t\t', training_logged_config.data.train_dataset_params.subsampling_factor)
     print()
     print('CURRENT inference configuration')
-    print('\t nuscenes_pickle_path: \t\t', inference_config.paths.nuscenes_pickle_path)
-    print('\t nuscenes_root_dir: \t\t', inference_config.paths.data_dir)
-    print('\t quantized_nuscenes_root_dir: \t', inference_config.paths.quantized_nuscenes_root_dir)
+    print('\t pickle_path: \t\t\t', inference_config.paths.pickle_path)
+    print('\t pickle_name: \t\t\t', inference_config.pickle_name)
+    print('\t quantized_data_root_dir: \t', inference_config.paths.quantized_data_root_dir)
     print('\t nb_context_frames: \t\t', inference_config.dataset_config.nb_context_frames)
     print('\t nb_prediction_frames: \t\t', inference_config.dataset_config.nb_prediction_frames)
-    
-    if training_logged_config.data.train_dataset_params.quantized_nuscenes_root_dir != inference_config.paths.quantized_nuscenes_root_dir:
-        log.warning(
-            "Different `quantized_nuscenes_root_dir` in the checkpoint than the one configured."
-            "Double check that you take as input the same tokens used during training."
-        )
+    print('\t subsampling_factor: \t\t', inference_config.dataset_config.subsampling_factor)
+
     
 def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
     """
@@ -120,6 +120,7 @@ def load_model(checkpoint_path, model_config, device, inference_sha, set_net_to_
         log.warning(f"Chekcpoint sha: {checkpoint_data['git_sha']}") 
 
     network = instantiate(model_config.network)
+    mup.set_base_shapes(network, base=model_config.mup_base_shapes)
     sequence_adapter = instantiate(model_config.sequence_adapter)
     action_tokenizer = instantiate(model_config.action_tokenizer)
 
@@ -137,14 +138,12 @@ def load_model(checkpoint_path, model_config, device, inference_sha, set_net_to_
     
     return network, sequence_adapter, action_tokenizer
 
-def load_data(nuscenes_pickle_path, dataset_config, dataloader_config):
-    with open(nuscenes_pickle_path, 'rb') as f:
-        nuscenes_data = pickle.load(f)
-    nuscenes_validation_data = nuscenes_data['val']
-    del nuscenes_data
+def load_data(pickle_path, dataset_config, dataloader_config):
+    with open(pickle_path, 'rb') as f:
+        pickle_data = pickle.load(f)
     
-    dataset = SceneBasedNuscenesDataset(
-        nuscenes_pickle_data = nuscenes_validation_data, 
+    dataset = SceneBasedNuplanDataset(
+        pickle_data = pickle_data, 
         **dataset_config
     )
     
@@ -167,9 +166,8 @@ def save_data(output_dir, image_paths, context_end_index, data):
             
             if not output_path.parent.exists():
                 output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(output_path, 'wb') as f:
-                pickle.dump(data[b, t].cpu(), f)
+                
+            np.save(output_path, data[b, t].cpu(), allow_pickle=False)
 
 def infer(inference_config: DictConfig) -> None:
     """Run inference given checkpoint and a datamodule config.
@@ -179,7 +177,6 @@ def infer(inference_config: DictConfig) -> None:
     """
     
     checkpoint_name = Path(inference_config.checkpoint_name)
-    assert checkpoint_name.suffix == '.ckpt', checkpoint_name
     
     model_log_dir = Path(inference_config.model_log_dir)
     checkpoint_path = model_log_dir / 'checkpoints' / checkpoint_name
@@ -224,8 +221,8 @@ def infer(inference_config: DictConfig) -> None:
     )
     
     log.info(f"Instantiating the dataset...")
-    nuscenes_pickle_path = inference_config.paths.nuscenes_pickle_path
-    dataloader = load_data(nuscenes_pickle_path, inference_config.dataset_config, inference_config.dataloader_config)
+    pickle_path = Path(inference_config.paths.pickle_path) / inference_config.pickle_name
+    dataloader = load_data(pickle_path, inference_config.dataset_config, inference_config.dataloader_config)
     
     log.info(f"Instantiating samplers...")
     samplers = instantiate_samplers(inference_config.samplers)    

@@ -21,14 +21,17 @@ output_dir: ${paths.output_dir}
 # i.e., then number of possible future sequence to generate
 nb_samplings: 2
 
+pickle_name: nuplan_val_front_camera_data.pkl
+
 dataset_config:
-  nuscenes_root_dir: ${paths.data_dir}
-  quantized_nuscenes_root_dir: ${paths.quantized_nuscenes_root_dir}
+  data_root_dir: ${paths.data_root_dir}
+  quantized_data_root_dir: ${paths.quantized_data_root_dir}
   extracted_sequence_length: 39
   context_to_prediction_index: 16
   nb_context_frames: 4
-  nb_prediction_frames: 2
+  nb_prediction_frames: 6
   load_image: False
+  subsampling_factor: 2
 
 dataloader_config: 
   batch_size: 4
@@ -44,7 +47,7 @@ samplers:
     k: 5
 
 
-max_threads: 10 # Maximum number of threds used for I/O purposes.
+max_threads: 10 # Maximum number of threads used for I/O purposes.
 concurrent_loops: 100 # Number of concurent saving loops before emptying queue to avoid ressource usage explosion
 
 

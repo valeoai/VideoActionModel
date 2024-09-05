@@ -17,12 +17,14 @@ if __name__ == "__main__":
     parser.add_argument("--python_cmd", "-p", type=str, required=True)
     parser.add_argument("--gpus_per_node", type=int, default=1)
     parser.add_argument("--nodes", type=int, default=1)
+    parser.add_argument("--file_to_run", "-f", type=str, default='train')
     parser.add_argument("--wall_time", "-wt", type=int, default=20) # jean zay has max time of 20h
     parser.add_argument("--allow_hyper_threading", action='store_true')
     # parse params
     args = parser.parse_args()
 
     print("RUN NAME: ", args.run_name)
+    print("ARGS: ", args.python_cmd)
 
     # Combining these below, the format produces a string like "0418_1530_1650295200", where:
     # "0418" indicates April 18th,
@@ -72,7 +74,7 @@ if __name__ == "__main__":
         "# echo of launched commands",
         "set -x",
         
-        f'srun python {REPO_DIR}/world_model/train.py {args.python_cmd}  {devices_args}  name={run_name}',
+        f'srun python {REPO_DIR}/world_model/{args.file_to_run}.py {args.python_cmd}  {devices_args}  name={run_name}',
     ]
 
     slurm_cmd = "\n".join(slurm_cmd)

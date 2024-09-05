@@ -10,7 +10,7 @@ import torch
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 
-from mup import set_base_shapes
+import mup
 
 
 class NextTokenPredictor(LightningModule):
@@ -54,7 +54,7 @@ class NextTokenPredictor(LightningModule):
         
         if mup_base_shapes is not None:
             print("mup_base_shapes configured")
-            _ = set_base_shapes(self.network, mup_base_shapes)
+            mup.set_base_shapes(self.network, mup_base_shapes)
             # re-initialize after set_base_shapes
             self.network.apply(self.network._init_weights)
         else:
