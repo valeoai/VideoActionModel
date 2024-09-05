@@ -156,11 +156,11 @@ def autoregressive_image_sequence_generation(
             ], dim=-1)
             
     
-    # generated_images is a list of t tensors of shape [B, H, W]    
+    # generated_images is a tensor of shape [B, T, H, W]    
     generated_images = torch.stack(generated_images, dim=1)    
     out_dict = {'visual_tokens': generated_images}
     if return_logits:
-        # generated_logits is a list of t tensors of shape [B, H, W, vocab_size]
+        # generated_logits is a tensor of shape [B, T, H, W, vocab_size]
         generated_logits = torch.stack(generated_logits, dim=1)
         out_dict['visual_logits'] = generated_logits
 

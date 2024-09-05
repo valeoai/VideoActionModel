@@ -59,6 +59,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from lightning import LightningModule
+from lightning.pytorch.strategies import DeepSpeedStrategy
 from lightning.pytorch.utilities import move_data_to_device
 
 from world_model.dataloader.components.scene_tokenized_sequence_nuplan import SceneBasedNuplanDataset
@@ -89,6 +91,46 @@ def print_log_and_current_config(inference_config, training_logged_config):
     print('\t nb_prediction_frames: \t\t', inference_config.dataset_config.nb_prediction_frames)
     print('\t subsampling_factor: \t\t', inference_config.dataset_config.subsampling_factor)
 
+
+class WorldModelInference(LightningModule):
+    def __init__(self, network, sequence_adapter, action_tokenizer):
+        super().__init__()
+        self.network = network
+        self.sequence_adapter = sequence_adapter
+        self.action_tokenizer = action_tokenizer
+
+    def forward(self, batch):
+        with torch.no_grad():
+            action_tokens = self.action_tokenizer(**batch)
+            
+            context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
+            
+            context_action_tokens = action_tokens[:, :batch['context_end_index']]
+            future_action_tokens = action_tokens[:, batch['context_end_index']:]
+            
+            return context_visual_tokens, context_action_tokens, future_action_tokens
+        
+    def forward(self, batch, sampler, return_logits):
+        
+        action_tokens = self.action_tokenizer(**batch)
+        
+        context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
+        
+        context_action_tokens = action_tokens[:, :batch['context_end_index']]
+        future_action_tokens = action_tokens[:, batch['context_end_index']:]
+        
+        generated_data = autoregressive_image_sequence_generation(
+            self.network,
+            sampler, 
+            self.sequence_adapter,
+            context_visual_tokens,
+            context_action_tokens,
+            future_action_tokens,
+            temperature=1.0,
+            return_logits=return_logits
+        )
+        
+        return generated_data
     
 def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
     """
@@ -111,7 +153,7 @@ def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
 
     return result
 
-def load_model(checkpoint_path, model_config, device, inference_sha, set_net_to_eval=True):
+def load_model(checkpoint_path, model_config, inference_sha):
     
     checkpoint_data = torch.load(checkpoint_path, map_location=torch.device(device))
     
@@ -127,16 +169,7 @@ def load_model(checkpoint_path, model_config, device, inference_sha, set_net_to_
     state_dict = remove_prefix(checkpoint_data['state_dict'], 'network')
     network.load_state_dict(state_dict, strict=True)
     
-    network.to(device)
-    sequence_adapter.to(device)
-    action_tokenizer.to(device)
-    
-    if set_net_to_eval:
-        network.eval()
-        sequence_adapter.eval()
-        action_tokenizer.eval()
-    
-    return network, sequence_adapter, action_tokenizer
+    return WorldModelInference(network, sequence_adapter, action_tokenizer)
 
 def load_data(pickle_path, dataset_config, dataloader_config):
     with open(pickle_path, 'rb') as f:
@@ -212,12 +245,10 @@ def infer(inference_config: DictConfig) -> None:
     print_log_and_current_config(inference_config, training_logged_config)
     
     log.info(f"Instantiating the model...")
-    network, sequence_adapter, action_tokenizer = load_model(
+    model = load_model(
         checkpoint_path, 
         model_config, 
-        device, 
-        inference_sha, 
-        set_net_to_eval=True
+        inference_sha
     )
     
     log.info(f"Instantiating the dataset...")
@@ -225,66 +256,69 @@ def infer(inference_config: DictConfig) -> None:
     dataloader = load_data(pickle_path, inference_config.dataset_config, inference_config.dataloader_config)
     
     log.info(f"Instantiating samplers...")
-    samplers = instantiate_samplers(inference_config.samplers)    
+    samplers = instantiate_samplers(inference_config.samplers)   
     
+    strategy = DeepSpeedStrategy(stage=2)
+    trainer = pl.Trainer(
+        accelerator="gpu",
+        devices=inference_config.trainer.devices,
+        num_nodes=inference_config.trainer.num_nodes, 
+        strategy=strategy,
+        precision="bf16-mixed",  # Using mixed precision
+    )
+ 
     thread_pool = ThreadPoolExecutor(max_workers=inference_config.max_threads)
+    threads = []
+    loop_counter = 0
     
-    with torch.no_grad():
-        threads = []
-        for i, batch in enumerate(tqdm(dataloader, file=sys.stdout)):
-            print()
-            
-            batch = move_data_to_device(batch, device=device)
+    # Process data in batches
+    for batch in tqdm(dataloader, desc="Processing batches"):
+        # Move batch to the appropriate device
+        batch = trainer.strategy.batch_to_device(batch, trainer.device)
 
-            action_tokens = action_tokenizer(**batch)
-            
-            context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
-            
-            context_action_tokens = action_tokens[:, :batch['context_end_index']]
-            future_action_tokens = action_tokens[:, batch['context_end_index']:]
-            
-            for s, sampler in enumerate(samplers): 
-                for sampling_idx in range(inference_config.nb_samplings):
-                    
-                    output_dir = (
-                        base_output_dir / f'{sampler}_sampling' / f'generation_{sampling_idx}'
-                    )
-                    logits_output_dir = output_dir / 'logits'
-                    tokens_output_dir = output_dir / 'tokens'
-                    
-                    generated_data = autoregressive_image_sequence_generation(
-                        network,
-                        sampler, 
-                        sequence_adapter,
-                        context_visual_tokens,
-                        context_action_tokens,
-                        future_action_tokens,
-                        temperature = 1.0,
-                        return_logits = sampling_idx == 0
-                    )
+        # Generate samples for each sampler
+        for s, sampler in enumerate(samplers):
+            for sampling_idx in range(inference_config.nb_samplings):
+                output_dir = base_output_dir / f'{sampler}_sampling' / f'generation_{sampling_idx}'
+                logits_output_dir = output_dir / 'logits'
+                tokens_output_dir = output_dir / 'tokens'
 
-                    if sampling_idx == 0:
-                        # save logits
-                        # generated_data['visual_logits'] is a list of t tensors of shape [B,H,W,vocab_size]
-                        visual_logits = rearrange(generated_data['visual_logits'], 'b t h w vocab_size -> b t vocab_size h w')
-                        args = (logits_output_dir, batch['images_paths'], batch['context_end_index'], visual_logits)
-                        thread = thread_pool.submit(save_data, *args)
-                        threads.append(thread)
-                        
-                    # save generated tokens
-                    # generated_data['visual_tokens'] is a list of t tensors of shape [B,H,W]
-                    args = (tokens_output_dir, batch['images_paths'], batch['context_end_index'], generated_data['visual_tokens'])
+                # Run the forward pass
+                with torch.no_grad():
+                    generated_data= model(batch, sampler, sampling_idx, return_logits=(sampling_idx == 0))
+                    
+                if sampling_idx == 0 and 'visual_logits' in generated_data:
+                    # save logits
+                    # generated_data['visual_logits'] is a tensor of shape [B,T,H,W,vocab_size]
+                    args = (logits_output_dir, batch['images_paths'], batch['context_end_index'], visual_logits)
                     thread = thread_pool.submit(save_data, *args)
                     threads.append(thread)
-                    
-                    if (s+1)*(i+1)*(sampling_idx+1) % inference_config.concurrent_loops == 0:
-                        # Wait for all threads to complete, and check if any exception raised.
-                        wait(threads)
-                        for thread in threads:
-                            if thread.exception():
-                                print(thread.result())
-                        threads = []
-                        
+                
+                # save generated tokens
+                # generated_data['visual_tokens'] is a tensor of shape [B,T,H,W]
+                args = (tokens_output_dir, batch['images_paths'], batch['context_end_index'], generated_data['visual_tokens'])
+                thread = thread_pool.submit(save_data, *args)
+                threads.append(thread)
+
+        loop_counter += 1
+
+        # Check if we've reached the concurrent_loops limit
+        if loop_counter % inference_config.concurrent_loops == 0:
+            wait(threads)
+            for thread in threads:
+                if thread.exception():
+                    print(thread.result())
+            threads = []
+
+    # Wait for any remaining threads
+    if threads:
+        wait(threads)
+        for thread in threads:
+            if thread.exception():
+                print(thread.result())
+                
+    log.info("Processing complete!")
+    
     OmegaConf.update(inference_config, 'git_sha', inference_sha, force_add=True)    
     meta_config = DictConfig({
         'inference_config': inference_config,
