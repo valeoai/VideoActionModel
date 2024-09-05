@@ -21,6 +21,8 @@ output_dir: ${paths.output_dir}
 # i.e., then number of possible future sequence to generate
 nb_samplings: 2
 
+save_logits: False
+
 pickle_name: nuplan_val_front_camera_data.pkl
 
 dataset_config:

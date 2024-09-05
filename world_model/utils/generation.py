@@ -59,7 +59,7 @@ class TopKSampler(Sampler):
         next_token = torch.gather(topk_tokens, -1, next_token_idx)
         
         return next_token
-    
+
 def autoregressive_image_sequence_generation(
     network,
     sampler,
@@ -120,19 +120,15 @@ def autoregressive_image_sequence_generation(
                 
                 next_token = sampler.sample(next_token_probs) # shape [B, 1]
                 
-                rolling_context = torch.cat((rolling_context[:, 1:], next_token), dim=-1)
+                rolling_context = rolling_context.roll(-1, dims=-1)
+                rolling_context[:, -1] = next_token
 
                 # Update spatial positions: Just rotate left by 1 for visual tokens
-                rolling_spatial_positions = torch.cat([
-                    rolling_spatial_positions[:, 1:],
-                    rolling_spatial_positions[:, :1]
-                ], dim=-1)
+                rolling_spatial_positions = rolling_spatial_positions.roll(-1, dims=-1)
 
                 # Update temporal positions: Rotate left by 1 and shift index value by the window size
-                rolling_temporal_positions = torch.cat([
-                    rolling_temporal_positions[:, 1:],
-                    rolling_temporal_positions[:, :1] + nb_context_frames
-                ], dim=-1)
+                rolling_temporal_positions = rolling_temporal_positions.roll(-1, dims=-1)
+                rolling_temporal_positions[:, -1] += nb_context_frames
 
             # Extract the last generated frame from the rolling context and save it
             last_generated_image = rolling_context[:,-nb_visual_tokens:]

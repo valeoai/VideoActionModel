@@ -60,6 +60,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from lightning import LightningModule
+from lightning.pytorch import Trainer
 from lightning.pytorch.strategies import DeepSpeedStrategy
 from lightning.pytorch.utilities import move_data_to_device
 
@@ -153,7 +154,7 @@ def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
 
     return result
 
-def load_model(checkpoint_path, model_config, inference_sha):
+def load_model(checkpoint_path, model_config, device, inference_sha):
     
     checkpoint_data = torch.load(checkpoint_path, map_location=torch.device(device))
     
@@ -199,8 +200,11 @@ def save_data(output_dir, image_paths, context_end_index, data):
             
             if not output_path.parent.exists():
                 output_path.parent.mkdir(parents=True, exist_ok=True)
-                
-            np.save(output_path, data[b, t].cpu(), allow_pickle=False)
+               
+            if data.device != "cpu":
+                data = data.cpu()
+                 
+            np.save(output_path, data[b, t], allow_pickle=False)
 
 def infer(inference_config: DictConfig) -> None:
     """Run inference given checkpoint and a datamodule config.
@@ -248,6 +252,7 @@ def infer(inference_config: DictConfig) -> None:
     model = load_model(
         checkpoint_path, 
         model_config, 
+        device,
         inference_sha
     )
     
@@ -259,7 +264,7 @@ def infer(inference_config: DictConfig) -> None:
     samplers = instantiate_samplers(inference_config.samplers)   
     
     strategy = DeepSpeedStrategy(stage=2)
-    trainer = pl.Trainer(
+    trainer = Trainer(
         accelerator="gpu",
         devices=inference_config.trainer.devices,
         num_nodes=inference_config.trainer.num_nodes, 
@@ -274,7 +279,7 @@ def infer(inference_config: DictConfig) -> None:
     # Process data in batches
     for batch in tqdm(dataloader, desc="Processing batches"):
         # Move batch to the appropriate device
-        batch = trainer.strategy.batch_to_device(batch, trainer.device)
+        batch = trainer.strategy.batch_to_device(batch, device)
 
         # Generate samples for each sampler
         for s, sampler in enumerate(samplers):
@@ -285,7 +290,7 @@ def infer(inference_config: DictConfig) -> None:
 
                 # Run the forward pass
                 with torch.no_grad():
-                    generated_data= model(batch, sampler, sampling_idx, return_logits=(sampling_idx == 0))
+                    generated_data = model(batch, sampler, return_logits=(sampling_idx == 0 and inference_config.save_logits))
                     
                 if sampling_idx == 0 and 'visual_logits' in generated_data:
                     # save logits
