@@ -48,11 +48,6 @@ samplers:
     _target_: world_model.utils.generation.TopKSampler
     k: 5
 
-
-max_threads: 10 # Maximum number of threads used for I/O purposes.
-concurrent_loops: 100 # Number of concurent saving loops before emptying queue to avoid ressource usage explosion
-
-
 # pretty print config at the start of the run using Rich library
 print_config: True
 
