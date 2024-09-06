@@ -1,3 +1,43 @@
+"""
+This script provides code to generate future frames tokens from a pre-trained world-model. 
+
+Outputs follow this structure: 
+
+/<output_dir>/
+    <model_log_dir name>/
+        inference/
+            <checkpoint_name>/
+                generated_tokens_metadata.yaml
+                <top_k,top_p,argmax>_sampling/
+                    generation_<index number of generation [0,N-1]>/
+                        visual_tokens/
+                            samples/
+                                CAM_FRONT/
+                                    n008-2018-07-27-12-07-38-0400__CAM_FRONT__1532708429012404.pkl
+                                    n008-2018-07-27-12-07-38-0400__CAM_FRONT__1532708430512404.pkl
+                                    ...
+                        
+                        visual_logits/ 
+                            samples/
+                                CAM_FRONT/
+                                    n008-2018-07-27-12-07-38-0400__CAM_FRONT__1532708429012404.pkl
+                                    n008-2018-07-27-12-07-38-0400__CAM_FRONT__1532708430512404.pkl
+                                    ...
+            
+With every pickle file under the `tokens` folder containing:
+- visual_tokens of shape [H, W]
+
+With every pickle file under the `logits` (only for generation_0) folder containing:
+- visual_logits of shape [vocab_size, H, W]
+
+generated_tokens_metadata.yaml contains:
+    - inference_config: the configuration and metadata used to run the inference (e.g., starting index
+    of the generation in the sequence, number of context and prediction frames, the 
+    original path to the model's checkpoint, the inference code git hash ...)
+    - training_config: the initial configuration (e.g., hyperparams) and metadata (training code git hash)
+    used to train the model.
+"""
+
 from typing import Any, Dict, List, Tuple
 import pickle
 from tqdm import tqdm
@@ -79,6 +119,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
         generated_data, image_paths, context_end_index = prediction
         
         for data_type, data in generated_data.items():
+            # data_type typically `visual_tokens`, `visual_logits`
             output_subdir = self.output_dir / data_type
             self.save_data(output_subdir, image_paths, context_end_index, data)
 
@@ -94,6 +135,43 @@ class WorldModelPredictionWriter(BasePredictionWriter):
                     data = data.cpu()
                      
                 np.save(output_path, data[b, t], allow_pickle=False)
+                
+
+class PredictionPathLogger(Callback):
+    def __init__(self, output_dir: Path):
+        super().__init__()
+        self.output_dir = output_dir
+        self.context_sequences = []
+        self.generated_sequences = []
+
+    def on_predict_batch_end(
+        self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0
+    ):
+        _, image_paths, context_end_index = outputs
+        
+        for sequence_image_paths in image_paths:
+            context_seq = sequence_image_paths[:context_end_index]
+            generated_seq = sequence_image_paths[context_end_index:]
+            
+            self.context_sequences.append(context_seq)
+            self.generated_sequences.append(generated_seq)
+
+    def on_predict_epoch_end(self, trainer, pl_module):
+        # Write generated_frames.txt
+        with open(self.output_dir / 'generated_frames.txt', 'w') as f:
+            for seq in self.generated_sequences:
+                for frame in seq:
+                    f.write(f"{Path(frame).with_suffix('npy')}\n")
+
+        # Write context_sequences.txt
+        with open(self.output_dir / 'context_sequences.txt', 'w') as f:
+            for seq in self.context_sequences:
+                f.write(" ; ".join(seq) + "\n")
+
+        # Write generated_sequences.txt
+        with open(self.output_dir / 'generated_sequences.txt', 'w') as f:
+            for seq in self.generated_sequences:
+                f.write(" ; ".join(seq) + "\n")
 
 class WorldModelInference(L.LightningModule):
     def __init__(self, network, sequence_adapter, action_tokenizer, sampler, return_logits):
@@ -232,6 +310,7 @@ def infer(inference_config: DictConfig) -> None:
             )
             
             prediction_writer = WorldModelPredictionWriter(output_dir)
+            prediction_path_logger = PredictionPathLogger(base_output_dir)
             progress_bar = TQDMProgressBar()
             gpu_memory_monitor = GPUMemoryMonitor()
             
@@ -248,7 +327,7 @@ def infer(inference_config: DictConfig) -> None:
                 num_nodes=inference_config.trainer.num_nodes, 
                 strategy=DeepSpeedStrategy(stage=2),
                 precision="bf16-mixed",
-                callbacks=[prediction_writer,progress_bar,gpu_memory_monitor],
+                callbacks=[prediction_writer,prediction_path_logger,progress_bar,gpu_memory_monitor],
                 logger=tensorboard_logger
             )
 
@@ -263,7 +342,7 @@ def infer(inference_config: DictConfig) -> None:
     })
     
     for s, sampler in enumerate(samplers): 
-        metada_path = base_output_dir / f'{sampler}_sampling' / 'generated_tokens_metadata.yaml'
+        metada_path = base_output_dir / 'generated_tokens_metadata.yaml'
         OmegaConf.save(meta_config, metada_path)
     
     log.info("Processing complete!")
