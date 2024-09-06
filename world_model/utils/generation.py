@@ -121,7 +121,7 @@ def autoregressive_image_sequence_generation(
                 next_token = sampler.sample(next_token_probs) # shape [B, 1]
                 
                 rolling_context = rolling_context.roll(-1, dims=-1)
-                rolling_context[:, -1] = next_token
+                rolling_context[:, -1] = next_token.squeeze(dim=-1)
 
                 # Update spatial positions: Just rotate left by 1 for visual tokens
                 rolling_spatial_positions = rolling_spatial_positions.roll(-1, dims=-1)

@@ -17,9 +17,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 import lightning as L
-from lightning.pytorch.callbacks import BasePredictionWriter
+from lightning.pytorch.callbacks import BasePredictionWriter, TQDMProgressBar, Callback
 from lightning.pytorch.strategies import DeepSpeedStrategy
-from lightning.pytorch.utilities import move_data_to_device
+from lightning.pytorch.loggers import TensorBoardLogger
 
 from world_model.dataloader.components.scene_tokenized_sequence_nuplan import SceneBasedNuplanDataset
 from world_model.dataloader.tokenized_sequence_nuplan import custom_collate
@@ -48,6 +48,24 @@ def print_log_and_current_config(inference_config, training_logged_config):
     print('\t nb_context_frames: \t\t', inference_config.dataset_config.nb_context_frames)
     print('\t nb_prediction_frames: \t\t', inference_config.dataset_config.nb_prediction_frames)
     print('\t subsampling_factor: \t\t', inference_config.dataset_config.subsampling_factor)
+
+
+class GPUMemoryMonitor(Callback):
+    def __init__(self):
+        super().__init__()
+        self.max_memory = 0
+
+    def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+        if torch.cuda.is_available():
+            memory = torch.cuda.max_memory_allocated() / (1024 ** 3)  # Convert to GB
+            self.max_memory = max(self.max_memory, memory)
+            trainer.logger.log_metrics({"gpu_memory_usage_gb": memory}, step=trainer.global_step)
+
+    def on_predict_epoch_end(self, trainer, pl_module):
+        if torch.cuda.is_available():
+            trainer.logger.log_metrics({"max_gpu_memory_usage_gb": self.max_memory}, step=trainer.global_step)
+        torch.cuda.reset_peak_memory_stats()
+        self.max_memory = 0
 
 class WorldModelPredictionWriter(BasePredictionWriter):
     def __init__(self, output_dir: Path, write_interval: str = "batch"):
@@ -214,6 +232,15 @@ def infer(inference_config: DictConfig) -> None:
             )
             
             prediction_writer = WorldModelPredictionWriter(output_dir)
+            progress_bar = TQDMProgressBar()
+            gpu_memory_monitor = GPUMemoryMonitor()
+            
+            tensorboard_logger = TensorBoardLogger(
+                save_dir=inference_config.paths.output_dir,
+                name=f"{inference_config.name}/tensorboard/",
+                log_graph=False,
+                prefix=""
+            )
             
             trainer = L.Trainer(
                 accelerator="gpu",
@@ -221,7 +248,8 @@ def infer(inference_config: DictConfig) -> None:
                 num_nodes=inference_config.trainer.num_nodes, 
                 strategy=DeepSpeedStrategy(stage=2),
                 precision="bf16-mixed",
-                callbacks=[prediction_writer]
+                callbacks=[prediction_writer,progress_bar,gpu_memory_monitor],
+                logger=tensorboard_logger
             )
 
             trainer.predict(model, dataloader)
