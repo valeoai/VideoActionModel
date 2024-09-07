@@ -48,6 +48,9 @@ samplers:
     _target_: world_model.utils.generation.TopKSampler
     k: 5
 
+# maximum collection of frames to buffer before saving in parrallel.
+max_queue_size: 50
+
 # pretty print config at the start of the run using Rich library
 print_config: True
 

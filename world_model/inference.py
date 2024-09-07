@@ -38,14 +38,16 @@ generated_tokens_metadata.yaml contains:
     used to train the model.
 """
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 import pickle
-from tqdm import tqdm
 import numpy as np
 from pathlib import Path
 import git
-import sys
 import mup
+from concurrent.futures import ThreadPoolExecutor
+import os
+
+
 
 import hydra
 from hydra.utils import instantiate
@@ -53,7 +55,6 @@ from omegaconf import OmegaConf, DictConfig
 import yaml
 
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 
 import lightning as L
@@ -63,7 +64,7 @@ from lightning.pytorch.loggers import TensorBoardLogger
 
 from world_model.dataloader.components.scene_tokenized_sequence_nuplan import SceneBasedNuplanDataset
 from world_model.dataloader.tokenized_sequence_nuplan import custom_collate
-from world_model.utils.generation import TopKSampler, autoregressive_image_sequence_generation
+from world_model.utils.generation import autoregressive_image_sequence_generation
 from world_model.utils import RankedLogger, extras, instantiate_samplers
 
 log = RankedLogger(__name__, rank_zero_only=True)
@@ -108,9 +109,12 @@ class GPUMemoryMonitor(Callback):
         self.max_memory = 0
 
 class WorldModelPredictionWriter(BasePredictionWriter):
-    def __init__(self, output_dir: Path, write_interval: str = "batch"):
+    def __init__(self, output_dir: Path, write_interval: str = "batch", max_queue_size: int = 50):
         super().__init__(write_interval)
         self.output_dir = output_dir
+        self.max_queue_size = max_queue_size
+        self.write_queue = []
+        self.executor = ThreadPoolExecutor(max_workers=os.cpu_count())
 
     def write_on_batch_end(
         self, trainer, pl_module, prediction: Any, batch_indices: List[int], batch: Any,
@@ -119,22 +123,39 @@ class WorldModelPredictionWriter(BasePredictionWriter):
         generated_data, image_paths, context_end_index = prediction
         
         for data_type, data in generated_data.items():
-            # data_type typically `visual_tokens`, `visual_logits`
             output_subdir = self.output_dir / data_type
-            self.save_data(output_subdir, image_paths, context_end_index, data)
+            self.queue_data(output_subdir, image_paths, context_end_index, data)
 
-    def save_data(self, output_dir, image_paths, context_end_index, data):
+    def queue_data(self, output_dir, image_paths, context_end_index, data):
+        if data.device != "cpu":
+            data = data.cpu()
+
         for b, sequence_image_paths in enumerate(image_paths):
             for t, image_path in enumerate(sequence_image_paths[context_end_index:]):
                 output_path = (output_dir / image_path).with_suffix('.npy')
-                
-                if not output_path.parent.exists():
-                    output_path.parent.mkdir(parents=True, exist_ok=True)
-                   
-                if data.device != "cpu":
-                    data = data.cpu()
-                     
-                np.save(output_path, data[b, t], allow_pickle=False)
+                self.write_queue.append((output_path, data[b, t]))
+
+        if len(self.write_queue) >= self.max_queue_size:
+            self.flush_queue()
+
+    def flush_queue(self):
+        futures = []
+        for output_path, data in self.write_queue:
+            if not output_path.parent.exists():
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+            futures.append(self.executor.submit(np.save, output_path, data, allow_pickle=False))
+
+        # Wait for all writes to complete
+        for future in futures:
+            future.result()
+
+        self.write_queue.clear()
+
+    def on_predict_epoch_end(self, trainer, pl_module):
+        self.flush_queue()  # Ensure all remaining data is written
+
+    def teardown(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: str) -> None:
+        self.executor.shutdown(wait=True)
                 
 
 class PredictionPathLogger(Callback):
@@ -161,7 +182,7 @@ class PredictionPathLogger(Callback):
         with open(self.output_dir / 'generated_frames.txt', 'w') as f:
             for seq in self.generated_sequences:
                 for frame in seq:
-                    f.write(f"{Path(frame).with_suffix('npy')}\n")
+                    f.write(f"{Path(frame).with_suffix('.npy')}\n")
 
         # Write context_sequences.txt
         with open(self.output_dir / 'context_sequences.txt', 'w') as f:
@@ -309,7 +330,7 @@ def infer(inference_config: DictConfig) -> None:
                 return_logits=(sampling_idx == 0 and inference_config.save_logits)
             )
             
-            prediction_writer = WorldModelPredictionWriter(output_dir)
+            prediction_writer = WorldModelPredictionWriter(output_dir, max_queue_size=inference_config.max_queue_size)
             prediction_path_logger = PredictionPathLogger(base_output_dir)
             progress_bar = TQDMProgressBar()
             gpu_memory_monitor = GPUMemoryMonitor()
