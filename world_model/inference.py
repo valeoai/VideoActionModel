@@ -47,8 +47,6 @@ import mup
 from concurrent.futures import ThreadPoolExecutor
 import os
 
-
-
 import hydra
 from hydra.utils import instantiate
 from omegaconf import OmegaConf, DictConfig
@@ -57,10 +55,12 @@ import yaml
 import torch
 from torch.utils.data import DataLoader
 
+
 import lightning as L
 from lightning.pytorch.callbacks import BasePredictionWriter, TQDMProgressBar, Callback
 from lightning.pytorch.strategies import DeepSpeedStrategy
 from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.utilities import rank_zero_only
 
 from world_model.dataloader.components.scene_tokenized_sequence_nuplan import SceneBasedNuplanDataset
 from world_model.dataloader.tokenized_sequence_nuplan import custom_collate
@@ -73,22 +73,23 @@ def worker_rnd_init(x):
     np.random.seed(42 + x)
 
 def print_log_and_current_config(inference_config, training_logged_config):
-    print('ORIGINAL train dataset configuration')
-    print('\t pickle_path: \t\t\t', training_logged_config.data.pickle_path)
-    print('\t train_pickle_name: \t\t', training_logged_config.data.train_pickle_name)
-    print('\t val_pickle_name: \t\t', training_logged_config.data.val_pickle_name)
-    print('\t data_root_dir: \t\t', training_logged_config.data.train_dataset_params.data_root_dir)
-    print('\t quantized_data_root_dir: \t', training_logged_config.data.train_dataset_params.quantized_data_root_dir)
-    print('\t sequence_length: \t\t', training_logged_config.data.train_dataset_params.sequence_length)
-    print('\t subsampling_factor: \t\t', training_logged_config.data.train_dataset_params.subsampling_factor)
-    print()
-    print('CURRENT inference configuration')
-    print('\t pickle_path: \t\t\t', inference_config.paths.pickle_path)
-    print('\t pickle_name: \t\t\t', inference_config.pickle_name)
-    print('\t quantized_data_root_dir: \t', inference_config.paths.quantized_data_root_dir)
-    print('\t nb_context_frames: \t\t', inference_config.dataset_config.nb_context_frames)
-    print('\t nb_prediction_frames: \t\t', inference_config.dataset_config.nb_prediction_frames)
-    print('\t subsampling_factor: \t\t', inference_config.dataset_config.subsampling_factor)
+    log.info('ORIGINAL configuration')
+    log.info(training_logged_config)
+    log.info('ORIGINAL train dataset configuration')
+    log.info(f'\t pickle_path: \t\t\t {training_logged_config.data.pickle_path}')
+    log.info(f'\t train_pickle_name: \t\t {training_logged_config.data.train_pickle_name}')
+    log.info(f'\t val_pickle_name: \t\t {training_logged_config.data.val_pickle_name}')
+    log.info(f'\t data_root_dir: \t\t {training_logged_config.data.train_dataset_params.data_root_dir}')
+    log.info(f'\t quantized_data_root_dir: \t {training_logged_config.data.train_dataset_params.quantized_data_root_dir}')
+    log.info(f'\t sequence_length: \t\t {training_logged_config.data.train_dataset_params.sequence_length}')
+    log.info(f'\t subsampling_factor: \t\t {training_logged_config.data.train_dataset_params.subsampling_factor}')
+    log.info(f'CURRENT inference configuration')
+    log.info(f'\t pickle_path: \t\t\t {inference_config.paths.pickle_path}')
+    log.info(f'\t pickle_name: \t\t\t {inference_config.pickle_name}')
+    log.info(f'\t quantized_data_root_dir: \t {inference_config.paths.quantized_data_root_dir}')
+    log.info(f'\t nb_context_frames: \t\t {inference_config.dataset_config.nb_context_frames}')
+    log.info(f'\t nb_prediction_frames: \t\t {inference_config.dataset_config.nb_prediction_frames}')
+    log.info(f'\t subsampling_factor: \t\t {inference_config.dataset_config.subsampling_factor}')
 
 
 class GPUMemoryMonitor(Callback):
@@ -114,7 +115,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
         self.output_dir = output_dir
         self.max_queue_size = max_queue_size
         self.write_queue = []
-        self.executor = ThreadPoolExecutor(max_workers=os.cpu_count())
+        self.executor = ThreadPoolExecutor(max_workers=20)
 
     def write_on_batch_end(
         self, trainer, pl_module, prediction: Any, batch_indices: List[int], batch: Any,
@@ -123,6 +124,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
         generated_data, image_paths, context_end_index = prediction
         
         for data_type, data in generated_data.items():
+            
             output_subdir = self.output_dir / data_type
             self.queue_data(output_subdir, image_paths, context_end_index, data)
 
@@ -132,6 +134,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
 
         for b, sequence_image_paths in enumerate(image_paths):
             for t, image_path in enumerate(sequence_image_paths[context_end_index:]):
+                
                 output_path = (output_dir / image_path).with_suffix('.npy')
                 self.write_queue.append((output_path, data[b, t]))
 
@@ -178,37 +181,61 @@ class PredictionPathLogger(Callback):
             self.generated_sequences.append(generated_seq)
 
     def on_predict_epoch_end(self, trainer, pl_module):
+        # Gather data from all GPUs
+        context_sequences = self.all_gather(self.context_sequences)
+        generated_sequences = self.all_gather(self.generated_sequences)
+
+        # Flatten the gathered lists
+        context_sequences = [item for sublist in context_sequences for item in sublist]
+        generated_sequences = [item for sublist in generated_sequences for item in sublist]
+
+        # Write files only on the main process
+        self.write_files(context_sequences, generated_sequences)
+
+    def all_gather(self, data):
+        if torch.distributed.is_initialized():
+            gathered_data = [None] * torch.distributed.get_world_size()
+            torch.distributed.all_gather_object(gathered_data, data)
+            return gathered_data
+        return [data]
+
+    @rank_zero_only
+    def write_files(self, context_sequences, generated_sequences):
         # Write generated_frames.txt
         with open(self.output_dir / 'generated_frames.txt', 'w') as f:
-            for seq in self.generated_sequences:
+            for seq in generated_sequences:
                 for frame in seq:
                     f.write(f"{Path(frame).with_suffix('.npy')}\n")
 
         # Write context_sequences.txt
         with open(self.output_dir / 'context_sequences.txt', 'w') as f:
-            for seq in self.context_sequences:
+            for seq in context_sequences:
                 f.write(" ; ".join(seq) + "\n")
 
         # Write generated_sequences.txt
         with open(self.output_dir / 'generated_sequences.txt', 'w') as f:
-            for seq in self.generated_sequences:
+            for seq in generated_sequences:
                 f.write(" ; ".join(seq) + "\n")
 
 class WorldModelInference(L.LightningModule):
-    def __init__(self, network, sequence_adapter, action_tokenizer, sampler, return_logits):
+    def __init__(self, network, sequence_adapter, action_tokenizer, sampler, return_logits, max_rolling_context_frames=None):
         super().__init__()
         self.network = network
         self.sequence_adapter = sequence_adapter
         self.action_tokenizer = action_tokenizer
         self.sampler = sampler
         self.return_logits = return_logits
+        if max_rolling_context_frames is None:
+            log.info(f"`max_rolling_context_frames` not set, using model's max context size: {network.nb_timesteps}")
+            max_rolling_context_frames = network.nb_timesteps - 1
+        self.max_rolling_context_frames = max_rolling_context_frames
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
         action_tokens = self.action_tokenizer(**batch)
         
         context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
-        
         context_action_tokens = action_tokens[:, :batch['context_end_index']]
+        
         future_action_tokens = action_tokens[:, batch['context_end_index']:]
         
         generated_data = autoregressive_image_sequence_generation(
@@ -218,11 +245,14 @@ class WorldModelInference(L.LightningModule):
             context_visual_tokens,
             context_action_tokens,
             future_action_tokens,
+            max_rolling_context_frames=self.max_rolling_context_frames,
             temperature=1.0,
             return_logits=self.return_logits
         )
-        
+
         return generated_data, batch['images_paths'], batch['context_end_index']
+
+
 
 def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
     result = dict()
@@ -234,10 +264,10 @@ def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
             result[key] = v
     return result
 
-def load_model(checkpoint_path, model_config, device, inference_sha):
+def load_model(checkpoint_path, model_config, device, inference_sha=None):
     checkpoint_data = torch.load(checkpoint_path, map_location=torch.device(device))
     
-    if checkpoint_data["git_sha"] != inference_sha:
+    if checkpoint_data["git_sha"] != inference_sha and inference_sha is not None:
         log.warning("WARNING: checkpoint's git sha is different from the current one. Usually nothing to worry about.")
         log.warning(f"Checkpoint sha: {checkpoint_data['git_sha']}") 
 
@@ -318,7 +348,7 @@ def infer(inference_config: DictConfig) -> None:
     log.info(f"Instantiating samplers...")
     samplers = instantiate_samplers(inference_config.samplers)   
     
-    for s, sampler in enumerate(samplers):
+    for sampler in samplers:
         for sampling_idx in range(inference_config.nb_samplings):
             output_dir = base_output_dir / f'{sampler}_sampling' / f'generation_{sampling_idx}'
             
@@ -327,7 +357,8 @@ def infer(inference_config: DictConfig) -> None:
                 sequence_adapter, 
                 action_tokenizer, 
                 sampler,
-                return_logits=(sampling_idx == 0 and inference_config.save_logits)
+                return_logits=(sampling_idx == 0 and inference_config.save_logits),
+                max_rolling_context_frames=inference_config.max_rolling_context_frames
             )
             
             prediction_writer = WorldModelPredictionWriter(output_dir, max_queue_size=inference_config.max_queue_size)
@@ -361,12 +392,11 @@ def infer(inference_config: DictConfig) -> None:
         'inference_config': inference_config,
         'training_config': training_logged_config
     })
+
+    metada_path = base_output_dir / 'generated_tokens_metadata.yaml'
+    OmegaConf.save(meta_config, metada_path)
     
-    for s, sampler in enumerate(samplers): 
-        metada_path = base_output_dir / 'generated_tokens_metadata.yaml'
-        OmegaConf.save(meta_config, metada_path)
-    
-    log.info("Processing complete!")
+    log.info(f"Metada saved at: {metada_path}")
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="inference.yaml")
 def main(config: DictConfig) -> None:

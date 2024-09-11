@@ -25,6 +25,9 @@ save_logits: False
 
 pickle_name: nuplan_val_front_camera_data.pkl
 
+# Leave as null to use the model's training context size
+max_rolling_context_frames: null 
+
 dataset_config:
   data_root_dir: ${paths.data_root_dir}
   quantized_data_root_dir: ${paths.quantized_data_root_dir}

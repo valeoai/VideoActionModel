@@ -60,54 +60,92 @@ class TopKSampler(Sampler):
         
         return next_token
 
+
+
 def autoregressive_image_sequence_generation(
     network,
     sampler,
     sequence_adapter,
-    context_visual_tokens,
-    context_action_tokens,
+    burnin_visual_tokens,
+    burnin_action_tokens,
     future_action_tokens,
+    max_rolling_context_frames,
     temperature = 1.0,
     return_logits = False
 ):
-
     """
-    temperature: controls the diversity/predictability of the output:
-        - lower temperature sharpens the probability distribution -> more predictable results.
-        - higher temperature flattens it -> increases chance of sampling less likely outcomes.
+    Generates image sequences autoregressively using a neural network.
+
+    Args:
+        network: The neural network model for generation.
+        sampler: The sampling strategy (e.g., TopKSampler).
+        sequence_adapter: An instance of GPTAdapter for token interleaving.
+        burnin_visual_tokens: Visual tokens for burnin frames, shape [B, T_burnin, H, W].
+        burnin_action_tokens: Action tokens for burnin frames, shape [B, T_burnin, K].
+        future_action_tokens: Action tokens for future frames, shape [B, T_future, K].
+        max_rolling_context_frames: Maximum number of frames to keep in the rolling context.
+        temperature: Controls randomness in sampling (default: 1.0).
+        return_logits: Whether to return logits along with generated images (default: False).
+
+    Returns:
+        A dictionary containing generated visual tokens and optionally logits.
+    """
+    
+    B, nb_burnin_frames, H, W = burnin_visual_tokens.shape
+    _, nb_future_actions, nb_action_tokens = future_action_tokens.shape
+
+    # first action conditioning future frame generation is actually already in the context
+    nb_future_frames = nb_future_actions + 1 
+
+    nb_visual_tokens = H * W
+
+    # Calculate the maximum number of tokens in the rolling context
+    max_rolling_context_size = max_rolling_context_frames * (nb_visual_tokens + nb_action_tokens)
+
+    # Interleave burnin visual and action tokens
+    sequence_data = sequence_adapter(burnin_visual_tokens, burnin_action_tokens)
+    rolling_context = sequence_data['token_sequence']
+    
+    # Compute initial positions for the full context size
+    position_data = sequence_adapter.compute_position_indices(
+        B, H, W, nb_action_tokens, max_rolling_context_frames
+    )
+    spatial_positions = position_data['spatial_positions']
+    temporal_positions = position_data['temporal_positions']
+    
+    # Ensure initial context doesn't exceed max_rolling_context_size
+    if rolling_context.shape[1] > max_rolling_context_size:
+        rolling_context = rolling_context[:, -max_rolling_context_size:]
+        spatial_positions = spatial_positions[:, :max_rolling_context_size]
+        temporal_positions = temporal_positions[:, :max_rolling_context_size]
         
-    """
-    
-    _, t, h, w = context_visual_tokens.shape
-    _, n, k = future_action_tokens.shape
-
-    nb_context_frames = t
-    nb_future_frames = n + 1
-    nb_visual_tokens = h * w
-    nb_action_tokens = k
-
-    sequence_data = sequence_adapter(context_visual_tokens, context_action_tokens)
-    
     generated_images = []
     generated_logits = []
     
-    rolling_context = sequence_data['token_sequence']
-
     with torch.no_grad():
         for i in range(nb_future_frames):
-            
             frame_logits = []
             
-            rolling_spatial_positions = sequence_data['spatial_positions']
-            rolling_temporal_positions = sequence_data['temporal_positions']
+            # change of frame, resetting position indices
+            rolling_spatial_positions = spatial_positions
+            rolling_temporal_positions = temporal_positions
             
-            for _ in range(nb_visual_tokens):
-
-                # logits shape [B, seq_len, vocab_size]
+            
+            
+            for j in range(nb_visual_tokens):
+                
+                # Spatial and temporal pos are pre-computed at len of max_rolling_context_size
+                # We need to crop by current_context_len the spatial and temporal pos indices
+                # as we are filling the context up to max_rolling_context_size.
+                # Once max_rolling_context_size, it will have no effect as rolling logic will take over
+                current_context_len = rolling_context.shape[1]
+                
+                # Get logits for the next token
                 sequence_logits = network(
                     rolling_context,
-                    rolling_spatial_positions,
-                    rolling_temporal_positions
+                    rolling_spatial_positions[:, :current_context_len],
+                    rolling_temporal_positions[:, :current_context_len],
+                    inference=True,
                 )
                 
                 next_token_logits = sequence_logits[:, -1, :] # shape [B, vocab_size]
@@ -115,48 +153,48 @@ def autoregressive_image_sequence_generation(
                 if return_logits:
                     frame_logits.append(next_token_logits)
                 
+                # Apply temperature and sample
                 next_token_logits = next_token_logits / temperature
                 next_token_probs = F.softmax(next_token_logits, dim=-1)
-                
                 next_token = sampler.sample(next_token_probs) # shape [B, 1]
                 
-                rolling_context = rolling_context.roll(-1, dims=-1)
-                rolling_context[:, -1] = next_token.squeeze(dim=-1)
-
-                # Update spatial positions: Just rotate left by 1 for visual tokens
-                rolling_spatial_positions = rolling_spatial_positions.roll(-1, dims=-1)
-
-                # Update temporal positions: Rotate left by 1 and shift index value by the window size
-                rolling_temporal_positions = rolling_temporal_positions.roll(-1, dims=-1)
-                rolling_temporal_positions[:, -1] += nb_context_frames
+                # Update rolling context
+                rolling_context = torch.cat([rolling_context, next_token], dim=1)
+                if rolling_context.shape[1] > max_rolling_context_size:
+                    rolling_context = rolling_context[:, 1:]
+                    rolling_spatial_positions = rolling_spatial_positions.roll(-1, dims=1)
+                    rolling_temporal_positions = rolling_temporal_positions.roll(-1, dims=1)
+                    rolling_temporal_positions[:, -1] += max_rolling_context_frames
 
             # Extract the last generated frame from the rolling context and save it
-            last_generated_image = rolling_context[:,-nb_visual_tokens:]
-            last_generated_image = rearrange(last_generated_image, 'b (h w) -> b h w', h=h)
+            last_generated_image = rolling_context[:, -nb_visual_tokens:]
+            last_generated_image = rearrange(last_generated_image, 'b (h w) -> b h w', h=H)
             generated_images.append(last_generated_image)
             
             if return_logits:
                 frame_logits = torch.stack(frame_logits, dim=1) # shape [B, H*W, vocab_size]
-                frame_logits = rearrange(frame_logits, 'b (h w) v -> b h w v', h=h)
+                frame_logits = rearrange(frame_logits, 'b (h w) v -> b h w v', h=H)
                 generated_logits.append(frame_logits)
 
-            if i+1 == nb_future_frames:
-                # if last frame we have finished, get out of generation loop
+            if i + 1 == nb_future_frames:
+                # If last frame, exit generation loop
                 break
                 
-            # Add GT action to rolling context to continue with the next frame generation
-            next_action_tokens = future_action_tokens[:,i] # shape [B, nb_action_tokens]
-            rolling_context = torch.cat([
-                rolling_context[..., nb_action_tokens:], # Rotate left by `nb_action_tokens`
-                next_action_tokens
-            ], dim=-1)
+            # Add next action tokens to rolling context
+            next_action_tokens = future_action_tokens[:, i] # shape [B, nb_action_tokens]
+            # Apply shifts to action token indices based on visual and action vocabularies' sizes.
+            # Otherwisz action and visual tokens may have the same index
+            next_action_tokens = sequence_adapter.action_shifts + next_action_tokens
+            rolling_context = torch.cat([rolling_context, next_action_tokens], dim=1)
             
-    
-    # generated_images is a tensor of shape [B, T, H, W]    
+            if rolling_context.shape[1] > max_rolling_context_size:
+                rolling_context = rolling_context[:, nb_action_tokens:]
+
+    # Stack generated images
     generated_images = torch.stack(generated_images, dim=1)    
     out_dict = {'visual_tokens': generated_images}
+    
     if return_logits:
-        # generated_logits is a tensor of shape [B, T, H, W, vocab_size]
         generated_logits = torch.stack(generated_logits, dim=1)
         out_dict['visual_logits'] = generated_logits
 
