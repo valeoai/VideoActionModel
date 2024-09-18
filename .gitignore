@@ -153,3 +153,5 @@ train.log
 
 # Aim logging
 .aim
+
+/notebooks/
