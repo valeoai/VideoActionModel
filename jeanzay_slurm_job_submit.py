@@ -57,6 +57,7 @@ if __name__ == "__main__":
         f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         
         "module purge", # cleans out the modules loaded in interactive and inherited by default
+        "module load arch/h100",
         "module load pytorch-gpu/py3/2.4.0",
         f"export PYTHONUSERBASE={WORK_DIR}/python_envs/worldmodel",
         
