@@ -3,3 +3,7 @@ shards_dir: ???
 shard_list_path: ???
 val_shard_list_path: ???
 shard_ext: '.shard' # '.shard' for tokens '.tar' for tokens
+train_kwargs:
+  batch_size: 1
+val_kwargs:
+  batch_size: 1
