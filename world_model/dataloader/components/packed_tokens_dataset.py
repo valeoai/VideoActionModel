@@ -6,6 +6,7 @@ from collections import deque
 import warnings
 
 import numpy as np
+import torch
 from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 
 from world_model.dataloader.components.packed_tokens import HEADER_SIZE, decode_header, decode_record, get_record_format
@@ -100,7 +101,9 @@ class TokensWindowedDataset(IterableDataset):
                                      f'expected {next_number}, got {record["frame_number"]}')
             scheduler.append(record)
             if len(scheduler) == self.window_size:
-                return np.stack([record['tokens'] for record in scheduler], axis=0)
+                visual_tokens = np.stack([record['tokens'] for record in scheduler], axis=0)
+                visual_tokens = torch.tensor(visual_tokens)
+                return {'visual_tokens': visual_tokens}
 
 
 class TokensWindowedMultishards(IterableDataset):

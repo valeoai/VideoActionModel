@@ -6,17 +6,17 @@ class ZeroSpeedAndCurvatureTokens(nn.Module):
     def __init__(self):
         super().__init__()
     
-    def forward(self, ego_to_world_rot, ego_to_world_tran, timestamps, **kwargs):
-        b, t, *_ =  ego_to_world_rot.shape
+    def forward(self, visual_tokens, **kwargs):
+        b, t, *_ =  visual_tokens.shape
         
         speed_tokens = torch.zeros(
             size=(b,t-1), 
-            device=timestamps.device,
+            device=visual_tokens.device,
             dtype=torch.int64
         )
         curvature_tokens = torch.zeros(
             size=(b,t-1), 
-            device=timestamps.device,
+            device=visual_tokens.device,
             dtype=torch.int64
         )
         
