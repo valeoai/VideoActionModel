@@ -10,12 +10,12 @@ class ZeroSpeedAndCurvatureTokens(nn.Module):
         b, t, *_ =  visual_tokens.shape
         
         speed_tokens = torch.zeros(
-            size=(b,t-1), 
+            size=(b,t), 
             device=visual_tokens.device,
             dtype=torch.int64
         )
         curvature_tokens = torch.zeros(
-            size=(b,t-1), 
+            size=(b,t), 
             device=visual_tokens.device,
             dtype=torch.int64
         )
