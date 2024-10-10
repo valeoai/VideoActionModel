@@ -1,0 +1,60 @@
+# @package _global_
+
+defaults:
+  - override /data: packed_tokens_opendv
+  - override /model: next_token_predictor
+  - override /model/network: mup_gpt2
+  - override /model/sequence_adapter: gpt_adapter
+  - override /model/action_tokenizer: zero_speed_and_curvature
+  - override /callbacks: callbacks_nuplan_training
+  - override /trainer: deepspeed2
+  - override /logger: many_loggers
+  - override /paths: jeanzay_nuplan
+  - override /optimizer: muAdamW
+  - override /scheduler: warmup_stable_drop
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+
+trainer:
+  max_epochs: 5
+  # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  log_every_n_steps: 5
+  use_distributed_sampler: False # sampling logic entirely handled by the dataloader and pre-processed sharding specs
+
+scheduler:
+  warmup_iter: 73 # 1% ~ end_iter * 0.01
+  end_iter: 7269 # (len_dataset - 1) // BATCH_SIZE * nb_epochs = (2791296 - 1) // 384 * 1 = 7269
+  drop_iter: 0 # 10% ~ end_iter * 0.1
+
+data:
+  shards_dir: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers
+  shard_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers/train_token_shards.txt
+  val_shard_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers/val_token_shards.txt
+  shard_ext: '.tokens' # '.tokens' for tokens '.tar' for tokens
+
+
+# VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
+model:
+  mup_base_shapes: ./mup_shapes/gpt2_24layers_nobias_basewidth128.bsh
+  network:
+    embedding_dim: 128
+    nb_heads: 1
+    nb_layers: 24
+    mlp_dim_mult: 4
+    vocabulary_size: 16385 # 16384 + 1 | visual_vocab_size + sum(action_vocab_sizes)
+    nb_timesteps: ${data.train_dataset_params.sequence_length}
+    nb_tokens_per_timestep: 578 # 18*32 + 2 = 576 + 2 = 578| visual tokens + action embeddings 
+    dropout_rate: 0.0
+    init_std: 0.02
+    bias: False
+    output_tied: True
+    output_scale: 1.0
+    attn_scale: 1.0
+  sequence_adapter:
+    visual_vocab_size: 16384
+    action_vocab_sizes:
+      - 1

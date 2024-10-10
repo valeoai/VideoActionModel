@@ -1,0 +1,5 @@
+_target_: world_model.dataloader.packed_tokens_datamodule.TokensWindowedDataModule
+shards_dir: ???
+shard_list_path: ???
+val_shard_list_path: ???
+shard_ext: '.shard' # '.shard' for tokens '.tar' for tokens
