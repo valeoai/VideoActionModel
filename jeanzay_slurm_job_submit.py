@@ -40,7 +40,7 @@ if __name__ == "__main__":
     
     devices_args = f'++trainer.devices={args.gpus_per_node} ++trainer.num_nodes={args.nodes}'
     
-    qos_full = f"qos_gpu-{args.qos}"
+    qos_full = f"qos_gpu_h100-{args.qos}"
 
     slurm_cmd = [
         "#!/bin/bash",
