@@ -58,7 +58,7 @@ if __name__ == "__main__":
         f"#SBATCH --output={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         
-        "#SBATCH --qos=qos_gpu_h100-dev" if not args.dev_qos else '',
+        "#SBATCH --qos=qos_gpu_h100-dev" if args.dev_qos else '',
         f"#SBATCH -A {args.account}",
         
         "module purge", # cleans out the modules loaded in interactive and inherited by default
