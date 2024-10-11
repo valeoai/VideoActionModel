@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - override /data: tokenized_sequence_opendv
+  - override /data: packed_tokens_opendv
   - override /model: next_token_predictor
   - override /model/network: mup_gpt2
   - override /model/sequence_adapter: gpt_adapter
@@ -31,9 +31,11 @@ scheduler:
   drop_iter: 0 # 10% ~ end_iter * 0.1
 
 data:
-  data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/OpenDV_tokenized/frames512/VQ_ds16_16384_llamagen
-  video_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/train_videos.txt
-  val_video_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/val_videos.txt
+  shards_dir: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers
+  shard_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers/train_token_shards.txt
+  val_shard_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers/val_token_shards.txt
+  shard_ext: '.tokens' # '.tokens' for tokens '.tar' for tokens
+
 
 # VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
 model:
