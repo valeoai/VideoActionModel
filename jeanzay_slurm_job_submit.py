@@ -17,6 +17,8 @@ if __name__ == "__main__":
     parser.add_argument("--python_cmd", "-p", type=str, required=True)
     parser.add_argument("--gpus_per_node", type=int, default=1)
     parser.add_argument("--nodes", type=int, default=1)
+    parser.add_argument("--qos", type=str, default="t3", choices=["t3", "t4", "dev"])
+    parser.add_argument("--account", type=str, default="ycy@h100")
     parser.add_argument("--file_to_run", "-f", type=str, default='train')
     parser.add_argument("--wall_time", "-wt", type=int, default=20) # jean zay has max time of 20h
     parser.add_argument("--allow_hyper_threading", action='store_true')
@@ -37,6 +39,8 @@ if __name__ == "__main__":
     run_name = f'{args.run_name}_{time_code}'
     
     devices_args = f'++trainer.devices={args.gpus_per_node} ++trainer.num_nodes={args.nodes}'
+    
+    qos_full = f"qos_gpu-{args.qos}"
 
     slurm_cmd = [
         "#!/bin/bash",
@@ -55,6 +59,9 @@ if __name__ == "__main__":
         # name of output and error files
         f"#SBATCH --output={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
+        
+        f"#SBATCH --qos={qos_full}",
+        f"#SBATCH -A {args.account}",
         
         "module purge", # cleans out the modules loaded in interactive and inherited by default
         "module load arch/h100",
