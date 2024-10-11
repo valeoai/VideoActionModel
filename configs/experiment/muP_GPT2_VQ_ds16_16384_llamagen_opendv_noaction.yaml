@@ -23,7 +23,6 @@ trainer:
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1
   log_every_n_steps: 5
-  use_distributed_sampler: False # sampling logic entirely handled by the dataloader and pre-processed sharding specs
 
 scheduler:
   warmup_iter: 73 # 1% ~ end_iter * 0.01
