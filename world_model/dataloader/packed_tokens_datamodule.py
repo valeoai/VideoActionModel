@@ -114,7 +114,9 @@ class TokensWindowedDataModule(L.LightningDataModule):
         return self.predict_loader
 
     def state_dict(self):
-        return {'data_module_pickled_state': pickle.dumps(self.__dict__)}
+        state_dict = self.__dict__.copy()
+        state_dict.pop('trainer', None)  # Remove 'trainer' key if it exists
+        return {'data_module_pickled_state': pickle.dumps(state_dict)}
 
     def load_state_dict(self, state_dict):
         self.__dict__.update(pickle.loads(state_dict['data_module_pickled_state']))
