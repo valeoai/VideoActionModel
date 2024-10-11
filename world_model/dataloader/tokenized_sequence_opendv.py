@@ -24,9 +24,6 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        self.train_video_list = None
-        self.val_video_list = None
-
     def setup(self, stage: Optional[str] = None):
         # Read train and validation video lists
         with open(self.video_list_path, 'r') as f:
@@ -36,7 +33,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         if stage == 'fit' or stage is None:
             self.train_dataset = RandomTokenizedSequenceOpenDVDataset(
                 self.data_root_dir,
-                self.train_video_list,
+                self.video_list,
                 self.sequence_length
             )
             
