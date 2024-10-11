@@ -1,12 +1,12 @@
 import os
-import pytorch_lightning as pl
+from lightning import LightningDataModule
 from torch.utils.data import DataLoader
 from typing import Optional
 
 # Assuming the VideoFrameDataset is in a file named video_dataset.py
 from world_model.dataloader.components.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
 
-class TokenizedSequenceOpenDVDataModule(pl.LightningDataModule):
+class TokenizedSequenceOpenDVDataModule(LightningDataModule):
     def __init__(
         self,
         data_root_dir: str,
