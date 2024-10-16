@@ -1,0 +1,6 @@
+defaults:
+  - model_summary
+  - tqdm_progress_bar
+  - learning_rate_monitor
+  - device_stats_monitor
+  - _self_

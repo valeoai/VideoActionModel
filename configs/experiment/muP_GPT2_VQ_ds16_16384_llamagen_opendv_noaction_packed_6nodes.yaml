@@ -26,14 +26,14 @@ trainer:
   use_distributed_sampler: False # sampling logic entirely handled by the dataloader and pre-processed sharding specs
 
 scheduler:
-  warmup_iter: 73 # 1% ~ end_iter * 0.01
-  end_iter: 7269 # (len_dataset - 1) // BATCH_SIZE * nb_epochs = (2791296 - 1) // 384 * 1 = 7269
+  warmup_iter: 1498 # 1% ~ end_iter * 0.01
+  end_iter: 149845 # (len_dataset - 1) // BATCH_SIZE * nb_epochs = (2791296 - 1) // 384 * 1 = 7269
   drop_iter: 0 # 10% ~ end_iter * 0.1
 
 data:
-  shards_dir: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers
-  shard_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers/train_token_shards.txt
-  val_shard_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_24nodes_8workers/val_token_shards.txt
+  shards_dir: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_6nodes_8trainworkers_2valworkers
+  shard_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_6nodes_8trainworkers_2valworkers/train_token_shards.txt
+  val_shard_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/frames512/shards_6nodes_8trainworkers_2valworkers/val_token_shards.txt
   shard_ext: '.tokens' # '.tokens' for tokens '.tar' for tokens
 
 
