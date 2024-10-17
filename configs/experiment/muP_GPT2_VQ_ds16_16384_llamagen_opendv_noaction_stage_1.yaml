@@ -6,7 +6,7 @@ defaults:
   - override /model/network: mup_gpt2
   - override /model/sequence_adapter: gpt_adapter
   - override /model/action_tokenizer: zero_speed_and_curvature
-  - override /callbacks: callbacks_nuplan_training
+  - override /callbacks: callbacks_opendv_training
   - override /trainer: deepspeed2
   - override /logger: many_loggers
   - override /paths: jeanzay_nuplan
