@@ -67,16 +67,15 @@ if __name__ == "__main__":
         f"export PYTHONUSERBASE={WORK_DIR}/python_envs/worldmodel",
         
         "export MPICH_GPU_SUPPORT_ENABLED=1",
-        "NCCL_DEBUG=INFO",
-        "CUDA_LAUNCH_BLOCKING=1",
+        "export NCCL_DEBUG=INFO",
+        "export CUDA_LAUNCH_BLOCKING=1",
+        "export HYDRA_FULL_ERROR=1",
         
         # Important change when using deepspeed (which now uses triton)
         # By default the cache dir will be $HOME/.triton
         # We point it to $SCRATCH because the inodes quota is very limited on JeanZay
         f"export TRITON_CACHE_DIR={SCRATCH_DIR}/.triton",
 
-        "export HYDRA_FULL_ERROR=1",
-        
         "# echo of launched commands",
         "set -x",
         

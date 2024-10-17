@@ -32,7 +32,8 @@ create_sbatch_script() {
 
 # Load modules and set environment variables
 module purge
-module load arch/h100 pytorch-gpu/py3/2.4.0
+module load arch/h100 
+module load pytorch-gpu/py3/2.4.0
 
 export PYTHONUSERBASE=/lustre/fswork/projects/rech/ycy/uyv67bd/python_envs/worldmodel
 export MPICH_GPU_SUPPORT_ENABLED=1
@@ -57,6 +58,8 @@ srun python $TRAIN_SCRIPT \\
     optimizer.weight_decay=0.1 \\
     ++trainer.devices=4 \\
     ++trainer.num_nodes=1 \\
+    ++trainer.limit_train_batches=1000 \\
+    ++trainer.limit_val_batches=200 \\
     name=${RUN_NAME}_part_${stage} \\
     $([ -n "$ckpt_path" ] && echo "++ckpt_path=$ckpt_path")
 EOF
