@@ -26,3 +26,10 @@ last_hours_checkpoint:
   train_time_interval:
     _target_: datetime.timedelta
     hours: 1
+
+end_of_epoch_checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: "${paths.output_dir}/${name}/checkpoints/"
+  filename: "end_of_epoch_{epoch:03d}_{step:010d}"
+  save_last: True
+  every_n_epochs: 1

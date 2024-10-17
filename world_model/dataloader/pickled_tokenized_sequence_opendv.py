@@ -3,23 +3,28 @@ from lightning import LightningDataModule
 from lightning_utilities.core.rank_zero import rank_zero_only
 from torch.utils.data import DataLoader
 from typing import Optional, List, Tuple
+import pickle
 
-from world_model.dataloader.components.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
+from world_model.dataloader.components.pickled_random_tokenized_sequence_opendv import PickledRandomTokenizedSequenceOpenDVDataset
 
-class TokenizedSequenceOpenDVDataModule(LightningDataModule):
+class PickledTokenizedSequenceOpenDVDataModule(LightningDataModule):
     def __init__(
         self,
         data_root_dir: str,
         video_list_path: str,
+        pickle_path: str,
         sequence_length: int,
         val_video_list_path: str = None,
+        val_pickle_path: str = None,
         batch_size: int = 32,
         num_workers: int = 4,
     ):
         super().__init__()
         self.data_root_dir = data_root_dir
         self.video_list_path = video_list_path
+        self.pickle_path = pickle_path
         self.val_video_list_path = val_video_list_path
+        self.val_pickle_path = val_pickle_path
         self.sequence_length = sequence_length
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -48,26 +53,33 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         # Read train and validation video lists
         with open(self.video_list_path, 'r') as f:
             video_list = [line.strip() for line in f.readlines()]
-        self.video_list, missing_videos = self.check_video_existence(video_list)
+        video_list, missing_videos = self.check_video_existence(video_list)
         self.print_missing_videos(missing_videos) # Print missing videos only on rank 0
+        with open(self.pickle_path, 'rb') as f:
+            video_windows = pickle.load(f)
 
         # Create datasets
         if stage == 'fit' or stage is None:
-            self.train_dataset = RandomTokenizedSequenceOpenDVDataset(
+            self.train_dataset = PickledRandomTokenizedSequenceOpenDVDataset(
                 self.data_root_dir,
-                self.video_list,
+                video_list,
+                video_windows,
                 self.sequence_length
             )
             
             if self.val_video_list_path:
                 with open(self.val_video_list_path, 'r') as f:
                     val_video_list = [line.strip() for line in f.readlines()]
-                self.val_video_list, missing_val_videos = self.check_video_existence(val_video_list)
+                val_video_list, missing_val_videos = self.check_video_existence(val_video_list)
                 self.print_missing_videos(missing_val_videos)
                 
-                self.val_dataset = RandomTokenizedSequenceOpenDVDataset(
+                with open(self.val_pickle_path, 'rb') as f:
+                    val_video_windows = pickle.load(f)
+                
+                self.val_dataset = PickledRandomTokenizedSequenceOpenDVDataset(
                     self.data_root_dir,
-                    self.val_video_list,
+                    val_video_list,
+                    val_video_windows
                     self.sequence_length
                 )
 
