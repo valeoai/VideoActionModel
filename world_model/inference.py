@@ -157,7 +157,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
     def on_predict_epoch_end(self, trainer, pl_module):
         self.flush_queue()  # Ensure all remaining data is written
 
-    def teardown(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: str) -> None:
+    def teardown(self, trainer: "L.Trainer", pl_module: "L.LightningModule", stage: str) -> None:
         self.executor.shutdown(wait=True)
                 
 

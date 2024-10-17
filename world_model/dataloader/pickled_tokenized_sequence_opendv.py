@@ -79,7 +79,7 @@ class PickledTokenizedSequenceOpenDVDataModule(LightningDataModule):
                 self.val_dataset = PickledRandomTokenizedSequenceOpenDVDataset(
                     self.data_root_dir,
                     val_video_list,
-                    val_video_windows
+                    val_video_windows,
                     self.sequence_length
                 )
 
