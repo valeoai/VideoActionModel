@@ -31,8 +31,8 @@ scheduler:
 
 data:
   data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/OpenDV_tokenized/frames512/VQ_ds16_16384_llamagen
-  video_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/train_videos.txt
-  val_video_list_path: /lustre/fsn1/projects/rech/ycy/commun/tmp_OpenDV_sharded/val_videos.txt
+  video_list_path: /lustre/fsn1/projects/rech/ycy/commun/OpenDV_sharded/train_videos.txt
+  val_video_list_path: /lustre/fsn1/projects/rech/ycy/commun/OpenDV_sharded/val_videos.txt
   sequence_length: 20
 
 # VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
