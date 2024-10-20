@@ -54,6 +54,7 @@ srun python $TRAIN_SCRIPT \\
     data.batch_size=4 \\
     data.num_workers=6 \\
     paths.output_dir=$OUTPUT_DIR \\
+    ++trainer.max_steps=$((1000 * stage)) \\
     optimizer.weight_decay=0.1 \\
     ++trainer.devices=4 \\
     ++trainer.num_nodes=1 \\
