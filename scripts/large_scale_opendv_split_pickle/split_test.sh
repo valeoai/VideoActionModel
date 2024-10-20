@@ -39,7 +39,7 @@ export PYTHONUSERBASE=/lustre/fswork/projects/rech/ycy/uyv67bd/python_envs/world
 export MPICH_GPU_SUPPORT_ENABLED=1
 export TRITON_CACHE_DIR=/lustre/fsn1/projects/rech/ycy/uyv67bd/.triton
 export HYDRA_FULL_ERROR=1
-export NCCL_DEBUG=INFO
+# export NCCL_DEBUG=INFO
 export CUDA_LAUNCH_BLOCKING=1
 
 # Echo launched commands

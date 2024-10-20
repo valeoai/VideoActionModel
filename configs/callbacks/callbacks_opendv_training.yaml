@@ -10,6 +10,7 @@ before_drop_checkpoint:
   dirpath: "${paths.output_dir}/${name}/checkpoints/"
   filename: "before_drop_{epoch:03d}_{step:010d}"
   every_n_train_steps: 134860 # 149845 - 149845*0.1
+  verbose: true
 
 every_quarter_epoch_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
@@ -17,6 +18,7 @@ every_quarter_epoch_checkpoint:
   filename: "quarters_{epoch:03d}_{step:010d}"
   every_n_train_steps: 37500
   save_top_k: -1
+  verbose: true
 
 last_hours_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
@@ -26,6 +28,7 @@ last_hours_checkpoint:
   train_time_interval:
     _target_: datetime.timedelta
     hours: 1
+  verbose: true
 
 end_of_epoch_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
@@ -33,3 +36,4 @@ end_of_epoch_checkpoint:
   filename: "end_of_epoch_{epoch:03d}_{step:010d}"
   save_last: True
   every_n_epochs: 1
+  verbose: true
