@@ -18,7 +18,7 @@ defaults:
 
 
 trainer:
-  max_steps: 100397 # part1 + part2 = 49449 + 50948
+  max_steps: 100391 # part1 + part2 = 49449 + 50948
   # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1
@@ -26,7 +26,7 @@ trainer:
 
 scheduler:
   warmup_iter: 0 # 1% ~ end_iter * 0.01
-  end_iter: 149846 # (len_dataset - 1) // BATCH_SIZE * nb_epochs
+  end_iter: 149837 # (len_dataset - 1) // BATCH_SIZE * nb_epochs
   drop_iter: 0 # 10% ~ end_iter * 0.1
 
 data:
