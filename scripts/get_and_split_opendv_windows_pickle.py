@@ -27,7 +27,7 @@ def get_windows(data_root_dir, video_list):
     sequence_length = 20
     video_windows = []
     for video_id, frames in tqdm(video_frames.items(), desc="Creating windows"):
-        for start_idx in range(len(frames) - sequence_length + 1):
+        for start_idx in range(len(frames) - sequence_length):
             video_windows.append((video_id, start_idx))
     return video_windows
 
