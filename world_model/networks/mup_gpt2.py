@@ -75,7 +75,10 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size))
 
-    def forward(self, x):
+        # will be KVCache object managed by inference context manager
+        self.cache = None
+
+    def forward(self, x, start_pos: int = None):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (dim_model)
 
         # calculate query, key, values for all heads in batch
@@ -83,6 +86,12 @@ class CausalSelfAttention(nn.Module):
 
         # split into qkv and heads
         q, k, v = rearrange(x, "b seq (n nb_heads dim_head) -> n b nb_heads seq dim_head", n=3, nb_heads=self.nb_heads)
+
+        # KV cache update
+        if self.cache is not None:
+            assert isinstance(start_pos, int), "start_pos must be an integer"
+            # update the KV cache with current KV and get all the previous KVs
+            k, v = self.cache.update(start_pos, k, v)
 
         ### muP: just for coord check (debug)
         q = self.query(q)
@@ -118,8 +127,8 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
         self.mlp = MLP(dim_model, bias, dropout, mlp_dim_mult)
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x, start_pos=None):
+        x = x + self.attn(self.ln_1(x), start_pos=start_pos)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -326,7 +335,14 @@ class MuGPT2(nn.Module):
         elif isinstance(module, MLP):
             self._init_c_proj_residual(module, is_mlp=True)
 
-    def forward(self, token_sequence, spatial_positions, temporal_positions, inference=False):
+    def forward(
+        self,
+        token_sequence,
+        spatial_positions,
+        temporal_positions,
+        inference=False,
+        start_pos=None,
+    ):
         """
         Args:
             token_sequence: A tensor of interleaved visual and action tokens.
@@ -349,7 +365,7 @@ class MuGPT2(nn.Module):
         # forward world embeddings to the transformer
         x = self.transformer.drop(emb_in)
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x, start_pos=start_pos)
         emb_out = self.transformer.ln_f(x)
 
         if not inference:
