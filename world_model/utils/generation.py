@@ -157,7 +157,7 @@ def autoregressive_image_sequence_generation(
         # total_len = rolling_context.shape[1] + nb_future_frames * nb_visual_tokens
         block.attention.cache = KVCache(
             batch_size=B,
-            seq_length=max_rolling_context_size,  # this may be larger than the actual context
+            seq_length=max_rolling_context_size,  # this may be larger than the actual context; if changing this change the way prev_pos and cur_pos are updated
             n_kv_heads=block.attn.nb_heads,
             head_dim=block.attn.dim_model // block.attn.nb_heads,
             dtype=layer_dtype,
@@ -196,14 +196,14 @@ def autoregressive_image_sequence_generation(
             # Get logits for the next token
             if use_kv_cache:
                 sequence_logits = network(
-                    rolling_context[:, prev_pos: cur_pos],  # only the last token as the other tokens are cached
+                    rolling_context[:, prev_pos: cur_pos],  # only the last token as the other tokens are cached after the first iteration, i.e. with the context
                     rolling_spatial_positions[:, current_context_len - 1:current_context_len],
                     rolling_temporal_positions[:, current_context_len - 1:current_context_len],
                     inference=True,
                     start_pos=prev_pos,
                 )
-                prev_pos = cur_pos
-                cur_pos += 1
+                prev_pos = min(cur_pos, max_rolling_context_size - 1)  # this ensures that we never have prev_pos going beyond the cache size
+                cur_pos = min(cur_pos + 1, max_rolling_context_size)
             else:
                 sequence_logits = network(
                     rolling_context,
@@ -229,6 +229,10 @@ def autoregressive_image_sequence_generation(
                 rolling_spatial_positions = rolling_spatial_positions.roll(-1, dims=1)
                 rolling_temporal_positions = rolling_temporal_positions.roll(-1, dims=1)
                 rolling_temporal_positions[:, -1] += max_rolling_context_frames
+                if use_kv_cache:
+                    for block in network.transformer.h:
+                        block.attention.cache.cache_k = block.attention.cache.cache_k.roll(-1, dims=1)
+                        block.attention.cache.cache_v = block.attention.cache.cache_v.roll(-1, dims=1)
 
         # Extract the last generated frame from the rolling context and save it
         last_generated_image = rolling_context[:, -nb_visual_tokens:]
