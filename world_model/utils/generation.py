@@ -242,6 +242,7 @@ def autoregressive_image_sequence_generation(
                     for block in network.transformer.h:
                         block.attention.cache.cache_k = block.attention.cache.cache_k.roll(-1, dims=1)
                         block.attention.cache.cache_v = block.attention.cache.cache_v.roll(-1, dims=1)
+                    raise NotImplementedError("KV cache rolling not implemented yet")
 
         # Extract the last generated frame from the rolling context and save it
         last_generated_image = rolling_context[:, -nb_visual_tokens:]
@@ -278,6 +279,7 @@ def autoregressive_image_sequence_generation(
                 for block in network.transformer.h:
                     block.attention.cache.cache_k = block.attention.cache.cache_k.roll(-1, dims=1)
                     block.attention.cache.cache_v = block.attention.cache.cache_v.roll(-1, dims=1)
+                raise NotImplementedError("KV cache rolling not implemented yet")
 
     # clean up the KV cache in all the layers
     for block in network.transformer.h:
