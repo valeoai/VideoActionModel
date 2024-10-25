@@ -70,16 +70,17 @@ class KVCache(nn.Module):
 
     def __init__(self, batch_size, seq_length, n_kv_heads, head_dim, dtype, device):
         super().__init__()
-        cache_shape = (batch_size, seq_length, n_kv_heads, head_dim)
+        cache_shape = (batch_size, n_kv_heads, seq_length, head_dim)
         self.register_buffer("cache_k", torch.zeros(cache_shape, dtype=dtype, device=device))
         self.register_buffer("cache_v", torch.zeros(cache_shape, dtype=dtype, device=device))
 
     def update(self, start_pos, xk, xv):
-        seqlen = xk.size(1)
-        self.cache_k[:, start_pos: start_pos + seqlen] = xk
-        self.cache_v[:, start_pos: start_pos + seqlen] = xv
-        xk = self.cache_k[:, : start_pos + seqlen]
-        xv = self.cache_v[:, : start_pos + seqlen]
+        # changed from original implementation because shape in mup_GPT2 is (b nb_heads seq dim_head)
+        seqlen = xk.size(2)
+        self.cache_k[:, :, start_pos: start_pos + seqlen] = xk
+        self.cache_v[:, :, start_pos: start_pos + seqlen] = xv
+        xk = self.cache_k[:, :, : start_pos + seqlen]
+        xv = self.cache_v[:, :, : start_pos + seqlen]
         return xk, xv
 
 
@@ -155,7 +156,7 @@ def autoregressive_image_sequence_generation(
         layer_dtype = block.attn.c_attn.weight.dtype
         layer_device = block.attn.c_attn.weight.device
         # total_len = rolling_context.shape[1] + nb_future_frames * nb_visual_tokens
-        block.attention.cache = KVCache(
+        block.attn.cache = KVCache(
             batch_size=B,
             seq_length=max_rolling_context_size,  # this may be larger than the actual context; if changing this change the way prev_pos and cur_pos are updated
             n_kv_heads=block.attn.nb_heads,
@@ -260,7 +261,7 @@ def autoregressive_image_sequence_generation(
 
     # clean up the KV cache in all the layers
     for block in network.transformer.h:
-        block.attention.cache = None
+        block.attn.cache = None
 
     # Stack generated images
     generated_images = torch.stack(generated_images, dim=1)
