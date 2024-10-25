@@ -78,7 +78,7 @@ class CausalSelfAttention(nn.Module):
         # will be KVCache object managed by inference context manager
         self.cache = None
 
-    def forward(self, x, start_pos: int = None):
+    def forward(self, x, mask, start_pos: int = None):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (dim_model)
 
         # calculate query, key, values for all heads in batch
@@ -104,9 +104,9 @@ class CausalSelfAttention(nn.Module):
         # efficient attention using Flash Attention CUDA kernels
         y = torch.nn.functional.scaled_dot_product_attention(
             q, k, v,
-            attn_mask=None,
+            attn_mask=None if mask == 'use_causal_mask' else mask,
             dropout_p=self.dropout if self.training else 0,
-            is_causal=True,
+            is_causal=mask == 'use_causal_mask',
             scale=attn_scaling,  # muP: attention scaling
         )
 
@@ -127,8 +127,8 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
         self.mlp = MLP(dim_model, bias, dropout, mlp_dim_mult)
 
-    def forward(self, x, start_pos=None):
-        x = x + self.attn(self.ln_1(x), start_pos=start_pos)
+    def forward(self, x, mask, start_pos=None):
+        x = x + self.attn(self.ln_1(x), mask, start_pos=start_pos)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -362,10 +362,25 @@ class MuGPT2(nn.Module):
 
         emb_in = tok_emb + temporal_pos_emb + spatial_pos_emb
 
+        mask = 'use_causal_mask'
+        if inference and start_pos != -1:
+            seqlen = token_sequence.size(1)
+            mask = None
+            if seqlen > 1:
+                mask = torch.full((seqlen, seqlen), float("-inf"), device=token_sequence.device)
+                mask = torch.triu(mask, diagonal=1)
+                # When performing key-value caching, we compute the attention scores
+                # only for the new sequence. Thus, the matrix of scores is of size
+                # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
+                # j > cache_len + i, since row i corresponds to token cache_len + i.
+                mask = torch.hstack(
+                    [torch.zeros((seqlen, start_pos), device=token_sequence.device), mask]
+                ).type_as(emb_in)
+
         # forward world embeddings to the transformer
         x = self.transformer.drop(emb_in)
         for block in self.transformer.h:
-            x = block(x, start_pos=start_pos)
+            x = block(x, mask, start_pos=start_pos)
         emb_out = self.transformer.ln_f(x)
 
         if not inference:

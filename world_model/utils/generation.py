@@ -75,6 +75,8 @@ class KVCache(nn.Module):
         self.register_buffer("cache_v", torch.zeros(cache_shape, dtype=dtype, device=device))
 
     def update(self, start_pos, xk, xv):
+        if start_pos == -1:
+            return xk, xv
         # changed from original implementation because shape in mup_GPT2 is (b nb_heads seq dim_head)
         seqlen = xk.size(2)
         self.cache_k[:, :, start_pos: start_pos + seqlen] = xk
@@ -96,6 +98,7 @@ def autoregressive_image_sequence_generation(
     temperature=1.0,
     return_logits=False,
     use_kv_cache=False,
+    deterministic=False,
     verbose=False,
 ):
     """
@@ -198,8 +201,8 @@ def autoregressive_image_sequence_generation(
             if use_kv_cache:
                 sequence_logits = network(
                     rolling_context[:, prev_pos: cur_pos],  # only the last token as the other tokens are cached after the first iteration, i.e. with the context
-                    rolling_spatial_positions[:, current_context_len - 1:current_context_len],
-                    rolling_temporal_positions[:, current_context_len - 1:current_context_len],
+                    rolling_spatial_positions[:, prev_pos:cur_pos],
+                    rolling_temporal_positions[:, prev_pos:cur_pos],
                     inference=True,
                     start_pos=prev_pos,
                 )
@@ -211,6 +214,7 @@ def autoregressive_image_sequence_generation(
                     rolling_spatial_positions[:, :current_context_len],
                     rolling_temporal_positions[:, :current_context_len],
                     inference=True,
+                    start_pos=0,
                 )
 
             next_token_logits = sequence_logits[:, -1, :]  # shape [B, vocab_size]
@@ -218,10 +222,14 @@ def autoregressive_image_sequence_generation(
             if return_logits:
                 frame_logits.append(next_token_logits)
 
-            # Apply temperature and sample
-            next_token_logits = next_token_logits / temperature
-            next_token_probs = F.softmax(next_token_logits, dim=-1)
-            next_token = sampler.sample(next_token_probs)  # shape [B, 1]
+            if deterministic:
+                # In deterministic mode, we always take the most likely token
+                next_token = next_token_logits.argmax(dim=-1, keepdim=True)
+            else:
+                # Apply temperature and sample
+                next_token_logits = next_token_logits / temperature
+                next_token_probs = F.softmax(next_token_logits, dim=-1)
+                next_token = sampler.sample(next_token_probs)  # shape [B, 1]
 
             # Update rolling context
             rolling_context = torch.cat([rolling_context, next_token], dim=1)
@@ -256,8 +264,20 @@ def autoregressive_image_sequence_generation(
         next_action_tokens = sequence_adapter.action_shifts + next_action_tokens
         rolling_context = torch.cat([rolling_context, next_action_tokens], dim=1)
 
+        if use_kv_cache:
+            # In any case, we need to update the position indices
+            cur_pos += nb_action_tokens
+
         if rolling_context.shape[1] > max_rolling_context_size:
             rolling_context = rolling_context[:, nb_action_tokens:]
+
+            if use_kv_cache:
+                # in this case we follow the rolling context and roll by the number of action tokens
+                prev_pos -= nb_action_tokens
+                cur_pos -= nb_action_tokens
+                for block in network.transformer.h:
+                    block.attention.cache.cache_k = block.attention.cache.cache_k.roll(-1, dims=1)
+                    block.attention.cache.cache_v = block.attention.cache.cache_v.roll(-1, dims=1)
 
     # clean up the KV cache in all the layers
     for block in network.transformer.h:
