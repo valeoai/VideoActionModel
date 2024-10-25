@@ -71,7 +71,8 @@ def autoregressive_image_sequence_generation(
     future_action_tokens,
     max_rolling_context_frames,
     temperature = 1.0,
-    return_logits = False
+    return_logits = False,
+    verbose = False,
 ):
     """
     Generates image sequences autoregressively using a neural network.
@@ -86,10 +87,12 @@ def autoregressive_image_sequence_generation(
         max_rolling_context_frames: Maximum number of frames to keep in the rolling context.
         temperature: Controls randomness in sampling (default: 1.0).
         return_logits: Whether to return logits along with generated images (default: False).
+        verbose: Whether to show progress bars during generation (default: False).
 
     Returns:
         A dictionary containing generated visual tokens and optionally logits.
     """
+    from tqdm.auto import tqdm
     
     B, nb_burnin_frames, H, W = burnin_visual_tokens.shape
     _, nb_future_actions, nb_action_tokens = future_action_tokens.shape
@@ -123,17 +126,26 @@ def autoregressive_image_sequence_generation(
     generated_logits = []
     
     with torch.no_grad():
-        for i in range(nb_future_frames):
+        # Create frame-level progress bar if verbose
+        frame_iterator = range(nb_future_frames)
+        if verbose:
+            frame_iterator = tqdm(frame_iterator, desc='Generating frames')
+            
+        for i in frame_iterator:
             frame_logits = []
             
             # change of frame, resetting position indices
             rolling_spatial_positions = spatial_positions
             rolling_temporal_positions = temporal_positions
             
-            
-            
-            for j in range(nb_visual_tokens):
+            # Create token-level progress bar if verbose
+            token_iterator = range(nb_visual_tokens)
+            if verbose:
+                token_iterator = tqdm(token_iterator, 
+                                    desc=f'Frame {i+1}/{nb_future_frames} tokens', 
+                                    leave=False)  # Don't leave inner progress bar
                 
+            for j in token_iterator:
                 # Spatial and temporal pos are pre-computed at len of max_rolling_context_size
                 # We need to crop by current_context_len the spatial and temporal pos indices
                 # as we are filling the context up to max_rolling_context_size.
@@ -183,7 +195,7 @@ def autoregressive_image_sequence_generation(
             # Add next action tokens to rolling context
             next_action_tokens = future_action_tokens[:, i] # shape [B, nb_action_tokens]
             # Apply shifts to action token indices based on visual and action vocabularies' sizes.
-            # Otherwisz action and visual tokens may have the same index
+            # Otherwise action and visual tokens may have the same index
             next_action_tokens = sequence_adapter.action_shifts + next_action_tokens
             rolling_context = torch.cat([rolling_context, next_action_tokens], dim=1)
             
@@ -192,7 +204,11 @@ def autoregressive_image_sequence_generation(
 
     # Stack generated images
     generated_images = torch.stack(generated_images, dim=1)    
-    out_dict = {'visual_tokens': generated_images}
+    out_dict = {
+        'visual_tokens': generated_images,
+        'sequence_data': sequence_data,
+        'position_data': position_data
+    }
     
     if return_logits:
         generated_logits = torch.stack(generated_logits, dim=1)
