@@ -341,7 +341,7 @@ class MuGPT2(nn.Module):
         spatial_positions,
         temporal_positions,
         inference=False,
-        start_pos=None,
+        start_pos=-1,
     ):
         """
         Args:
