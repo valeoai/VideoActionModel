@@ -147,6 +147,7 @@ class MuGPT2(nn.Module):
         vocabulary_size: int = 1104,
         nb_timesteps: int = 8,
         nb_tokens_per_timestep: int = 352,
+        multiple_tokens_inference: bool = False,
         dropout_rate: float = 0.0,
         init_std: float = 0.02,
         bias: bool = True,
@@ -173,6 +174,7 @@ class MuGPT2(nn.Module):
         self.nb_timesteps = nb_timesteps
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
         self.block_size = nb_timesteps * nb_tokens_per_timestep
+        self.multiple_tokens_inference = multiple_tokens_inference
 
         self.transformer = nn.ModuleDict(dict(
             wie=nn.Embedding(vocabulary_size, embedding_dim),         # token embeddings
@@ -339,10 +341,14 @@ class MuGPT2(nn.Module):
         assert spatial_positions.max() < self.nb_tokens_per_timestep
         assert temporal_positions.max() < self.nb_timesteps
 
-        # For the attention mask we want:
-        # 1. Do not attend to future frames
-        # 2. Attend to all spatial tokens in the same frame (this makes it not entirely causal)
-        attention_mask = temporal_positions[:, None] <= temporal_positions[:, None, None]
+        if self.multiple_tokens_inference:
+            # For the attention mask we want:
+            # 1. Do not attend to future frames
+            # 2. Attend to all spatial tokens in the same frame (this makes it not entirely causal)
+            attention_mask = temporal_positions[:, None] <= temporal_positions[:, None, None]
+        else:
+            # Full causal mask
+            attention_mask = torch.tril(torch.ones(token_sequence.size(1), token_sequence.size(1))).view(1, 1, token_sequence.size(1), token_sequence.size)
 
         # compute spatio-temporal position embeddings
         spatial_pos_emb = self.transformer.wse(spatial_positions)
@@ -361,7 +367,11 @@ class MuGPT2(nn.Module):
         if not inference:
             img_logits = self.lm_head(emb_out)
         else:
-            # at inference time, we only we keep the prediction for all the tokens of the last timestep
-            img_logits = self.lm_head(emb_out[:, -self.nb_tokens_per_timestep:])
+            if self.multiple_tokens_inference:
+                # at inference time, we only we keep the prediction for all the tokens of the last timestep
+                img_logits = self.lm_head(emb_out[:, -self.nb_tokens_per_timestep:])
+            else:
+                # at inference time, we only we keep the prediction for the last timestep
+                img_logits = self.lm_head(emb_out[:, [-1]])
 
         return img_logits
