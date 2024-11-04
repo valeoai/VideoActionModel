@@ -45,7 +45,7 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, dim_model, nb_heads, bias, dropout, block_size, attn_scale):
         super().__init__()
-        assert dim_model % nb_heads == 0
+        assert dim_model % nb_heads == 0, "dim_model must be divisible by nb_heads"
 
         self.nb_heads = nb_heads
         self.dim_model = dim_model
@@ -78,7 +78,7 @@ class CausalSelfAttention(nn.Module):
         # will be KVCache object managed by inference context manager
         self.cache = None
 
-    def forward(self, x, mask, start_pos: int = None):
+    def forward(self, x, attn_mask, start_pos: int = None):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (dim_model)
 
         # calculate query, key, values for all heads in batch
@@ -104,9 +104,9 @@ class CausalSelfAttention(nn.Module):
         # efficient attention using Flash Attention CUDA kernels
         y = torch.nn.functional.scaled_dot_product_attention(
             q, k, v,
-            attn_mask=None if mask == 'use_causal_mask' else mask,
+            attn_mask=attn_mask,
             dropout_p=self.dropout if self.training else 0,
-            is_causal=mask == 'use_causal_mask',
+            is_causal=False,
             scale=attn_scaling,  # muP: attention scaling
         )
 
@@ -127,8 +127,8 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
         self.mlp = MLP(dim_model, bias, dropout, mlp_dim_mult)
 
-    def forward(self, x, mask, start_pos=None):
-        x = x + self.attn(self.ln_1(x), mask, start_pos=start_pos)
+    def forward(self, x, attn_mask, start_pos=None):
+        x = x + self.attn(self.ln_1(x), attn_mask, start_pos=start_pos)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -166,9 +166,9 @@ class MuGPT2(nn.Module):
     ) -> None:
 
         super().__init__()
-        assert vocabulary_size is not None
-        assert nb_tokens_per_timestep is not None
-        assert nb_timesteps is not None
+        assert vocabulary_size is not None, "vocabulary_size must be provided"
+        assert nb_tokens_per_timestep is not None, "nb_tokens_per_timestep must be provided"
+        assert nb_timesteps is not None, "nb_timesteps must be provided"
 
         self.embedding_dim = embedding_dim
         self.bias = bias
@@ -351,8 +351,8 @@ class MuGPT2(nn.Module):
             temporal_positions: A tensor indicating the temporal position of each token in the sequence.
                 example: [0,0,0,0,1,1,1,1]
         """
-        assert spatial_positions.max() < self.nb_tokens_per_timestep
-        assert temporal_positions.max() < self.nb_timesteps
+        assert spatial_positions.max() < self.nb_tokens_per_timestep, f"spatial_positions.max()={spatial_positions.max()} >= self.nb_tokens_per_timestep={self.nb_tokens_per_timestep}"
+        assert temporal_positions.max() < self.nb_timesteps, f"temporal_positions.max()={temporal_positions.max()} >= self.nb_timesteps={self.nb_timesteps}"
 
         # compute spatio-temporal position embeddings
         spatial_pos_emb = self.transformer.wse(spatial_positions)
@@ -362,25 +362,26 @@ class MuGPT2(nn.Module):
 
         emb_in = tok_emb + temporal_pos_emb + spatial_pos_emb
 
-        mask = 'use_causal_mask'
+        seqlen = token_sequence.size(1)
         if inference and start_pos != -1:
-            seqlen = token_sequence.size(1)
-            mask = None
+            attn_mask = None
             if seqlen > 1:
-                mask = torch.full((seqlen, seqlen), float("-inf"), device=token_sequence.device)
-                mask = torch.triu(mask, diagonal=1)
+                attn_mask = torch.full((seqlen, seqlen), float("-inf"), device=token_sequence.device)
+                attn_mask = torch.triu(attn_mask, diagonal=1)
                 # When performing key-value caching, we compute the attention scores
                 # only for the new sequence. Thus, the matrix of scores is of size
                 # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
                 # j > cache_len + i, since row i corresponds to token cache_len + i.
-                mask = torch.hstack(
-                    [torch.zeros((seqlen, start_pos), device=token_sequence.device), mask]
+                attn_mask = torch.hstack(
+                    [torch.zeros((seqlen, start_pos), device=token_sequence.device), attn_mask]
                 ).type_as(emb_in)
+        else:
+            attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
 
         # forward world embeddings to the transformer
         x = self.transformer.drop(emb_in)
         for block in self.transformer.h:
-            x = block(x, mask, start_pos=start_pos)
+            x = block(x, attn_mask, start_pos=start_pos)
         emb_out = self.transformer.ln_f(x)
 
         if not inference:
