@@ -272,15 +272,16 @@ def autoregressive_image_sequence_generation(
             cur_pos += nb_action_tokens
 
         if rolling_context.shape[1] > max_rolling_context_size:
-            rolling_context = rolling_context[:, nb_action_tokens:]
+            offset = rolling_context.size(1) - max_rolling_context_size  # this makes it work when max_rolling_context_size is not a multiple of the number of tokens per frame
+            rolling_context = rolling_context[:, offset:]
 
             if use_kv_cache:
                 # in this case we follow the rolling context and roll by the number of action tokens
-                prev_pos -= nb_action_tokens
+                prev_pos -= nb_action_tokens  # this can be either max_rolling_context_size - 3 or max_rolling_context_size - 2
                 cur_pos = max_rolling_context_size
                 for block in network.transformer.h:
-                    block.attn.cache.cache_k = block.attn.cache.cache_k.roll(-1, dims=2)
-                    block.attn.cache.cache_v = block.attn.cache.cache_v.roll(-1, dims=2)
+                    block.attn.cache.cache_k = block.attn.cache.cache_k.roll(-offset, dims=2)
+                    block.attn.cache.cache_v = block.attn.cache.cache_v.roll(-offset, dims=2)
 
     # clean up the KV cache in all the layers
     for block in network.transformer.h:
@@ -299,65 +300,3 @@ def autoregressive_image_sequence_generation(
         out_dict['visual_logits'] = generated_logits
 
     return out_dict
-
-
-if __name__ == '__main__':
-    import yaml
-    from pathlib import Path
-
-    import mup
-    from omegaconf import OmegaConf
-    from hydra.utils import instantiate
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    base_logs_dir = Path('~/iveco/scratch_iveco/world_model_JZGC4/').expanduser()
-    path_to_worldmodel_repo = Path('~/shared/eramzi/NextTokenPredictor').expanduser()
-    model_name = 'muP_GPT2_Nodes6_BSperGPU16_totalBS384_dim256_std0.0217_lr0.0047_0903_1345_1725363936'
-
-    config_file_path = base_logs_dir / 'model_logs_and_checkpoints' / model_name / 'tensorboard/version_0/hparams.yaml'
-    with open(config_file_path, 'r') as file:
-        training_logged_config = yaml.safe_load(file)
-    training_logged_config = OmegaConf.create(training_logged_config)
-
-    model_config = training_logged_config.model
-    model_config.mup_base_shapes = str(path_to_worldmodel_repo / 'mup_shapes/gpt2_24layers_nobias_basewidth128.bsh')
-
-    network = instantiate(model_config.network)
-    mup.set_base_shapes(network, base=model_config.mup_base_shapes)
-    sequence_adapter = instantiate(model_config.sequence_adapter)
-    action_tokenizer = instantiate(model_config.action_tokenizer)
-
-    network = network.to(device)
-    sequence_adapter = sequence_adapter.to(device)
-    action_tokenizer = action_tokenizer.to(device)
-
-    network.eval()
-    sequence_adapter.eval()
-    action_tokenizer.eval()
-
-    sampler = TopKSampler(k=5)
-
-    window_size = 23
-    burnin_visual_tokens = torch.randint(0, 1000, (3, 18, 16, 32), device=device)
-
-    b, burnin_size, h, w = burnin_visual_tokens.shape
-    future_size = window_size - burnin_size
-
-    burnin_action_tokens = action_tokenizer(burnin_visual_tokens)
-    future_action_tokens = torch.zeros((b, future_size - 1, 2), device=device, dtype=torch.long)
-
-    generated_data = autoregressive_image_sequence_generation(
-        network,
-        sampler,
-        sequence_adapter,
-        burnin_visual_tokens,
-        burnin_action_tokens,
-        future_action_tokens,
-        max_rolling_context_frames=network.nb_timesteps - 1,
-        temperature=1.0,
-        return_logits=True,
-        deterministic=False,
-        use_kv_cache=True,
-        verbose=True,
-    )
