@@ -4,6 +4,7 @@
 OUTPUT_DIR='/lustre/fsn1/projects/rech/ycy/commun/output_data/opendv_GPT2_LlamaGen/large_scale'
 RUN_NAME='muP_GPT2_split_opendv_dim1024'
 TRAIN_SCRIPT=/lustre/fswork/projects/rech/ycy/uyv67bd/NextTokenPredictor/world_model/train.py
+DATA_DIR=/lustre/fsn1/projects/rech/ycy/commun/OpenDV_tokenized/frames512/VQ_ds16_16384_llamagen
 
 STD=0.0843
 LR=0.0092
@@ -26,17 +27,17 @@ create_sbatch_script() {
 #SBATCH --cpus-per-task=24
 #SBATCH --hint=nomultithread
 #SBATCH --time=20:00:00
-#SBATCH --output=/lustre/fswork/projects/rech/ycy/uyv67bd/slurm_jobs_logs/stdout/%x_%j.out
-#SBATCH --error=/lustre/fswork/projects/rech/ycy/uyv67bd/slurm_jobs_logs/stdout/%x_%j.out
+#SBATCH --output=$WORK/slurm_jobs_logs/stdout/%x_%j.out
+#SBATCH --error=$WORK/slurm_jobs_logs/stdout/%x_%j.out
 
 # Load modules and set environment variables
 module purge
 module load arch/h100 
 module load pytorch-gpu/py3/2.4.0
 
-export PYTHONUSERBASE=/lustre/fswork/projects/rech/ycy/uyv67bd/python_envs/worldmodel
+export PYTHONUSERBASE=$WORK/python_envs/worldmodel
 export MPICH_GPU_SUPPORT_ENABLED=1
-export TRITON_CACHE_DIR=/lustre/fsn1/projects/rech/ycy/uyv67bd/.triton
+export TRITON_CACHE_DIR=$SCRATCH/.triton
 export HYDRA_FULL_ERROR=1
 # export NCCL_DEBUG=INFO
 export CUDA_LAUNCH_BLOCKING=1
@@ -52,6 +53,7 @@ srun python $TRAIN_SCRIPT \\
     model.network.nb_heads=8 \\
     data.batch_size=4 \\
     data.num_workers=6 \\
+    data.data_root_dir=$DATA_DIR \\
     paths.output_dir=$OUTPUT_DIR \\
     optimizer.weight_decay=0.1 \\
     ++trainer.devices=4 \\
