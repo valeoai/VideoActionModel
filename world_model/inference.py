@@ -71,25 +71,56 @@ log = RankedLogger(__name__, rank_zero_only=True)
 
 def worker_rnd_init(x):
     np.random.seed(42 + x)
+    
+def get_nested_value(config, key_path):
+    """Helper to safely get nested dictionary values using dot notation."""
+    try:
+        value = config
+        for key in key_path.split('.'):
+            value = value[key] if isinstance(value, dict) else getattr(value, key)
+        return value
+    except (KeyError, AttributeError):
+        return "NOT FOUND"
+    
+def print_config_value(config, title, key, indent='\t'):
+    """Helper to print a single config value with proper formatting."""
+    value = get_nested_value(config, key)
+    log.info(f'{indent}{key.split(".")[-1]}: {" " * (25 - len(key.split(".")[-1]))}{value}')
+
 
 def print_log_and_current_config(inference_config, training_logged_config):
+    # Original configuration overview
     log.info('ORIGINAL configuration')
     log.info(training_logged_config)
+    
+    # Original train dataset configuration
     log.info('ORIGINAL train dataset configuration')
-    log.info(f'\t pickle_path: \t\t\t {training_logged_config.data.pickle_path}')
-    log.info(f'\t train_pickle_name: \t\t {training_logged_config.data.train_pickle_name}')
-    log.info(f'\t val_pickle_name: \t\t {training_logged_config.data.val_pickle_name}')
-    log.info(f'\t data_root_dir: \t\t {training_logged_config.data.train_dataset_params.data_root_dir}')
-    log.info(f'\t quantized_data_root_dir: \t {training_logged_config.data.train_dataset_params.quantized_data_root_dir}')
-    log.info(f'\t sequence_length: \t\t {training_logged_config.data.train_dataset_params.sequence_length}')
-    log.info(f'\t subsampling_factor: \t\t {training_logged_config.data.train_dataset_params.subsampling_factor}')
-    log.info(f'CURRENT inference configuration')
-    log.info(f'\t pickle_path: \t\t\t {inference_config.paths.pickle_path}')
-    log.info(f'\t pickle_name: \t\t\t {inference_config.pickle_name}')
-    log.info(f'\t quantized_data_root_dir: \t {inference_config.paths.quantized_data_root_dir}')
-    log.info(f'\t nb_context_frames: \t\t {inference_config.dataset_config.nb_context_frames}')
-    log.info(f'\t nb_prediction_frames: \t\t {inference_config.dataset_config.nb_prediction_frames}')
-    log.info(f'\t subsampling_factor: \t\t {inference_config.dataset_config.subsampling_factor}')
+    original_keys = [
+        'data.pickle_path',
+        'data.train_pickle_name',
+        'data.val_pickle_name',
+        'data.train_dataset_params.data_root_dir',
+        'data.train_dataset_params.quantized_data_root_dir',
+        'data.train_dataset_params.sequence_length',
+        'data.train_dataset_params.subsampling_factor'
+    ]
+    
+    for key in original_keys:
+        print_config_value(training_logged_config, 'ORIGINAL', key)
+    
+    # Current inference configuration
+    log.info('CURRENT inference configuration')
+    inference_keys = [
+        'paths.pickle_path',
+        'pickle_name',
+        'paths.quantized_data_root_dir',
+        'dataset_config.nb_context_frames',
+        'dataset_config.nb_prediction_frames',
+        'dataset_config.subsampling_factor'
+    ]
+    
+    for key in inference_keys:
+        print_config_value(inference_config, 'CURRENT', key)
 
 
 class GPUMemoryMonitor(Callback):
