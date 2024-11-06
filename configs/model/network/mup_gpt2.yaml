@@ -3,12 +3,13 @@ embedding_dim: 256
 nb_heads: 2
 nb_layers: 24
 mlp_dim_mult: 4
+multiple_tokens_inference: false
 vocabulary_size: ???
 nb_timesteps: ${data.sequence_length}
 nb_tokens_per_timestep: ???
 dropout_rate: 0.
 bias: false
-output_tied: true 
+output_tied: true
 init_std: 0.02
 output_scale: 1.0
 attn_scale: 1.0

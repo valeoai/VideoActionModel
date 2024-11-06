@@ -61,16 +61,6 @@ class TopKSampler(Sampler):
         return next_token
 
 
-class MultiTokenTopKSampler(TopKSampler):
-
-    def sample(self, next_token_probabilities: torch.Tensor) -> torch.Tensor:
-        nb_visual_tokens = next_token_probabilities.size(1)
-        next_token_probabilities = rearrange(next_token_probabilities, 'b n v -> (b n) v')
-        next_token = super().sample(next_token_probabilities)
-        next_token = rearrange(next_token, '(b n) 1 -> b n 1', n=nb_visual_tokens)
-        return next_token
-
-
 def autoregressive_image_sequence_generation(
     network,
     sampler,

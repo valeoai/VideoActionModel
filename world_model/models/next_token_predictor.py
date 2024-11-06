@@ -8,6 +8,10 @@ import torch
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 
+from world_model.utils.cmd_line_logging import RankedLogger
+
+log = RankedLogger(__name__, rank_zero_only=True)
+
 
 class NextTokenPredictor(LightningModule):
     """
@@ -52,12 +56,12 @@ class NextTokenPredictor(LightningModule):
         self.nb_tokens_per_timestep = self.network.nb_tokens_per_timestep
 
         if mup_base_shapes is not None:
-            print("mup_base_shapes configured")
+            log.info("mup_base_shapes configured")
             mup.set_base_shapes(self.network, mup_base_shapes)
             # re-initialize after set_base_shapes
             self.network.apply(self.network._init_weights)
         else:
-            print('Network NOT mu-Parametrized')
+            log.warning('Network NOT mu-Parametrized')
 
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
 
@@ -239,10 +243,12 @@ class NextTokenPredictor(LightningModule):
             scheduler.step(metric)
 
     def on_save_checkpoint(self, checkpoint):
-        repo = git.Repo(search_parent_directories=True)
-        sha = repo.head.object.hexsha
-
-        checkpoint["git_sha"] = sha
+        try:
+            repo = git.Repo(search_parent_directories=True)
+            sha = repo.head.object.hexsha
+            checkpoint["git_sha"] = sha
+        except git.InvalidGitRepositoryError:
+            log.warning("Not in a git repository. Skipping git sha in checkpoint.")
 
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = (

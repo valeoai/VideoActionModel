@@ -1,19 +1,20 @@
-import collections
 import pickle
-import numpy as np
-from typing import Any, Callable, Dict, Optional, Tuple
-import torch
-from torch.utils.data import DataLoader, default_collate
 from pathlib import Path
+from typing import Any, Callable, Dict, Optional
 
+import numpy as np
 from lightning import LightningDataModule
+from torch.utils.data import DataLoader, default_collate
 
+from world_model.utils.cmd_line_logging import RankedLogger
 from world_model.dataloader.components.random_tokenized_sequence_nuplan import RandomTokenizedSequenceNuplanDataset
+
+log = RankedLogger(__name__, rank_zero_only=True)
 
 
 # overrinding default_collate for list of strings (e.g., list of image paths).
 def custom_collate(batch_items):
-    
+
     special_dict = {}
     keys = ['images_paths', 'scene_names']
     for key in keys:
@@ -25,10 +26,10 @@ def custom_collate(batch_items):
 
     # Use default_collate for other fields
     batch = default_collate(batch_items)
-    
+
     # When available, context_end_index is an integer indicating which frames in the sequence
     # are part of the context. It is the same for all elements of the batch
-    if 'context_end_index' in batch: 
+    if 'context_end_index' in batch:
         batch['context_end_index'] = batch['context_end_index'][0]
 
     # And put back the the specially processed entries
@@ -36,8 +37,10 @@ def custom_collate(batch_items):
 
     return batch
 
+
 def worker_rnd_init(x):
     np.random.seed(13 + x)
+
 
 class TokenizedSequenceNuplanDataModule(LightningDataModule):
     """
@@ -57,15 +60,15 @@ class TokenizedSequenceNuplanDataModule(LightningDataModule):
     Read the docs:
         https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html
     """
-    
+
     def __init__(
         self,
-        pickle_path: str, 
+        pickle_path: str,
         train_pickle_name: str,
         val_pickle_name: str,
         dataloader_params: Dict,
         train_dataset_params: Dict,
-        val_dataset_params: Dict, 
+        val_dataset_params: Dict,
         transform: Optional[Callable] = None,
         **kwargs,
     ) -> None:
@@ -81,18 +84,17 @@ class TokenizedSequenceNuplanDataModule(LightningDataModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
-        
-        pickle_path = Path(pickle_path)        
-        
+
+        pickle_path = Path(pickle_path)
+
         self.train_pickle_path = pickle_path / train_pickle_name
         self.val_pickle_path = pickle_path / val_pickle_name
-        
+
         self.transform = transform
 
         self.dataloader_params = dataloader_params
         self.train_dataset_params = train_dataset_params
         self.val_dataset_params = val_dataset_params
-        
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
@@ -103,14 +105,16 @@ class TokenizedSequenceNuplanDataModule(LightningDataModule):
         Args:
             stage: The stage to setup. Either `"fit"`, `"validate"`, `"test"`, or `"predict"`. Defaults to ``None``.
         """
-        
+        log.info("Loading training data...")
         with open(self.train_pickle_path, "rb") as f:
             self.train_data = pickle.load(f)
 
+        log.info("Loading val data...")
         with open(self.val_pickle_path, "rb") as f:
             self.val_data = pickle.load(f)
 
         # Training dataset
+        log.info("Creating training dataset...")
         self.train_dataset = RandomTokenizedSequenceNuplanDataset(
             pickle_data=self.train_data,
             transform=self.transform,
@@ -118,23 +122,22 @@ class TokenizedSequenceNuplanDataModule(LightningDataModule):
         )
 
         # Validation dataset
+        log.info("Creating training dataset...")
         self.val_dataset = RandomTokenizedSequenceNuplanDataset(
             pickle_data=self.val_data,
             transform=self.transform,
             **self.val_dataset_params
         )
 
-
     def train_dataloader(self) -> DataLoader[Any]:
         """
         Create and return the train dataloader.
         """
-           
+
         # Define default data shuffle if not set in config
         dataloader_params = self.dataloader_params.copy()
         if 'shuffle' not in dataloader_params:
             dataloader_params['shuffle'] = True
-
 
         return DataLoader(
             self.train_dataset,
@@ -143,13 +146,12 @@ class TokenizedSequenceNuplanDataModule(LightningDataModule):
             collate_fn=custom_collate,
             **dataloader_params
         )
-        
 
     def val_dataloader(self) -> DataLoader[Any]:
         """
         Create and return the validation dataloader.
         """
-        
+
         # Define default data shuffle if not set in config
         dataloader_params = self.dataloader_params.copy()
         if 'shuffle' not in dataloader_params:
@@ -161,7 +163,6 @@ class TokenizedSequenceNuplanDataModule(LightningDataModule):
             collate_fn=custom_collate,
             **dataloader_params
         )
-
 
     def test_dataloader(self) -> DataLoader[Any]:
         """

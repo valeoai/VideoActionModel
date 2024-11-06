@@ -11,6 +11,7 @@ export PYTHONUSERBASE=${ENVS_ROOT_DIR}/${env_name}
 mkdir -p "${PYTHONUSERBASE}"
 
 module purge
+module load arch/h100
 module load "${python_module}"
 
 pip install --upgrade lightning --user --no-cache-dir
