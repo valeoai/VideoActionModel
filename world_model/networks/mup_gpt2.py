@@ -75,7 +75,7 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size))
 
-    def forward(self, x, attention_mask=None):
+    def forward(self, x, attn_mask):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (dim_model)
 
         # calculate query, key, values for all heads in batch
@@ -95,7 +95,7 @@ class CausalSelfAttention(nn.Module):
         # efficient attention using Flash Attention CUDA kernels
         y = torch.nn.functional.scaled_dot_product_attention(
             q, k, v,
-            attn_mask=attention_mask,
+            attn_mask=attn_mask,
             dropout_p=self.dropout if self.training else 0,
             is_causal=False,
             scale=attn_scaling  # muP: attention scaling
@@ -118,8 +118,8 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
         self.mlp = MLP(dim_model, bias, dropout, mlp_dim_mult)
 
-    def forward(self, x, attention_mask):
-        x = x + self.attn(self.ln_1(x), attention_mask=attention_mask)
+    def forward(self, x, attn_mask):
+        x = x + self.attn(self.ln_1(x), attn_mask=attn_mask)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -170,6 +170,7 @@ class MuGPT2(nn.Module):
         self.mlp_dim_mult = mlp_dim_mult
         self.nb_layers = nb_layers
         self.output_tied = output_tied
+        self.vocab_size = vocabulary_size
 
         self.nb_timesteps = nb_timesteps
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
@@ -345,10 +346,11 @@ class MuGPT2(nn.Module):
             # For the attention mask we want:
             # 1. Do not attend to future frames
             # 2. Attend to all spatial tokens in the same frame (this makes it not entirely causal)
-            attention_mask = temporal_positions[:, None] <= temporal_positions[:, None, None]
+            attn_mask = temporal_positions.unsqueeze(1) <= temporal_positions.unsqueeze(2)
+            attn_mask.unsqueeze_(1)  # this is for the nb_heads dimension
         else:
             # Full causal mask
-            attention_mask = torch.tril(torch.ones(token_sequence.size(1), token_sequence.size(1))).view(1, 1, token_sequence.size(1), token_sequence.size)
+            attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
 
         # compute spatio-temporal position embeddings
         spatial_pos_emb = self.transformer.wse(spatial_positions)
@@ -361,7 +363,7 @@ class MuGPT2(nn.Module):
         # forward world embeddings to the transformer
         x = self.transformer.drop(emb_in)
         for block in self.transformer.h:
-            x = block(x, attention_mask=attention_mask)
+            x = block(x, attn_mask=attn_mask)
         emb_out = self.transformer.ln_f(x)
 
         if not inference:
@@ -375,3 +377,49 @@ class MuGPT2(nn.Module):
                 img_logits = self.lm_head(emb_out[:, [-1]])
 
         return img_logits
+
+
+if __name__ == '__main__':
+    # temporary test code
+    import mup
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    voc_size = 1024
+    nb_tokens_per_timestep = 8 * 16
+
+    gpt2 = MuGPT2(
+        embedding_dim=16,
+        nb_layers=3,
+        nb_heads=2,
+        mlp_dim_mult=2,
+        vocabulary_size=voc_size,
+        nb_timesteps=8,
+        nb_tokens_per_timestep=nb_tokens_per_timestep,
+        multiple_tokens_inference=True,
+        bias=False,
+        output_tied=True,
+    )
+    mup.set_base_shapes(gpt2, base=None)
+    gpt2.to(device)
+
+    batch_size = 3
+    number_of_frames = 5
+    seqlen = nb_tokens_per_timestep * number_of_frames
+
+    x = torch.randint(0, voc_size, (batch_size, seqlen))
+    spatial_positions = torch.arange(nb_tokens_per_timestep).repeat(number_of_frames)
+    temporal_positions = torch.arange(number_of_frames).repeat_interleave(nb_tokens_per_timestep)
+
+    spatial_positions = spatial_positions.unsqueeze(0).repeat(batch_size, 1)
+    temporal_positions = temporal_positions.unsqueeze(0).repeat(batch_size, 1)
+
+    x = x.to(device)
+    spatial_positions = spatial_positions.to(device)
+    temporal_positions = temporal_positions.to(device)
+
+    img_logits = gpt2(x, spatial_positions, temporal_positions)
+    print(img_logits.shape)
+
+    img_inf_logits = gpt2(x, spatial_positions, temporal_positions, inference=True)
+    print(img_inf_logits.shape)
