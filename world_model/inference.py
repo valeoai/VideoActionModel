@@ -156,6 +156,9 @@ class WorldModelPredictionWriter(BasePredictionWriter):
         
         for data_type, data in generated_data.items():
             
+            if data_type not in ['visual_tokens', 'visual_logits']:
+                continue
+            
             output_subdir = self.output_dir / data_type
             self.queue_data(output_subdir, image_paths, context_end_index, data)
 
