@@ -98,7 +98,6 @@ def autoregressive_image_sequence_generation(
     temperature=1.0,
     return_logits=False,
     use_kv_cache=False,
-    deterministic=False,
     verbose=False,
 ):
     """
@@ -214,7 +213,7 @@ def autoregressive_image_sequence_generation(
                     rolling_spatial_positions[:, :current_context_len],
                     rolling_temporal_positions[:, :current_context_len],
                     inference=True,
-                    start_pos=0,
+                    start_pos=-1,
                 )
 
             next_token_logits = sequence_logits[:, -1, :]  # shape [B, vocab_size]
@@ -222,14 +221,10 @@ def autoregressive_image_sequence_generation(
             if return_logits:
                 frame_logits.append(next_token_logits)
 
-            if deterministic:
-                # In deterministic mode, we always take the most likely token
-                next_token = next_token_logits.argmax(dim=-1, keepdim=True)
-            else:
-                # Apply temperature and sample
-                next_token_logits = next_token_logits / temperature
-                next_token_probs = F.softmax(next_token_logits, dim=-1)
-                next_token = sampler.sample(next_token_probs)  # shape [B, 1]
+            # Apply temperature and sample
+            next_token_logits = next_token_logits / temperature
+            next_token_probs = F.softmax(next_token_logits, dim=-1)
+            next_token = sampler.sample(next_token_probs)  # shape [B, 1]
 
             # Update rolling context
             rolling_context = torch.cat([rolling_context, next_token], dim=1)
