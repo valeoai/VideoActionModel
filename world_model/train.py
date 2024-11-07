@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
+import torch
 import hydra
 import lightning
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
@@ -17,6 +18,8 @@ from world_model.utils import (
 )
 
 log = RankedLogger(__name__, rank_zero_only=True)
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_tf32 = True
 
 
 @task_wrapper
@@ -29,7 +32,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     Args:
         config: A DictConfig configuration composed by Hydra.
-        
+
     Returns:
         A tuple with metrics and dict with all instantiated objects.
     """
@@ -73,7 +76,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if config.get("train"):
         log.info("Starting training!")
         trainer.fit(model=model, datamodule=datamodule, ckpt_path=config.get("ckpt_path"))
-        
+
         # Print path to best checkpoint
         if not config.trainer.get("fast_dev_run"):
             log.info(f"Best model ckpt at {trainer.checkpoint_callback.best_model_path}")
@@ -89,7 +92,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         else:
             log.info(f"Best ckpt path: {ckpt_path}")
         trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
-        
+
     test_metrics = trainer.callback_metrics
 
     # merge train and test metrics
@@ -104,15 +107,15 @@ def main(config: DictConfig) -> Optional[float]:
 
     Args:
         config: DictConfig configuration composed by Hydra.
-        
+
     Returns
         Optional[float] with optimized metric value.
     """
     # apply extra utilities
     # (e.g. print config tree, etc.)
     extras(
-        config, 
-        print_order = (
+        config,
+        print_order=(
             "data",
             "model",
             "callbacks",

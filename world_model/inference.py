@@ -66,6 +66,8 @@ from world_model.utils import RankedLogger, extras, instantiate_samplers
 from world_model.utils.generation import autoregressive_image_sequence_generation, autoregressive_image_multitoken_generation
 
 log = RankedLogger(__name__, rank_zero_only=True)
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_tf32 = True
 
 
 def worker_rnd_init(x):
