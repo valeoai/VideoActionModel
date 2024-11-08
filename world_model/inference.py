@@ -64,7 +64,7 @@ from lightning.pytorch.utilities import rank_zero_only
 
 from world_model.dataloader.components.scene_tokenized_sequence_nuplan import SceneBasedNuplanDataset
 from world_model.dataloader.tokenized_sequence_nuplan import custom_collate
-from world_model.utils.generation import autoregressive_image_sequence_generation
+from world_model.utils.generation import ImageGenerator, GenerationConfig
 from world_model.utils import RankedLogger, extras, instantiate_samplers
 
 log = RankedLogger(__name__, rank_zero_only=True)
@@ -254,34 +254,45 @@ class PredictionPathLogger(Callback):
 class WorldModelInference(L.LightningModule):
     def __init__(self, network, sequence_adapter, action_tokenizer, sampler, return_logits, max_rolling_context_frames=None):
         super().__init__()
-        self.network = network
-        self.sequence_adapter = sequence_adapter
-        self.action_tokenizer = action_tokenizer
-        self.sampler = sampler
-        self.return_logits = return_logits
+        
         if max_rolling_context_frames is None:
             log.info(f"`max_rolling_context_frames` not set, using model's max context size: {network.nb_timesteps}")
             max_rolling_context_frames = network.nb_timesteps - 1
-        self.max_rolling_context_frames = max_rolling_context_frames
+        
+        self.action_tokenizer = action_tokenizer
+        
+        # necessary for auto moving to gpu device
+        self.network = network
+        self.sequence_adapter = sequence_adapter
+        self.sampler = sampler
+        
+        self.inference_generator = ImageGenerator(
+            self.network ,
+            self.sampler,
+            self.sequence_adapter,
+            max_rolling_context_frames,
+        )
+        
+        self.gen_config = GenerationConfig(
+            temperature=1.0,
+            return_logits=return_logits,
+            use_kv_cache=True,
+            verbose=False,
+        )
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
         action_tokens = self.action_tokenizer(**batch)
         
-        context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
-        context_action_tokens = action_tokens[:, :batch['context_end_index']]
+        burnin_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
+        burnin_action_tokens = action_tokens[:, :batch['context_end_index']]
         
         future_action_tokens = action_tokens[:, batch['context_end_index']:]
         
-        generated_data = autoregressive_image_sequence_generation(
-            self.network,
-            self.sampler, 
-            self.sequence_adapter,
-            context_visual_tokens,
-            context_action_tokens,
+        generated_data = self.inference_generator.generate(
+            burnin_visual_tokens,
+            burnin_action_tokens,
             future_action_tokens,
-            max_rolling_context_frames=self.max_rolling_context_frames,
-            temperature=1.0,
-            return_logits=self.return_logits
+            self.gen_config
         )
 
         return generated_data, batch['images_paths'], batch['context_end_index']
@@ -397,7 +408,7 @@ def infer(inference_config: DictConfig) -> None:
             
             prediction_writer = WorldModelPredictionWriter(output_dir, max_queue_size=inference_config.max_queue_size)
             prediction_path_logger = PredictionPathLogger(base_output_dir)
-            progress_bar = TQDMProgressBar()
+            progress_bar = TQDMProgressBar(refresh_rate=5)
             gpu_memory_monitor = GPUMemoryMonitor()
             
             tensorboard_logger = TensorBoardLogger(
@@ -408,13 +419,14 @@ def infer(inference_config: DictConfig) -> None:
             )
             
             trainer = L.Trainer(
-                accelerator="gpu",
                 devices=inference_config.trainer.devices,
                 num_nodes=inference_config.trainer.num_nodes, 
-                strategy=DeepSpeedStrategy(stage=2),
-                precision="bf16-mixed",
+                strategy=inference_config.trainer.strategy,
+                precision=inference_config.trainer.precision,
+                accelerator=inference_config.trainer.accelerator,
                 callbacks=[prediction_writer,prediction_path_logger,progress_bar,gpu_memory_monitor],
-                logger=tensorboard_logger
+                logger=tensorboard_logger,
+                enable_progress_bar=True
             )
 
             trainer.predict(model, dataloader)
