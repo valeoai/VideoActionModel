@@ -6,7 +6,7 @@ set -eu
 
 python_module=pytorch-gpu/py3/2.4.0
 env_name=worldmodel
-ENVS_ROOT_DIR=${ycy_CCFRWORK}/python_envs
+ENVS_ROOT_DIR=${WORK}/python_envs
 export PYTHONUSERBASE=${ENVS_ROOT_DIR}/${env_name}
 mkdir -p "${PYTHONUSERBASE}"
 
