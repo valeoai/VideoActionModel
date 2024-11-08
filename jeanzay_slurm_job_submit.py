@@ -17,8 +17,10 @@ if __name__ == "__main__":
     parser.add_argument("--python_cmd", "-p", type=str, required=True)
     parser.add_argument("--gpus_per_node", type=int, default=1)
     parser.add_argument("--nodes", type=int, default=1)
+    parser.add_argument("--account", type=str, default="ycy@h100")
     parser.add_argument("--file_to_run", "-f", type=str, default='train')
     parser.add_argument("--wall_time", "-wt", type=int, default=20) # jean zay has max time of 20h
+    parser.add_argument("--dev_qos", action='store_true')
     parser.add_argument("--allow_hyper_threading", action='store_true')
     # parse params
     args = parser.parse_args()
@@ -56,21 +58,24 @@ if __name__ == "__main__":
         f"#SBATCH --output={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         
+        "#SBATCH --qos=qos_gpu_h100-dev" if args.dev_qos else '',
+        f"#SBATCH -A {args.account}",
+        
         "module purge", # cleans out the modules loaded in interactive and inherited by default
+        "module load arch/h100",
         "module load pytorch-gpu/py3/2.4.0",
         f"export PYTHONUSERBASE={WORK_DIR}/python_envs/worldmodel",
         
         "export MPICH_GPU_SUPPORT_ENABLED=1",
-        "NCCL_DEBUG=INFO",
-        "CUDA_LAUNCH_BLOCKING=1",
+        "export NCCL_DEBUG=INFO",
+        "export CUDA_LAUNCH_BLOCKING=1",
+        "export HYDRA_FULL_ERROR=1",
         
         # Important change when using deepspeed (which now uses triton)
         # By default the cache dir will be $HOME/.triton
         # We point it to $SCRATCH because the inodes quota is very limited on JeanZay
         f"export TRITON_CACHE_DIR={SCRATCH_DIR}/.triton",
 
-        "export HYDRA_FULL_ERROR=1",
-        
         "# echo of launched commands",
         "set -x",
         

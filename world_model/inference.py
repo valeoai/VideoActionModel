@@ -64,32 +64,63 @@ from lightning.pytorch.utilities import rank_zero_only
 
 from world_model.dataloader.components.scene_tokenized_sequence_nuplan import SceneBasedNuplanDataset
 from world_model.dataloader.tokenized_sequence_nuplan import custom_collate
-from world_model.utils.generation import autoregressive_image_sequence_generation
+from world_model.utils.generation import ImageGenerator, GenerationConfig
 from world_model.utils import RankedLogger, extras, instantiate_samplers
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
 def worker_rnd_init(x):
     np.random.seed(42 + x)
+    
+def get_nested_value(config, key_path):
+    """Helper to safely get nested dictionary values using dot notation."""
+    try:
+        value = config
+        for key in key_path.split('.'):
+            value = value[key] if isinstance(value, dict) else getattr(value, key)
+        return value
+    except (KeyError, AttributeError):
+        return "NOT FOUND"
+    
+def print_config_value(config, title, key, indent='\t'):
+    """Helper to print a single config value with proper formatting."""
+    value = get_nested_value(config, key)
+    log.info(f'{indent}{key.split(".")[-1]}: {" " * (25 - len(key.split(".")[-1]))}{value}')
+
 
 def print_log_and_current_config(inference_config, training_logged_config):
+    # Original configuration overview
     log.info('ORIGINAL configuration')
     log.info(training_logged_config)
+    
+    # Original train dataset configuration
     log.info('ORIGINAL train dataset configuration')
-    log.info(f'\t pickle_path: \t\t\t {training_logged_config.data.pickle_path}')
-    log.info(f'\t train_pickle_name: \t\t {training_logged_config.data.train_pickle_name}')
-    log.info(f'\t val_pickle_name: \t\t {training_logged_config.data.val_pickle_name}')
-    log.info(f'\t data_root_dir: \t\t {training_logged_config.data.train_dataset_params.data_root_dir}')
-    log.info(f'\t quantized_data_root_dir: \t {training_logged_config.data.train_dataset_params.quantized_data_root_dir}')
-    log.info(f'\t sequence_length: \t\t {training_logged_config.data.train_dataset_params.sequence_length}')
-    log.info(f'\t subsampling_factor: \t\t {training_logged_config.data.train_dataset_params.subsampling_factor}')
-    log.info(f'CURRENT inference configuration')
-    log.info(f'\t pickle_path: \t\t\t {inference_config.paths.pickle_path}')
-    log.info(f'\t pickle_name: \t\t\t {inference_config.pickle_name}')
-    log.info(f'\t quantized_data_root_dir: \t {inference_config.paths.quantized_data_root_dir}')
-    log.info(f'\t nb_context_frames: \t\t {inference_config.dataset_config.nb_context_frames}')
-    log.info(f'\t nb_prediction_frames: \t\t {inference_config.dataset_config.nb_prediction_frames}')
-    log.info(f'\t subsampling_factor: \t\t {inference_config.dataset_config.subsampling_factor}')
+    original_keys = [
+        'data.pickle_path',
+        'data.train_pickle_name',
+        'data.val_pickle_name',
+        'data.train_dataset_params.data_root_dir',
+        'data.train_dataset_params.quantized_data_root_dir',
+        'data.train_dataset_params.sequence_length',
+        'data.train_dataset_params.subsampling_factor'
+    ]
+    
+    for key in original_keys:
+        print_config_value(training_logged_config, 'ORIGINAL', key)
+    
+    # Current inference configuration
+    log.info('CURRENT inference configuration')
+    inference_keys = [
+        'paths.pickle_path',
+        'pickle_name',
+        'paths.quantized_data_root_dir',
+        'dataset_config.nb_context_frames',
+        'dataset_config.nb_prediction_frames',
+        'dataset_config.subsampling_factor'
+    ]
+    
+    for key in inference_keys:
+        print_config_value(inference_config, 'CURRENT', key)
 
 
 class GPUMemoryMonitor(Callback):
@@ -125,6 +156,9 @@ class WorldModelPredictionWriter(BasePredictionWriter):
         
         for data_type, data in generated_data.items():
             
+            if data_type not in ['visual_tokens', 'visual_logits']:
+                continue
+            
             output_subdir = self.output_dir / data_type
             self.queue_data(output_subdir, image_paths, context_end_index, data)
 
@@ -157,7 +191,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
     def on_predict_epoch_end(self, trainer, pl_module):
         self.flush_queue()  # Ensure all remaining data is written
 
-    def teardown(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: str) -> None:
+    def teardown(self, trainer: "L.Trainer", pl_module: "L.LightningModule", stage: str) -> None:
         self.executor.shutdown(wait=True)
                 
 
@@ -220,34 +254,45 @@ class PredictionPathLogger(Callback):
 class WorldModelInference(L.LightningModule):
     def __init__(self, network, sequence_adapter, action_tokenizer, sampler, return_logits, max_rolling_context_frames=None):
         super().__init__()
-        self.network = network
-        self.sequence_adapter = sequence_adapter
-        self.action_tokenizer = action_tokenizer
-        self.sampler = sampler
-        self.return_logits = return_logits
+        
         if max_rolling_context_frames is None:
             log.info(f"`max_rolling_context_frames` not set, using model's max context size: {network.nb_timesteps}")
             max_rolling_context_frames = network.nb_timesteps - 1
-        self.max_rolling_context_frames = max_rolling_context_frames
+        
+        self.action_tokenizer = action_tokenizer
+        
+        # necessary for auto moving to gpu device
+        self.network = network
+        self.sequence_adapter = sequence_adapter
+        self.sampler = sampler
+        
+        self.inference_generator = ImageGenerator(
+            self.network ,
+            self.sampler,
+            self.sequence_adapter,
+            max_rolling_context_frames,
+        )
+        
+        self.gen_config = GenerationConfig(
+            temperature=1.0,
+            return_logits=return_logits,
+            use_kv_cache=True,
+            verbose=False,
+        )
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
         action_tokens = self.action_tokenizer(**batch)
         
-        context_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
-        context_action_tokens = action_tokens[:, :batch['context_end_index']]
+        burnin_visual_tokens = batch['visual_tokens'][:, :batch['context_end_index']]
+        burnin_action_tokens = action_tokens[:, :batch['context_end_index']]
         
         future_action_tokens = action_tokens[:, batch['context_end_index']:]
         
-        generated_data = autoregressive_image_sequence_generation(
-            self.network,
-            self.sampler, 
-            self.sequence_adapter,
-            context_visual_tokens,
-            context_action_tokens,
+        generated_data = self.inference_generator.generate(
+            burnin_visual_tokens,
+            burnin_action_tokens,
             future_action_tokens,
-            max_rolling_context_frames=self.max_rolling_context_frames,
-            temperature=1.0,
-            return_logits=self.return_logits
+            self.gen_config
         )
 
         return generated_data, batch['images_paths'], batch['context_end_index']
@@ -363,7 +408,7 @@ def infer(inference_config: DictConfig) -> None:
             
             prediction_writer = WorldModelPredictionWriter(output_dir, max_queue_size=inference_config.max_queue_size)
             prediction_path_logger = PredictionPathLogger(base_output_dir)
-            progress_bar = TQDMProgressBar()
+            progress_bar = TQDMProgressBar(refresh_rate=5)
             gpu_memory_monitor = GPUMemoryMonitor()
             
             tensorboard_logger = TensorBoardLogger(
@@ -374,13 +419,14 @@ def infer(inference_config: DictConfig) -> None:
             )
             
             trainer = L.Trainer(
-                accelerator="gpu",
                 devices=inference_config.trainer.devices,
                 num_nodes=inference_config.trainer.num_nodes, 
-                strategy=DeepSpeedStrategy(stage=2),
-                precision="bf16-mixed",
+                strategy=inference_config.trainer.strategy,
+                precision=inference_config.trainer.precision,
+                accelerator=inference_config.trainer.accelerator,
                 callbacks=[prediction_writer,prediction_path_logger,progress_bar,gpu_memory_monitor],
-                logger=tensorboard_logger
+                logger=tensorboard_logger,
+                enable_progress_bar=True
             )
 
             trainer.predict(model, dataloader)

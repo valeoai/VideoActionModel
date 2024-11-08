@@ -2,7 +2,7 @@
 output_dir: /lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor
 
 # Path to the directory where data is located
-data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/nuplan/nuplan-v1.1/sensor_blobs/
+data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/nuplan/sensor_blobs/
 
 pickle_path: /lustre/fswork/projects/rech/ycy/commun/nuplan_pickling/generated_files/
 

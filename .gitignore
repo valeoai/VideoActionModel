@@ -155,3 +155,5 @@ train.log
 .aim
 
 /notebooks/
+
+tmp/
