@@ -2,7 +2,7 @@
 
 # Define common variables
 OUTPUT_DIR='/lustre/fsn1/projects/rech/ycy/commun/output_data/opendv_GPT2_LlamaGen/large_scale'
-RUN_NAME='muP_GPT2_split_opendv_dim2048'
+RUN_NAME='muP_GPT2_split_opendv_dim768'
 TRAIN_SCRIPT=/lustre/fswork/projects/rech/ycy/uyv67bd/NextTokenPredictor/world_model/train.py
 DATA_DIR=/lustre/fsn1/projects/rech/ycy/commun/OpenDV_tokenized/frames512/VQ_ds16_16384_llamagen
 
@@ -18,10 +18,10 @@ create_sbatch_script() {
     cat << EOF > $script_name
 #!/bin/bash
 
-#SBATCH --job-name=muP_GPT2_split_opendv_dim2048_stage_${stage}
+#SBATCH --job-name=muP_GPT2_split_opendv_dim768_stage_${stage}
 #SBATCH -C h100
 #SBATCH -A ycy@h100
-#SBATCH --nodes=48
+#SBATCH --nodes=12
 #SBATCH --gres=gpu:4
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=24
@@ -49,15 +49,15 @@ srun python $TRAIN_SCRIPT \\
     experiment=muP_GPT2_VQ_ds16_16384_llamagen_opendv_noaction_stage_${stage} \\
     model.network.init_std=$STD \\
     optimizer.lr=$LR \\
-    model.network.embedding_dim=2048 \\
-    model.network.nb_heads=16 \\
-    data.batch_size=2 \\
+    model.network.embedding_dim=768 \\
+    model.network.nb_heads=6 \\
+    data.batch_size=8 \\
     data.num_workers=6 \\
     data.data_root_dir=$DATA_DIR \\
     paths.output_dir=$OUTPUT_DIR \\
     optimizer.weight_decay=0.1 \\
     ++trainer.devices=4 \\
-    ++trainer.num_nodes=48 \\
+    ++trainer.num_nodes=12 \\
     name=${RUN_NAME}_part_${stage} \\
     $([ -n "$ckpt_path" ] && echo "++ckpt_path=$ckpt_path")
 EOF
