@@ -1,25 +1,27 @@
 import uuid
 import yaml
 from typing import List
-from pathlib import Path
 from dataclasses import dataclass
 
 import numpy as np
 import torch
 from torch import Tensor
+from einops import rearrange
 from PIL import Image
 
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from world_model.inference import load_model, WorldModelInference
+from world_model.inference import load_model, WorldModelInference, instantiate_samplers
+
+from llamagen import VQ_16
 
 NUSCENES_CAM_ORDER = [
     "CAM_FRONT",
-    # "CAM_FRONT_RIGHT",
-    # "CAM_FRONT_LEFT",
-    # "CAM_BACK",
-    # "CAM_BACK_LEFT",
-    # "CAM_BACK_RIGHT",
+    "CAM_FRONT_RIGHT",
+    "CAM_FRONT_LEFT",
+    "CAM_BACK",
+    "CAM_BACK_LEFT",
+    "CAM_BACK_RIGHT",
 ]
 
 
@@ -61,20 +63,40 @@ class WMRunner:
     def __init__(self, config_path: str, checkpoint_path: str, device: torch.device):
         with open(config_path, 'r') as file:
             training_logged_config = yaml.safe_load(file)
-        self.config = OmegaConf.create(training_logged_config)
+        self.inference_config = OmegaConf.create(training_logged_config)
 
-        model_config = training_logged_config.model
+        with open(self.inference_config.model_config_path, 'r') as file:
+            model_config = yaml.safe_load(file)
+        model_config = model_config.model
+        model_config.mup_base_shapes = self.inference_config.mup_base_shapes_path
 
-        # path_to_worldmodel_repo is the folder two above the path of this file
-        path_to_worldmodel_repo = Path(__file__).resolve().parents[2]
-        model_config.mup_base_shapes = str(path_to_worldmodel_repo / 'mup_shapes/gpt2_24layers_nobias_basewidth128.bsh')
+        wm_checkpoint_path = self.inference_config.world_model_checkpoint_path
+        tokenizer_checkpoint_path = self.inference_config.tokenizer_checkpoint_path
 
-        self.model: WorldModelInference = load_model(
-            checkpoint_path, model_config, device=device,
+        network, sequence_adapter, action_tokenizer = load_model(
+            wm_checkpoint_path, model_config, device=device,
         )
 
-        self.model.eval()
-        self.model.requires_grad_(False)
+        sampler = instantiate_samplers(self.inference_config.samplers)[0]
+
+        self.model = WorldModelInference(
+            network,
+            sequence_adapter,
+            action_tokenizer,
+            sampler=sampler,
+            return_logits=False,
+            max_rolling_context_frames=network.nb_timesteps - 1,
+        )
+
+        self.tokenizer = VQ_16()
+        keys = self.tokenizer.load_state_dict(torch.load(tokenizer_checkpoint_path, map_location='cpu'), strict=False)
+        assert keys.missing_keys == [], f"Missing keys: {keys.missing_keys}"
+        for k in keys.unexpected_keys:
+            assert any([x in k for x in ["distillation", "temporal"]]), f"Unexpected keys: {keys.unexpected_keys}"
+
+        self.tokenizer.eval()
+        self.tokenizer.requires_grad_(False)
+        self.tokenizer.to(device)
 
         self.device = device
         self.preproc_pipeline = instantiate(self.config.data.transform)
@@ -85,7 +107,7 @@ class WMRunner:
         self.scene_token = str(uuid.uuid4())
         self.prev_frame_info = {
             "scene_token": None,
-            "prev_frames": [],
+            "prev_frames": None,
         }
 
     @torch.no_grad()
@@ -101,12 +123,26 @@ class WMRunner:
         else:
             # append the current frame to the previous frames
             self.prev_frame_info["prev_frames"] = torch.cat(
-                [self.prev_frame_info["prev_frames"], preproc_output], dim=0
+                [self.prev_frame_info["prev_frames"], preproc_output], dim=0,
             )
 
-        preproc_output = self.prev_frame_info["prev_frames"].unsqueeze(0).to(self.device)
+        preproc_output = self.prev_frame_info["prev_frames"].to(self.device)
+        T, CAM, *_ = preproc_output.shape
+        preproc_output = rearrange(preproc_output, 'T CAM c h w -> (T CAM) c h w')
 
-        outs_planning = self.model.predict_step(preproc_output)
+        quant, _, (_, _, tokens) = self.tokenizer(preproc_output)
+        *_, h, w = quant.shape
+        visual_tokens = rearrange(tokens, '(T CAM h w) -> 1 T CAM h w', T=T, CAM=CAM, h=h, w=w)
+
+        action_tokens = self.action_tokenizer(visual_tokens=visual_tokens)
+        sequence_data = self.sequence_adapter(visual_tokens, action_tokens)
+        input_data = {
+            'token_sequence': sequence_data['token_sequence'],
+            'spatial_positions': sequence_data['spatial_positions'],
+            'temporal_positions': sequence_data['temporal_positions'],
+        }
+
+        outs_planning = self.model.predict_step(input_data)
         aux_outputs = WMAuxOutputs.empty()
         return WMInferenceOutput(
             trajectory=_format_trajs(outs_planning["sdc_traj"])[0].cpu().numpy(),
