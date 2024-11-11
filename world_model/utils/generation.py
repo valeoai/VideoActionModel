@@ -512,8 +512,8 @@ class ImageGenerator:
                 frame_logits = [] if config.return_logits else None
 
                 # TODO: change of frame, resetting position indices
-                #rolling_spatial_positions = intial_spatial_positions
-                #rolling_temporal_positions = initial_temporal_positions
+                # rolling_spatial_positions = intial_spatial_positions
+                # rolling_temporal_positions = initial_temporal_positions
 
                 # Generate tokens for current frame
                 for _ in range(dims.n_visual_tokens):
@@ -563,6 +563,7 @@ class ImageGenerator:
             result['visual_logits'] = torch.stack(generated_logits, dim=1)
 
         return result
+
 
 @torch.no_grad()
 def autoregressive_image_multitoken_generation(

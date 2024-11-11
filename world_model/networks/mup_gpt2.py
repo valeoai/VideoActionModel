@@ -370,15 +370,26 @@ class MuGPT2(nn.Module):
         if inference and start_pos != -1:
             attn_mask = None
             if seqlen > 1:
-                attn_mask = torch.full((seqlen, seqlen), float("-inf"), device=token_sequence.device)
-                attn_mask = torch.triu(attn_mask, diagonal=1)
-                # When performing key-value caching, we compute the attention scores
-                # only for the new sequence. Thus, the matrix of scores is of size
-                # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
-                # j > cache_len + i, since row i corresponds to token cache_len + i.
-                attn_mask = torch.hstack(
-                    [torch.zeros((seqlen, start_pos), device=token_sequence.device), attn_mask]
-                ).type_as(emb_in)
+                if self.multiple_tokens_inference:
+                    # When performing key-value caching, we compute the attention scores
+                    # only for the new sequence. In the current sequence we attend to the past
+                    # and current frames (discard only the future frames)
+                    attn_mask = temporal_positions.unsqueeze(1) <= temporal_positions.unsqueeze(2)
+                    # In the KV cache we attend to all tokens since they are of past
+                    # frames.
+                    attn_mask = torch.hstack(
+                        [torch.ones((seqlen, start_pos), device=token_sequence.device, dtype=torch.bool), attn_mask]
+                    ).type_as(emb_in)
+                else:
+                    attn_mask = torch.full((seqlen, seqlen), float("-inf"), device=token_sequence.device)
+                    attn_mask = torch.triu(attn_mask, diagonal=1)
+                    # When performing key-value caching, we compute the attention scores
+                    # only for the new sequence. Thus, the matrix of scores is of size
+                    # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
+                    # j > cache_len + i, since row i corresponds to token cache_len + i.
+                    attn_mask = torch.hstack(
+                        [torch.zeros((seqlen, start_pos), device=token_sequence.device), attn_mask]
+                    ).type_as(emb_in)
         else:
             if self.multiple_tokens_inference:
                 # For the attention mask we want:
