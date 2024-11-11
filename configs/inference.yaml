@@ -20,7 +20,7 @@ model_log_dir: ???
 # The name to the model checkpoint file (e.g., `epoch_006_val_perplexity_365.0459.ckpt`).
 checkpoint_name: ???
 
-# Path to the directory where the predicted tokens data will be stored. 
+# Path to the directory where the predicted tokens data will be stored.
 # The directory does not need to exist beforehand.
 output_dir: ${paths.output_dir}
 
@@ -33,7 +33,7 @@ save_logits: False
 pickle_name: nuplan_val_front_camera_data.pkl
 
 # Leave as null to use the model's training context size
-max_rolling_context_frames: null 
+max_rolling_context_frames: null
 
 dataset_config:
   data_root_dir: ${paths.data_root_dir}
@@ -45,7 +45,12 @@ dataset_config:
   load_image: False
   subsampling_factor: 2
 
-dataloader_config: 
+transform:
+  _target_: world_model.dataloader.components.transforms.CropAndResizeTransform
+  trop_crop_size: 4
+  resize_factor: 4
+
+dataloader_config:
   batch_size: 4
   num_workers: 4
   pin_memory: True
@@ -54,7 +59,7 @@ dataloader_config:
   drop_last: False
 
 samplers:
-  top5: 
+  top5:
     _target_: world_model.utils.generation.TopKSampler
     k: 5
 
@@ -66,3 +71,8 @@ print_config: True
 
 # disable python warnings if they annoy you
 ignore_warnings: False
+
+# Different checkpoints paths requirede for the model
+world_model_checkpoint_path: ${oc.env:HOME}/shared/eramzi/llamagen_distilled/weights/WM_fused/llamagen_IMNET_pretrain_quarters_epoch=000_step=0000007268_fused.pt
+tokenizer_checkpoint_path: ${oc.env:HOME}/shared/eramzi/llamagen_distilled/weights/vq_ds16_c2i_training.pt
+mup_base_shapes_path: ${oc.env:HOME}/shared/eramzi/NextTokenPredictor/mup_shapes/gpt2_24layers_nobias_basewidth128.bsh

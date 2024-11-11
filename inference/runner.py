@@ -37,7 +37,7 @@ class WMInferenceInput:
 
 @dataclass
 class WMAuxOutputs:
-    generated_frames: Tensor  # N x T x [3, h, w]
+    generated_frames: Tensor  # T x CAM x [3, h, w]
 
     def to_json(self) -> dict:
         return dict(
@@ -47,7 +47,7 @@ class WMAuxOutputs:
     @classmethod
     def empty(cls) -> "WMAuxOutputs":
         return cls(
-            generated_frames=torch.zeros((0, 0, 3, 0, 0), dtype=torch.float32),
+            generated_frames=torch.zeros((0, 6, 3, 0, 0), dtype=torch.float32),
         )
 
 
@@ -65,20 +65,15 @@ class WMRunner:
             training_logged_config = yaml.safe_load(file)
         self.inference_config = OmegaConf.create(training_logged_config)
 
-        with open(self.inference_config.model_config_path, 'r') as file:
-            model_config = yaml.safe_load(file)
-        model_config = model_config.model
+        wm_checkpoint_path = self.inference_config.world_model_checkpoint_path
+        wm_ckpt = torch.load(wm_checkpoint_path, map_location='cpu')
+        model_config = OmegaConf.create(wm_ckpt['hyper_parameters'])
         model_config.mup_base_shapes = self.inference_config.mup_base_shapes_path
 
-        wm_checkpoint_path = self.inference_config.world_model_checkpoint_path
-        tokenizer_checkpoint_path = self.inference_config.tokenizer_checkpoint_path
-
         network, sequence_adapter, action_tokenizer = load_model(
-            wm_checkpoint_path, model_config, device=device,
+            wm_ckpt, model_config, device=device,
         )
-
         sampler = instantiate_samplers(self.inference_config.samplers)[0]
-
         self.model = WorldModelInference(
             network,
             sequence_adapter,
@@ -87,19 +82,25 @@ class WMRunner:
             return_logits=False,
             max_rolling_context_frames=network.nb_timesteps - 1,
         )
+        self.model.eval()
+        self.model.requires_grad_(False)
+        self.model.to(device)
 
+        tokenizer_checkpoint_path = self.inference_config.tokenizer_checkpoint_path
         self.tokenizer = VQ_16()
-        keys = self.tokenizer.load_state_dict(torch.load(tokenizer_checkpoint_path, map_location='cpu'), strict=False)
+        keys = self.tokenizer.load_state_dict(
+            torch.load(tokenizer_checkpoint_path, map_location='cpu')['model'],
+            strict=False,
+        )
         assert keys.missing_keys == [], f"Missing keys: {keys.missing_keys}"
         for k in keys.unexpected_keys:
             assert any([x in k for x in ["distillation", "temporal"]]), f"Unexpected keys: {keys.unexpected_keys}"
-
         self.tokenizer.eval()
         self.tokenizer.requires_grad_(False)
         self.tokenizer.to(device)
 
         self.device = device
-        self.preproc_pipeline = instantiate(self.config.data.transform)
+        self.preproc_pipeline = instantiate(self.inference_config.transform)
         self.reset()
 
     def reset(self):
@@ -119,33 +120,38 @@ class WMRunner:
         # first frame
         if self.prev_frame_info["scene_token"] is None:
             self.prev_frame_info["scene_token"] = self.scene_token
-            self.prev_frame_info["prev_frames"] = preproc_output
+            self.prev_frame_info["prev_frames"] = preproc_output.unsqueeze(0)
         else:
             # append the current frame to the previous frames
             self.prev_frame_info["prev_frames"] = torch.cat(
-                [self.prev_frame_info["prev_frames"], preproc_output], dim=0,
+                [self.prev_frame_info["prev_frames"], preproc_output.unsqueeze(0)], dim=0,
             )
 
         preproc_output = self.prev_frame_info["prev_frames"].to(self.device)
         T, CAM, *_ = preproc_output.shape
         preproc_output = rearrange(preproc_output, 'T CAM c h w -> (T CAM) c h w')
 
-        quant, _, (_, _, tokens) = self.tokenizer(preproc_output)
+        quant, _, (_, _, tokens) = self.tokenizer.encode(preproc_output)
         *_, h, w = quant.shape
-        visual_tokens = rearrange(tokens, '(T CAM h w) -> 1 T CAM h w', T=T, CAM=CAM, h=h, w=w)
+        # visual_tokens = rearrange(tokens, '(T CAM h w) -> 1 T CAM h w', T=T, CAM=CAM, h=h, w=w)
+        print("DEBUG PURPOSES")
+        visual_tokens = rearrange(tokens, '(T CAM h w) -> CAM T h w', T=T, CAM=CAM, h=h, w=w)
 
-        action_tokens = self.action_tokenizer(visual_tokens=visual_tokens)
-        sequence_data = self.sequence_adapter(visual_tokens, action_tokens)
+        action_tokens = self.model.action_tokenizer(visual_tokens=visual_tokens)
+        print("DEBUG PURPOSES")
+        future_action_tokens = torch.zeros_like(action_tokens)
+
         input_data = {
-            'token_sequence': sequence_data['token_sequence'],
-            'spatial_positions': sequence_data['spatial_positions'],
-            'temporal_positions': sequence_data['temporal_positions'],
+            'visual_tokens': visual_tokens,
+            'action_tokens': torch.cat((action_tokens, future_action_tokens), dim=1),
+            'context_end_index': T,
+            'images_paths': [],
         }
 
-        outs_planning = self.model.predict_step(input_data)
-        aux_outputs = WMAuxOutputs.empty()
+        generated_data, *_ = self.model.predict_step(input_data, batch_idx=0)
+        aux_outputs = WMAuxOutputs(generated_frames=generated_data["visual_tokens"])
         return WMInferenceOutput(
-            trajectory=_format_trajs(outs_planning["sdc_traj"])[0].cpu().numpy(),
+            trajectory=_format_trajs(generated_data["visual_tokens"]).cpu().numpy(),
             aux_outputs=aux_outputs,
         )
 
@@ -185,42 +191,22 @@ def _get_sample_input(nusc, sample) -> WMInferenceInput:
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     runner = WMRunner(
-        config_path="/UniAD/projects/configs/stage2_e2e/inference_e2e.py",
-        checkpoint_path="/UniAD/ckpts/uniad_base_e2e.pth",
+        config_path="../configs/inference.yaml",
+        checkpoint_path=None,
         device=torch.device(device),
     )
 
     # only load this for testing
     from nuscenes.nuscenes import NuScenes
-    from nuscenes.can_bus.can_bus_api import NuScenesCanBus
-    import matplotlib.pyplot as plt
+    # import matplotlib.pyplot as plt
 
     # load the first surround-cam in nusc mini
-    nusc = NuScenes(version="v1.0-mini", dataroot="./data/nuscenes")
-    nusc_can = NuScenesCanBus(dataroot="./data/nuscenes")
+    nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
     scene_name = "scene-0103"
     scene = [s for s in nusc.scene if s["name"] == scene_name][0]
     # get the first sample in the scene
     sample = nusc.get("sample", scene["first_sample_token"])
 
-    for i in range(60):
-        inference_input = _get_sample_input(nusc, nusc_can, scene_name, sample)
-        if i > 4:
-            inference_input.command = 2  # straight
-        plan = runner.forward_inference(inference_input)
-        # plot in bev
-        fig, ax = plt.subplots(1, 2)
-        ax[0].imshow(inference_input.imgs[0])
-        ax[0].axis("off")
-
-        ax[1].plot(plan.trajectory[:, 0], plan.trajectory[:, 1], "r-*")
-        ax[1].set_aspect("equal")
-        ax[1].set_xlabel("x (m)")
-        ax[1].set_ylabel("y (m)")
-
-        # save fig
-        fig.savefig(f"{scene_name}_{str(i).zfill(3)}_{sample['timestamp']}.png")
-        plt.close(fig)
-        if sample["next"] == "":
-            break
-        sample = nusc.get("sample", sample["next"])
+    inference_input = _get_sample_input(nusc, sample)
+    plan = runner.forward_inference(inference_input)
+    plan = runner.forward_inference(inference_input)
