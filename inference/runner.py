@@ -80,7 +80,7 @@ class WMRunner:
             action_tokenizer,
             sampler=sampler,
             return_logits=False,
-            max_rolling_context_frames=network.nb_timesteps - 1,
+            verbose=False,
         )
         self.model.eval()
         self.model.requires_grad_(False)
@@ -128,28 +128,34 @@ class WMRunner:
             )
 
         preproc_output = self.prev_frame_info["prev_frames"].to(self.device)
-        T, CAM, *_ = preproc_output.shape
+        T_context, CAM, *_ = preproc_output.shape
         preproc_output = rearrange(preproc_output, 'T CAM c h w -> (T CAM) c h w')
 
         quant, _, (_, _, tokens) = self.tokenizer.encode(preproc_output)
         *_, h, w = quant.shape
         # visual_tokens = rearrange(tokens, '(T CAM h w) -> 1 T CAM h w', T=T, CAM=CAM, h=h, w=w)
         print("DEBUG PURPOSES")
-        visual_tokens = rearrange(tokens, '(T CAM h w) -> CAM T h w', T=T, CAM=CAM, h=h, w=w)
+        visual_tokens = rearrange(tokens, '(T CAM h w) -> CAM T h w', T=T_context, CAM=CAM, h=h, w=w)
 
-        action_tokens = self.model.action_tokenizer(visual_tokens=visual_tokens)
         print("DEBUG PURPOSES")
-        future_action_tokens = torch.zeros_like(action_tokens)
+        T_future = 4
+        future_shape = (CAM, T_future - 1, h, w)  # We have to put -1 to account for the +1 in the generation process
+        future_visual_tokens = torch.zeros(future_shape, dtype=visual_tokens.dtype, device=visual_tokens.device)
 
         input_data = {
-            'visual_tokens': visual_tokens,
-            'action_tokens': torch.cat((action_tokens, future_action_tokens), dim=1),
-            'context_end_index': T,
+            'visual_tokens': torch.cat((visual_tokens, future_visual_tokens), dim=1),
+            'context_end_index': T_context,
             'images_paths': [],
         }
 
         generated_data, *_ = self.model.predict_step(input_data, batch_idx=0)
-        aux_outputs = WMAuxOutputs(generated_frames=generated_data["visual_tokens"])
+        print("DEBUG PURPOSES")
+        generated_visual_tokens = rearrange(generated_data["visual_tokens"], 'CAM T h w -> (CAM T) h w', T=T_future, CAM=CAM, h=h, w=w)
+        shape = (T_future * CAM, self.tokenizer.quantize.e_dim, h, w)
+        generated_frames = self.tokenizer.decode_code(generated_visual_tokens, shape=shape)
+        print("DEBUG PURPOSES")
+        generated_frames = rearrange(generated_frames, '(CAM T) c h w -> CAM T c h w', T=T_future, CAM=CAM)
+        aux_outputs = WMAuxOutputs(generated_frames=generated_frames)
         return WMInferenceOutput(
             trajectory=_format_trajs(generated_data["visual_tokens"]).cpu().numpy(),
             aux_outputs=aux_outputs,
@@ -191,7 +197,7 @@ def _get_sample_input(nusc, sample) -> WMInferenceInput:
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     runner = WMRunner(
-        config_path="../configs/inference.yaml",
+        config_path="configs/inference.yaml",
         checkpoint_path=None,
         device=torch.device(device),
     )

@@ -254,7 +254,16 @@ class PredictionPathLogger(Callback):
 
 
 class WorldModelInference(L.LightningModule):
-    def __init__(self, network, sequence_adapter, action_tokenizer, sampler, return_logits, max_rolling_context_frames=None):
+    def __init__(
+        self,
+        network,
+        sequence_adapter,
+        action_tokenizer,
+        sampler,
+        return_logits,
+        max_rolling_context_frames=None,
+        verbose=False,
+    ):
         super().__init__()
 
         if max_rolling_context_frames is None:
@@ -279,7 +288,7 @@ class WorldModelInference(L.LightningModule):
             temperature=1.0,
             return_logits=return_logits,
             use_kv_cache=True,
-            verbose=False,
+            verbose=verbose,
         )
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:

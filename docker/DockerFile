@@ -1,0 +1,9 @@
+FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
+
+RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
+
+RUN pip install --upgrade pip
+
+RUN pip install pip install --upgrade lightning --user --no-cache-dir
+RUN pip install hydra-core>=1.1.0 hydra-colorlog>=1.1.0 mup deepspeed --user --no-cache-dir
+RUn pip install fastapi uvicorn pydantic
