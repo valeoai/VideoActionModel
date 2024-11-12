@@ -110,6 +110,16 @@ class TopKSampler(Sampler):
         return next_token
 
 
+class MultiTokenTopKSampler(TopKSampler):
+
+    def sample(self, next_frame_probabilities: torch.Tensor) -> torch.Tensor:
+        _, n, _ = next_frame_probabilities.shape
+        next_frame_probabilities = rearrange(next_frame_probabilities, 'b n v -> (b n) v')
+        next_frame_tokens = super().sample(next_frame_probabilities)  # shape [B * nb_visual_tokens, 1]
+        next_frame_tokens = rearrange(next_frame_tokens, '(b n) 1 -> b n', n=n)  # shape [B, nb_visual_tokens]
+        return next_frame_tokens
+
+
 class KVCache(nn.Module):
     """
     Adapted from
@@ -322,7 +332,7 @@ class ImageGenerator:
         temperature: float
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Sample the next token from model logits."""
-        token_logits = logits[:, -1, :] / temperature
+        token_logits = logits / temperature
         token_probs = F.softmax(token_logits, dim=-1)
         next_token = self.sampler.sample(token_probs)
         return next_token, token_logits
@@ -409,8 +419,6 @@ class ImageGenerator:
             temporal_pos = temporal_pos.roll(-1, dims=1)
             temporal_pos[:, -1] += self.max_context_frames
 
-            raise NotImplementedError("rolling kv caching not implemented")
-
             if use_cache:
                 self._roll_kv_cache()
 
@@ -429,7 +437,7 @@ class ImageGenerator:
         if not frame_logits:
             return frame, None
 
-        logits = torch.stack(frame_logits, dim=1)
+        logits = torch.cat(frame_logits, dim=1)
         logits = rearrange(logits, 'b (h w) v -> b h w v', h=dims.height)
         return frame, logits
 
@@ -465,9 +473,62 @@ class ImageGenerator:
 
     def _roll_kv_cache(self, offset: int = 1) -> None:
         """Roll the Key-Value cache for all transformer blocks."""
+        raise NotImplementedError("rolling tokens not implemented for KV cache")
         for block in self.network.transformer.h:
             block.attn.cache.cache_k = block.attn.cache.cache_k.roll(-offset, dims=2)
             block.attn.cache.cache_v = block.attn.cache.cache_v.roll(-offset, dims=2)
+
+    def _generate_frame_iteratively(
+        self,
+        state: ContextState,
+        dims: GenerationDims,
+        config: GenerationConfig,
+        prev_pos: int,
+        cur_pos: int,
+    ) -> Tuple[ContextState, Optional[List[torch.Tensor]], Tuple[int, int]]:
+        frame_logits = [] if config.return_logits else None
+
+        for _ in range(dims.n_visual_tokens):
+            # Get next token
+            logits = self._get_model_output(state, prev_pos, cur_pos, config.use_kv_cache)
+            logits = logits[:, -1, :]
+            next_token, token_logits = self._sample_next_token(logits, config.temperature)
+
+            if config.return_logits:
+                # Adding unsqueeze here for consistency with the multi-token case
+                frame_logits.append(token_logits.unsqueeze(1))
+
+            # Update state
+            if config.use_kv_cache:
+                prev_pos = min(cur_pos, dims.max_context_size - 1)
+                cur_pos = min(cur_pos + 1, dims.max_context_size)
+
+            state = self._update_context_state(state, next_token, dims, config.use_kv_cache)
+
+        return state, frame_logits, (prev_pos, cur_pos)
+
+    def _generate_whole_frame(
+        self,
+        state: ContextState,
+        dims: GenerationDims,
+        config: GenerationConfig,
+        prev_pos: int,
+        cur_pos: int,
+    ) -> Tuple[ContextState, List[torch.Tensor], Tuple[int, int]]:
+        # Get next token
+        token_logits = self._get_model_output(state, prev_pos, cur_pos, config.use_kv_cache)
+        token_logits = token_logits[:, :dims.n_visual_tokens, :]
+        next_token, token_logits = self._sample_next_token(token_logits, config.temperature)
+
+        # Update state
+        if config.use_kv_cache:
+            prev_pos = min(cur_pos, dims.max_context_size - 1)
+            # compared to _generate_frame_iteratively, we add n_visual_tokens instead of 1
+            # TODO: this may need to change if we generate the future tokens directly from the model
+            cur_pos = min(cur_pos + dims.n_visual_tokens, dims.max_context_size)
+
+        state = self._update_context_state(state, next_token, dims, config.use_kv_cache)
+        return state, [token_logits], (prev_pos, cur_pos)
 
     @torch.no_grad()
     def generate(
@@ -509,27 +570,19 @@ class ImageGenerator:
             # Main generation loop
             frame_range = tqdm(range(dims.n_future_frames), disable=not config.verbose)
             for frame_idx in frame_range:
-                frame_logits = [] if config.return_logits else None
-
                 # TODO: change of frame, resetting position indices
                 # rolling_spatial_positions = intial_spatial_positions
                 # rolling_temporal_positions = initial_temporal_positions
 
                 # Generate tokens for current frame
-                for _ in range(dims.n_visual_tokens):
-                    # Get next token
-                    logits = self._get_model_output(state, prev_pos, cur_pos, config.use_kv_cache)
-                    next_token, token_logits = self._sample_next_token(logits, config.temperature)
-
-                    if config.return_logits:
-                        frame_logits.append(token_logits)
-
-                    # Update state
-                    if config.use_kv_cache:
-                        prev_pos = min(cur_pos, dims.max_context_size - 1)
-                        cur_pos = min(cur_pos + 1, dims.max_context_size)
-
-                    state = self._update_context_state(state, next_token, dims, config.use_kv_cache)
+                if self.network.multiple_tokens_inference:
+                    state, frame_logits, (prev_pos, cur_pos) = self._generate_whole_frame(
+                        state, dims, config, prev_pos, cur_pos
+                    )
+                else:
+                    state, frame_logits, (prev_pos, cur_pos) = self._generate_frame_iteratively(
+                        state, dims, config, prev_pos, cur_pos
+                    )
 
                 # Process generated frame
                 frame, frame_logits_tensor = self._process_generated_frame(
@@ -563,141 +616,6 @@ class ImageGenerator:
             result['visual_logits'] = torch.stack(generated_logits, dim=1)
 
         return result
-
-
-@torch.no_grad()
-def autoregressive_image_multitoken_generation(
-    network,
-    sampler,
-    sequence_adapter,
-    burnin_visual_tokens,
-    burnin_action_tokens,
-    future_action_tokens,
-    max_rolling_context_frames,
-    temperature=1.0,
-    return_logits=False,
-    verbose=False,
-):
-    """
-    Generates image sequences autoregressively using a neural network.
-
-    Args:
-        network: The neural network model for generation.
-        sampler: The sampling strategy (e.g., TopKSampler).
-        sequence_adapter: An instance of GPTAdapter for token interleaving.
-        burnin_visual_tokens: Visual tokens for burnin frames, shape [B, T_burnin, H, W].
-        burnin_action_tokens: Action tokens for burnin frames, shape [B, T_burnin, K].
-        future_action_tokens: Action tokens for future frames, shape [B, T_future, K].
-        max_rolling_context_frames: Maximum number of frames to keep in the rolling context.
-        temperature: Controls randomness in sampling (default: 1.0).
-        return_logits: Whether to return logits along with generated images (default: False).
-        verbose: Whether to show progress bars during generation (default: False).
-
-    Returns:
-        A dictionary containing generated visual tokens and optionally logits.
-    """
-    from tqdm.auto import tqdm
-    verbose = int(verbose)
-
-    B, nb_burnin_frames, H, W = burnin_visual_tokens.shape
-    _, nb_future_actions, nb_action_tokens = future_action_tokens.shape
-
-    # first action conditioning future frame generation is actually already in the context
-    nb_future_frames = nb_future_actions + 1
-
-    nb_visual_tokens = H * W
-    nb_visual_and_action_tokens = nb_visual_tokens + nb_action_tokens
-
-    # Calculate the maximum number of tokens in the rolling context
-    max_rolling_context_size = max_rolling_context_frames * (nb_visual_tokens + nb_action_tokens)
-
-    # Interleave burnin visual and action tokens
-    sequence_data = sequence_adapter(burnin_visual_tokens, burnin_action_tokens)
-    rolling_context = sequence_data['token_sequence']
-
-    # Compute initial positions for the full context size
-    position_data = sequence_adapter.compute_position_indices(
-        B, H, W, nb_action_tokens, max_rolling_context_frames
-    )
-    spatial_positions = position_data['spatial_positions']
-    temporal_positions = position_data['temporal_positions']
-
-    # Ensure initial context doesn't exceed max_rolling_context_size
-    if rolling_context.shape[1] > max_rolling_context_size:
-        rolling_context = rolling_context[:, -max_rolling_context_size:]
-        spatial_positions = spatial_positions[:, :max_rolling_context_size]
-        temporal_positions = temporal_positions[:, :max_rolling_context_size]
-
-    generated_images = torch.empty(B, nb_future_frames, H, W, device=burnin_visual_tokens.device)
-    if return_logits:
-        generated_logits = torch.empty(B, nb_future_frames, H, W, network.vocab_size, device=burnin_visual_tokens.device)
-
-    # Create frame-level progress bar if verbose > 0, leave=True if verbose > 1
-    for i in tqdm(range(nb_future_frames), desc='Generating frames', disable=verbose < 1, leave=verbose > 1):
-        # change of frame, resetting position indices
-        rolling_spatial_positions = spatial_positions
-        rolling_temporal_positions = temporal_positions
-
-        # Spatial and temporal pos are pre-computed at len of max_rolling_context_size
-        # We need to crop by current_context_len the spatial and temporal pos indices
-        # as we are filling the context up to max_rolling_context_size.
-        # Once max_rolling_context_size, it will have no effect as rolling logic will take over
-        current_context_len = rolling_context.shape[1]
-
-        # Get logits for the next token
-        sequence_logits = network(
-            rolling_context,
-            rolling_spatial_positions[:, :current_context_len],
-            rolling_temporal_positions[:, :current_context_len],
-            inference=True,
-        )
-
-        # remove action tokens from the logits
-        next_frame_logits = sequence_logits[:, :nb_visual_tokens, :]  # shape [B, nb_visual_tokens, vocab_size]
-
-        # Apply temperature and sample
-        next_frame_logits = next_frame_logits / temperature
-        next_frame_probs = F.softmax(next_frame_logits, dim=-1)
-        next_frame_probs = rearrange(next_frame_probs, 'b n v -> (b n) v')
-        next_frame = sampler.sample(next_frame_probs)  # shape [B * nb_visual_tokens, 1]
-        next_frame = rearrange(next_frame, '(b n) 1 -> b n', n=nb_visual_tokens)  # shape [B, nb_visual_tokens]
-
-        # Save generated frame and logits
-        generated_images[:, i] = rearrange(next_frame, 'b (h w) -> b h w', h=H)
-        if return_logits:
-            generated_logits[:, i] = rearrange(next_frame_logits, 'b (h w) v -> b h w v', h=H)
-
-        if i + 1 == nb_future_frames:
-            # If last frame, exit generation loop
-            continue
-
-        # Add next action tokens to rolling context
-        next_action_tokens = future_action_tokens[:, i]  # shape [B, nb_action_tokens]
-        # Apply shifts to action token indices based on visual and action vocabularies' sizes.
-        # Otherwise action and visual tokens may have the same index
-        next_action_tokens = sequence_adapter.action_shifts + next_action_tokens
-        # Update rolling context with generated frame and next action tokens
-        rolling_context = torch.cat([rolling_context, next_frame, next_action_tokens], dim=1)
-
-        # Update rolling context
-        if rolling_context.shape[1] > max_rolling_context_size:
-            rolling_context = rolling_context[:, nb_visual_and_action_tokens:]
-            # In this case spatial positions are fixed
-            # rolling_spatial_positions = rolling_spatial_positions.roll(-nb_visual_and_action_tokens, dims=1)
-            rolling_temporal_positions = rolling_temporal_positions.roll(-nb_visual_and_action_tokens, dims=1)
-            rolling_temporal_positions[:, -nb_visual_and_action_tokens:] += max_rolling_context_frames  # TODO: check this
-
-    # Stack generated images
-    out_dict = {
-        'visual_tokens': generated_images,
-        'sequence_data': sequence_data,
-        'position_data': position_data
-    }
-
-    if return_logits:
-        out_dict['visual_logits'] = generated_logits
-
-    return out_dict
 
 
 if __name__ == '__main__':
@@ -738,10 +656,14 @@ if __name__ == '__main__':
     sequence_adapter.eval()
     action_tokenizer.eval()
 
-    sampler = TopKSampler(k=5)
+    if network.multiple_tokens_inference:
+        sampler = MultiTokenTopKSampler(k=5)
+    else:
+        sampler = TopKSampler(k=5)
 
-    window_size = 23
-    burnin_visual_tokens = torch.randint(0, 1000, (3, 18, 16, 32), device=device)
+    window_size = 10
+    burnin_visual_tokens = torch.randint(0, 1000, (3, 3, 18, 32), device=device)
+    assert burnin_visual_tokens.shape[-1] * burnin_visual_tokens.shape[-2] + 2 == network.nb_tokens_per_timestep
 
     b, burnin_size, h, w = burnin_visual_tokens.shape
     future_size = window_size - burnin_size
@@ -749,17 +671,20 @@ if __name__ == '__main__':
     burnin_action_tokens = action_tokenizer(burnin_visual_tokens)
     future_action_tokens = torch.zeros((b, future_size - 1, 2), device=device, dtype=torch.long)
 
-    generated_data = autoregressive_image_multitoken_generation(
-        network,
-        sampler,
-        sequence_adapter,
+    config = GenerationConfig(use_kv_cache=True, verbose=True, return_logits=True)
+
+    generator = ImageGenerator(
+        network=network,
+        sampler=sampler,
+        sequence_adapter=sequence_adapter,
+        max_rolling_context_frames=network.nb_timesteps - 1,
+    )
+
+    generated_data = generator.generate(
         burnin_visual_tokens,
         burnin_action_tokens,
         future_action_tokens,
-        max_rolling_context_frames=network.nb_timesteps - 1,
-        temperature=1.0,
-        return_logits=True,
-        verbose=2,
+        config=config,
     )
 
     print(generated_data['visual_tokens'].shape)

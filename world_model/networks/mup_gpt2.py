@@ -377,9 +377,11 @@ class MuGPT2(nn.Module):
                     attn_mask = temporal_positions.unsqueeze(1) <= temporal_positions.unsqueeze(2)
                     # In the KV cache we attend to all tokens since they are of past
                     # frames.
-                    attn_mask = torch.hstack(
-                        [torch.ones((seqlen, start_pos), device=token_sequence.device, dtype=torch.bool), attn_mask]
+                    attn_mask = torch.cat(
+                        [torch.ones((len(temporal_positions), seqlen, start_pos), device=token_sequence.device, dtype=torch.bool), attn_mask],
+                        dim=2,
                     ).type_as(emb_in)
+                    attn_mask.unsqueeze_(1)  # this is for the nb_heads dimension
                 else:
                     attn_mask = torch.full((seqlen, seqlen), float("-inf"), device=token_sequence.device)
                     attn_mask = torch.triu(attn_mask, diagonal=1)
