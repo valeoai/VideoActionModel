@@ -47,7 +47,7 @@ class WMAuxOutputs:
     @classmethod
     def empty(cls) -> "WMAuxOutputs":
         return cls(
-            generated_frames=torch.zeros((0, 6, 3, 0, 0), dtype=torch.float32),
+            generated_frames=torch.zeros((0, len(NUSCENES_CAM_ORDER), 3, 0, 0), dtype=torch.float32),
         )
 
 

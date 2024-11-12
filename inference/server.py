@@ -18,15 +18,32 @@ from inference.runner import (
 app = FastAPI()
 
 
+class Calibration(BaseModel):
+    """Calibration data."""
+
+    camera2image: Dict[str, List[List[float]]]
+    """Camera intrinsics. The keys are the camera names."""
+    camera2ego: Dict[str, List[List[float]]]
+    """Camera extrinsics. The keys are the camera names."""
+    lidar2ego: List[List[float]]
+    """Lidar extrinsics."""
+
+
 class InferenceInputs(BaseModel):
     """Input data for inference."""
 
     images: Dict[str, Base64Bytes]
     """Camera images in PNG format. The keys are the camera names."""
+    ego2world: List[List[float]]
+    """Ego pose in the world frame."""
+    canbus: List[float]
+    """CAN bus signals."""
     timestamp: int  # in microseconds
     """Timestamp of the current frame in microseconds."""
     command: Literal[0, 1, 2]
     """Command of the current frame."""
+    calibration: Calibration
+    """Calibration data.""" ""
 
 
 class InferenceAuxOutputs(BaseModel):
