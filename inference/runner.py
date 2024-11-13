@@ -197,7 +197,7 @@ def _get_sample_input(nusc, sample) -> WMInferenceInput:
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     runner = WMRunner(
-        config_path="configs/inference.yaml",
+        config_path="configs/inference_ncap.yaml",
         checkpoint_path=None,
         device=torch.device(device),
     )

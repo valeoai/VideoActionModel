@@ -1,0 +1,46 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - paths: default
+  - hydra: default
+
+name: "inference" # used by hydra in case of error looging
+
+# The directory where model logs are stored (the folder `checkpoints`, `tensorboard`, etc.. are under it).
+model_log_dir: ???
+
+# The name to the model checkpoint file (e.g., `epoch_006_val_perplexity_365.0459.ckpt`).
+checkpoint_name: ???
+
+# Path to the directory where the predicted tokens data will be stored.
+# The directory does not need to exist beforehand.
+output_dir: ${paths.output_dir}
+
+# The number of sequences to samples
+# i.e., then number of possible future sequence to generate
+nb_samplings: 2
+
+save_logits: False
+
+# Leave as null to use the model's training context size
+max_rolling_context_frames: null
+
+transform:
+  _target_: world_model.dataloader.components.transforms.CropAndResizeTransform
+  trop_crop_size: 4
+  resize_factor: 4
+
+samplers:
+  top5:
+    _target_: world_model.utils.generation.TopKSampler
+    k: 5
+
+# Different checkpoints paths requirede for the model
+mup_base_shapes_path: /model/mup_shapes/gpt2_24layers_nobias_basewidth128.bsh
+world_model_checkpoint_path: /model/weights/WM_fused/llamagen_IMNET_pretrain_quarters_epoch=000_step=0000007268_fused.pt
+tokenizer_checkpoint_path: /model/weights/vq_ds16_c2i_training.pt
+
+# mup_base_shapes_path: ${oc.env:HOME}/shared/eramzi/NextTokenPredictor/mup_shapes/gpt2_24layers_nobias_basewidth128.bsh
+# world_model_checkpoint_path: ${oc.env:HOME}/shared/eramzi/llamagen_distilled/weights/WM_fused/llamagen_IMNET_pretrain_quarters_epoch=000_step=0000007268_fused.pt
+# tokenizer_checkpoint_path: ${oc.env:HOME}/shared/eramzi/llamagen_distilled/weights/vq_ds16_c2i_training.pt
