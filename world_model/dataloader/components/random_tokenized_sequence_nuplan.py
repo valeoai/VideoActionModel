@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from collections import defaultdict
 from typing import Optional, Callable
@@ -53,21 +54,34 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
         self,
         quantized_data_root_dir: str,
         pickle_data: str,
-        transform: Optional[Callable] = None,
         sequence_length: int = 1,
-        data_root_dir: str = None,
-        load_image: bool = True,
+        prediction_length: int = 1,
         subsampling_factor: int = 1,
-        camera: str = 'CAM_F0'
-    ):
+        camera: str = 'CAM_F0',
+        load_image: bool = False,
+        data_root_dir: Optional[str] = None,
+        transform: Optional[Callable] = None,
+        quantized_trajectory_root_dir: Optional[str] = None,
+        command_db_path: Optional[str] = None,
+    ) -> None:
 
         self.camera = camera
 
         self.load_image = load_image
         self.sequence_length = sequence_length
+        self.prediction_length = prediction_length
         self.subsampling_factor = subsampling_factor
 
         self.quantized_data_root_dir = Path(quantized_data_root_dir)
+
+        self.quantized_trajectory_root_dir = None
+        if quantized_trajectory_root_dir is not None:
+            self.quantized_trajectory_root_dir = Path(quantized_trajectory_root_dir)
+
+        self.command_db = None
+        if command_db_path is not None:
+            with open(command_db_path) as f:
+                self.command_db = json.load(f)
 
         # sort by scene and timestamp
         pickle_data.sort(key=lambda x: (x['scene']['name'], x[self.camera]['timestamp']))
@@ -107,7 +121,7 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
 
             # sequence_length + 1 because we need the position of one more frame
             # to compute `sequence_length` actions (change in pose between two frame)
-            max_temporal_index = self.subsampling_factor * (self.sequence_length + 1)
+            max_temporal_index = self.subsampling_factor * (self.sequence_length + self.prediction_length)
             for t in range(0, max_temporal_index, self.subsampling_factor):
                 temporal_index = sequence_start_index + t
 
@@ -163,6 +177,19 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
             quantized_data = torch.tensor(quantized_data)
             data['visual_tokens'].append(quantized_data)
 
+            ####### load trajectory tokens
+            if self.quantized_trajectory_root_dir is not None:
+                quantized_trajectory_path = (self.quantized_trajectory_root_dir / relative_img_path).with_suffix('.npy')
+                quantized_trajectory = np.load(quantized_trajectory_path)
+                quantized_trajectory = torch.tensor(quantized_trajectory)
+                data['trajectory_tokens'].append(quantized_trajectory)
+
+            ####### load command
+            if self.command_db is not None:
+                command = self.command_db[relative_img_path]
+                command = torch.tensor(command)
+                data['commands'].append(command)
+
             ####### load ego motion data
             ego_to_world_tran = sample['ego_to_world_tran']
             ego_to_world_tran = torch.tensor(ego_to_world_tran)
@@ -199,3 +226,27 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
                 data[key] = torch.stack(data[key], dim=0)
 
         return data
+
+
+if __name__ == '__main__':
+    import os
+    import pickle
+
+    _path = lambda x: os.path.expanduser(os.path.expandvars(x))
+
+    with open(os.path.join(_path('$ycy_ALL_CCFRSCRATCH'), 'nuscenes_cvpr', 'trainval_data.pkl'), 'rb') as f:
+        pickle_data = pickle.load(f)
+
+    dts = RandomTokenizedSequenceNuplanDataset(
+        os.path.join(
+            _path('$ycy_ALL_CCFRSCRATCH'),
+            'nuscenes_tokenized',
+            'VQ_ds16_16384_llamagen',
+        ),
+        pickle_data,
+        command_db_path=os.path.join(
+            _path('$ycy_ALL_CCFRSCRATCH'),
+            'nuscenes_cvpr',
+            'nuscenes_commands.json',
+        ),
+    )
