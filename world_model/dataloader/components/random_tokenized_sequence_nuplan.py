@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from collections import defaultdict
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict
 
 import numpy as np
 import torch
@@ -62,7 +62,7 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
         data_root_dir: Optional[str] = None,
         transform: Optional[Callable] = None,
         quantized_trajectory_root_dir: Optional[str] = None,
-        command_db_path: Optional[str] = None,
+        command_db: Optional[Dict[str, int]] = None,
     ) -> None:
 
         self.camera = camera
@@ -78,10 +78,7 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
         if quantized_trajectory_root_dir is not None:
             self.quantized_trajectory_root_dir = Path(quantized_trajectory_root_dir)
 
-        self.command_db = None
-        if command_db_path is not None:
-            with open(command_db_path) as f:
-                self.command_db = json.load(f)
+        self.command_db = command_db
 
         # sort by scene and timestamp
         pickle_data.sort(key=lambda x: (x['scene']['name'], x[self.camera]['timestamp']))
@@ -186,7 +183,7 @@ class RandomTokenizedSequenceNuplanDataset(torch.utils.data.Dataset):
 
             ####### load command
             if self.command_db is not None:
-                command = self.command_db[relative_img_path]
+                command = self.command_db[os.path.basename(relative_img_path)]
                 command = torch.tensor(command)
                 data['commands'].append(command)
 
@@ -237,6 +234,23 @@ if __name__ == '__main__':
     with open(os.path.join(_path('$ycy_ALL_CCFRSCRATCH'), 'nuscenes_cvpr', 'trainval_data.pkl'), 'rb') as f:
         pickle_data = pickle.load(f)
 
+    pickle_data = pickle_data['train']
+    for i, sample in enumerate(pickle_data):
+        for cam_name in sample.keys():
+            if 'CAM' not in cam_name:
+                continue
+            pickle_data[i][cam_name]['file_path'] = pickle_data[i][cam_name]['file_path'].replace('samples/', '')
+
+    command_db_path = os.path.join(
+        _path('$ycy_ALL_CCFRSCRATCH'),
+        'nuscenes_cvpr',
+        'nuscenes_commands.json',
+    )
+
+    if command_db_path is not None:
+        with open(command_db_path) as f:
+            command_db = json.load(f)
+
     dts = RandomTokenizedSequenceNuplanDataset(
         os.path.join(
             _path('$ycy_ALL_CCFRSCRATCH'),
@@ -244,9 +258,9 @@ if __name__ == '__main__':
             'VQ_ds16_16384_llamagen',
         ),
         pickle_data,
-        command_db_path=os.path.join(
-            _path('$ycy_ALL_CCFRSCRATCH'),
-            'nuscenes_cvpr',
-            'nuscenes_commands.json',
-        ),
+        command_db=command_db,
+        camera='CAM_FRONT',
     )
+
+    print(len(dts))
+    print(dts[0].keys())
