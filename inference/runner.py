@@ -207,7 +207,7 @@ if __name__ == "__main__":
     # import matplotlib.pyplot as plt
 
     # load the first surround-cam in nusc mini
-    nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
+    nusc = NuScenes(version="v1.0-mini", dataroot="/model/data/nuscenes")
     scene_name = "scene-0103"
     scene = [s for s in nusc.scene if s["name"] == scene_name][0]
     # get the first sample in the scene

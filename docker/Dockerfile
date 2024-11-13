@@ -18,11 +18,16 @@ RUN pip install uvicorn
 RUN pip install pydantic
 RUN pip install einops
 RUN pip install gitpython
-
-# install the nuplan devkit
-RUN git clone --branch nuplan-devkit-v1.2.1-release 'https://github.com/motional/nuplan-devkit.git' && \
-    cd nuplan-devkit && \
-    python -m pip install -e .
+RUN pip install matplotlib
+RUN pip install --no-dependencies nuscenes-devkit
+RUN pip install opencv-python
+RUN pip install scikit-learn
+RUN pip install pyquaternion
+RUN pip install cachetools
+RUN pip install descartes
+RUN pip install fire
+RUN pip install "Shapely<2.0.0"
+RUN pip install parameterized
 
 ADD . /NextTokenPredictor
 RUN cd /NextTokenPredictor && pip install --no-cache-dir .
