@@ -181,7 +181,19 @@ class TokenizedNuScenesDataModule(LightningDataModule):
 
 
 if __name__ == '__main__':
+    """
+    Debug script to test the TokenizedNuScenesDataModule.
+
+    srun -A ycy@h100 -C h100 --pty --nodes=1 \
+    --ntasks-per-node=1 --cpus-per-task=16 \
+    --gres=gpu:0 --hint=nomultithread \
+    --qos=qos_gpu_h100-dev --time=01:00:00 \
+    python world_model/dataloader/tokenized_nuscenes.py
+
+    """
     import os
+
+    from tqdm import tqdm
 
     _path = lambda x: os.path.expanduser(os.path.expandvars(x))
 
@@ -195,6 +207,12 @@ if __name__ == '__main__':
         _path('$ycy_ALL_CCFRSCRATCH'),
         'nuscenes_tokenized',
         'VQ_ds16_16384_llamagen',
+    )
+    trajectory_tokens_paths = os.path.join(
+        _path('$ycy_ALL_CCFRSCRATCH'),
+        'nuscenes_tokenized',
+        'TrajectoryFSQ_seqlen6',
+        'epoch_029_val_recon_loss_0.0211',
     )
 
     dataloader_params = {
@@ -210,15 +228,16 @@ if __name__ == '__main__':
         sequence_length=3,
         prediction_length=6,
         subsampling_factor=1,
-        camera=['CAM_FRONT', 'CAM_FRONT_LEFT'],
+        camera=['CAM_FRONT'],
         quantized_trajectory_root_dir=None,
         command_db_path=command_db_path,
     ).setup()
 
-    loader = dm.train_dataloader()
-    batch = next(iter(loader))
-
-    print(batch.keys())
-    print(batch['visual_tokens'].shape)
-    print(batch['timestamps'].shape)
-    print(batch['commands'].shape)
+    for loader in [dm.train_dataloader(), dm.val_dataloader()]:
+        for i, batch in enumerate(tqdm(loader)):
+            if i == 0:
+                print(batch.keys())
+                print(batch['visual_tokens'].shape)
+                print(batch['timestamps'].shape)
+                print(batch['commands'].shape)
+            pass

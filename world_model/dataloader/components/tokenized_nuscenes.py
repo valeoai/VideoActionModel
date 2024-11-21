@@ -128,7 +128,14 @@ class TokenizedNuScenesDataset(torch.utils.data.Dataset):
             ####### load command
             if self.command_db is not None:
                 # Only a global command and not a per camera command
-                command = self.command_db[os.path.basename(sample[self.camera[0]]['file_path'])]
+                try:
+                    command = self.command_db[os.path.basename(sample[self.camera[0]]['file_path'])]
+                except KeyError as e:
+                    if i > self.sequence_length:
+                        # For the last frame in NuScenes sequence, we don't have a command
+                        command = -1
+                    else:
+                        raise e
                 command = torch.tensor(command)
                 data['commands'].append(command)
 
@@ -137,7 +144,7 @@ class TokenizedNuScenesDataset(torch.utils.data.Dataset):
             for cam_name in self.camera:
                 relative_img_path = sample[cam_name]['file_path']
                 images_paths.append(relative_img_path)
-                relative_img_path = relative_img_path.replace('samples/', '')
+                relative_img_path = relative_img_path
 
                 ####### load image tokens
                 quantized_data_path = (self.quantized_visual_tokens_root_dir / relative_img_path).with_suffix('.npy')
@@ -193,6 +200,12 @@ if __name__ == '__main__':
         'nuscenes_tokenized',
         'VQ_ds16_16384_llamagen',
     )
+    trajectory_tokens_paths = os.path.join(
+        _path('$ycy_ALL_CCFRSCRATCH'),
+        'nuscenes_tokenized',
+        'TrajectoryFSQ_seqlen6',
+        'epoch_029_val_recon_loss_0.0211',
+    )
 
     with open(pickle_path, 'rb') as f:
         pickle_data = pickle.load(f)['train']
@@ -206,12 +219,14 @@ if __name__ == '__main__':
         visual_tokens_paths,
         sequence_length=3,
         prediction_length=6,
+        quantized_trajectory_root_dir=trajectory_tokens_paths,
         command_db=command_db,
-        camera=['CAM_FRONT', 'CAM_FRONT_LEFT'],
+        camera=['CAM_FRONT'],
     )
 
     print(len(dts))
     sample = dts[0]
     print(sample.keys())
     print(sample['visual_tokens'].shape)
+    print(sample['trajectory_tokens'].shape)
     print(sample['commands'].shape)
