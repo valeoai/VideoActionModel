@@ -170,6 +170,7 @@ class MuGPT2(nn.Module):
         assert nb_tokens_per_timestep is not None, "nb_tokens_per_timestep must be provided"
         assert nb_timesteps is not None, "nb_timesteps must be provided"
 
+        self.vocabulary_size = vocabulary_size
         self.embedding_dim = embedding_dim
         self.bias = bias
         self.init_std = init_std
@@ -215,6 +216,46 @@ class MuGPT2(nn.Module):
 
         # report number of parameters
         print("number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,))
+        
+    def load_pretrained_statedict(self, state_dict):
+        """
+        Load pretrained state_dict and extend vocabulary if needed.
+        """
+
+        emb_weight = state_dict['transformer.wie.weight']
+        orig_vocab_size, orig_vocab_dim = emb_weight.shape
+        
+        # no need to extend vocabulary
+        if orig_vocab_size == self.vocabulary_size:
+            self.load_state_dict(state_dict)
+            return
+        
+        assert orig_vocab_dim == self.embedding_dim
+        
+        new_emb = torch.zeros(self.vocabulary_size, self.embedding_dim)
+        new_emb[:orig_vocab_size] = emb_weight
+        
+        # Initialize new embeddings
+        num_new_tokens = self.vocabulary_size - orig_vocab_size
+        new_embeddings_data = torch.zeros(num_new_tokens, self.embedding_dim)
+        new_embeddings_data.normal_(mean=0.0, std=self.init_std)
+        new_emb[orig_vocab_size:] = new_embeddings_data
+        
+        # Update state_dict
+        state_dict['transformer.wie.weight'] = new_emb
+        
+        if self.output_tied and 'lm_head.weight' in state_dict:
+            state_dict['lm_head.weight'] = new_emb
+        
+        if not self.output_tied and 'lm_head.weight' in state_dict:
+            # Handle output layer weights if not tied
+            out_weight = state_dict['lm_head.weight']
+            new_out = torch.zeros(self.vocabulary_size, self.embedding_dim)
+            new_out[:orig_vocab_size] = out_weight
+            # Zero initialize new output weights as per model's initialization
+            state_dict['lm_head.weight'] = new_out
+            
+        self.load_state_dict(state_dict)
 
     def get_num_params(self, non_embedding=True):
         """
@@ -299,7 +340,6 @@ class MuGPT2(nn.Module):
             if hasattr(module.weight, 'infshape'):
                 normal_(module.weight, mean=0.0, std=self.init_std)
             else:
-
                 module.weight.data.normal_(mean=0.0, std=self.init_std * self.embedding_dim**-0.5)
 
             if module.bias is not None:

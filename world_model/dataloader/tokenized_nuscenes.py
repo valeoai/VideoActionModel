@@ -64,7 +64,7 @@ class TokenizedNuScenesDataModule(LightningDataModule):
         dataloader_params: Dict,
         quantized_visual_tokens_root_dir: str,
         sequence_length: int = 1,
-        prediction_length: int = 0,
+        trajectory_length: int = 0,
         subsampling_factor: int = 1,
         camera: Union[List[str], str] = 'CAM_FRONT',
         quantized_trajectory_root_dir: Optional[str] = None,
@@ -76,7 +76,7 @@ class TokenizedNuScenesDataModule(LightningDataModule):
             dataloader_params: A dict containing the dataloader-specific parameters (batch size, )
             quantized_visual_tokens_root_dir: The directory where quantized representations of the NuScenes images are stored.
             sequence_length: The number of consecutive frames to include in each data sample. Defaults to 1.
-            prediction_length: The number of frames to predict in the future. Defaults to 0.
+            trajectory_length: The number of **future** steps by which a trajectory is defined. Defaults to 0.
             subsampling_factor: only keep one frame every `subsampling_factor` frames.
             camera: Name of the camera to extract data for (e.g., 'CAM_F0', 'CAM_FRONT' this is dataset dependant)
             quantized_trajectory_root_dir: The directory where quantized representations of the NuScenes trajectory are stored.
@@ -95,7 +95,7 @@ class TokenizedNuScenesDataModule(LightningDataModule):
         dataset_params = {
             'quantized_visual_tokens_root_dir': quantized_visual_tokens_root_dir,
             'sequence_length': sequence_length,
-            'prediction_length': prediction_length,
+            'trajectory_length': trajectory_length,
             'subsampling_factor': subsampling_factor,
             'camera': camera,
             'quantized_trajectory_root_dir': quantized_trajectory_root_dir,
@@ -226,7 +226,7 @@ if __name__ == '__main__':
         dataloader_params=dataloader_params,
         quantized_visual_tokens_root_dir=visual_tokens_paths,
         sequence_length=3,
-        prediction_length=6,
+        trajectory_length=6,
         subsampling_factor=1,
         camera=['CAM_FRONT'],
         quantized_trajectory_root_dir=None,

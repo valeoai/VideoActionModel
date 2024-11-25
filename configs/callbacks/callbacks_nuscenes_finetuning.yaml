@@ -1,0 +1,12 @@
+defaults:
+  - model_summary
+  - tqdm_progress_bar
+  - learning_rate_monitor
+  - device_stats_monitor
+  - _self_
+
+last_checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: "${paths.output_dir}/${name}/checkpoints/"
+  filename: "{step:010d}"
+  every_n_train_steps: ${trainer.max_steps}

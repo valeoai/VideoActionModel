@@ -44,6 +44,11 @@ class TokenizedNuScenesDataset(torch.utils.data.Dataset):
         quantized_trajectory_root_dir: Optional[str] = None,
         command_db: Optional[Dict[str, int]] = None,
     ) -> None:
+
+        if camera is None or camera == 'all':
+            camera = [k for k in pickle_data[0].keys() if 'CAM' in k]
+        if isinstance(camera, str):
+            camera = [camera]
         self.camera = camera
 
         self.sequence_length = sequence_length
@@ -59,7 +64,7 @@ class TokenizedNuScenesDataset(torch.utils.data.Dataset):
         self.command_db = command_db
 
         # sort by scene and timestamp
-        pickle_data.sort(key=lambda x: (x['scene']['name'], x[self.camera]['timestamp']))
+        pickle_data.sort(key=lambda x: (x['scene']['name'], x[self.camera[0]]['timestamp']))
         self.pickle_data = pickle_data
 
         self.sequences_indices = self.get_sequence_indices()
@@ -135,7 +140,7 @@ class TokenizedNuScenesDataset(torch.utils.data.Dataset):
             if self.command_db is not None:
                 # Only a global command and not a per camera command
                 try:
-                    command = self.command_db[os.path.basename(sample[self.camera]['file_path'])]
+                    command = self.command_db[os.path.basename(sample[self.camera[0]]['file_path'])]
                 except KeyError as e:
                     if i > self.sequence_length:
                         # For the last frame in NuScenes sequence, we don't have a command
@@ -146,24 +151,32 @@ class TokenizedNuScenesDataset(torch.utils.data.Dataset):
                 data['commands'].append(command)
 
             ####### get tokens
-            relative_img_path = sample[self.camera]['file_path']
-            data['images_paths'] = relative_img_path
+            images_paths, visual_tokens, trajectory_tokens = [], [], []
+            for cam_name in self.camera:
+                relative_img_path = sample[cam_name]['file_path']
+                images_paths.append(relative_img_path)
+                relative_img_path = relative_img_path
 
-            ####### load image tokens
-            quantized_data_path = (self.quantized_visual_tokens_root_dir / relative_img_path).with_suffix('.npy')
-            quantized_data = np.load(quantized_data_path)
-            quantized_data = torch.tensor(quantized_data)
-            data['visual_tokens'].append(quantized_data)
+                ####### load image tokens
+                quantized_data_path = (self.quantized_visual_tokens_root_dir / relative_img_path).with_suffix('.npy')
+                quantized_data = np.load(quantized_data_path)
+                quantized_data = torch.tensor(quantized_data)
+                visual_tokens.append(quantized_data)
 
-            ####### load trajectory tokens
+                ####### load trajectory tokens
+                if self.quantized_trajectory_root_dir is not None:
+                    quantized_trajectory_path = (self.quantized_trajectory_root_dir / relative_img_path).with_suffix('.npy')
+                    quantized_trajectory = np.load(quantized_trajectory_path)
+                    quantized_trajectory = torch.tensor(quantized_trajectory)
+                    trajectory_tokens.append(quantized_trajectory)
+
+            data['images_paths'].append(images_paths)
+            data['visual_tokens'].append(torch.stack(visual_tokens, dim=0))
             if self.quantized_trajectory_root_dir is not None:
-                quantized_trajectory_path = (self.quantized_trajectory_root_dir / relative_img_path).with_suffix('.npy')
-                quantized_trajectory = np.load(quantized_trajectory_path)
-                quantized_trajectory = torch.tensor(quantized_trajectory)
-                data['trajectory_tokens'].append(quantized_trajectory)
+                data['trajectory_tokens'].append(torch.stack(trajectory_tokens, dim=0))
 
             ####### load timestamp
-            unix_timestamp = sample[self.camera]['timestamp']
+            unix_timestamp = sample[self.camera[0]]['timestamp']
             if i == 0:
                 first_frame_timestamp = unix_timestamp
             unix_timestamp = (unix_timestamp - first_frame_timestamp) * 1e-6
