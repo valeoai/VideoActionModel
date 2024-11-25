@@ -162,7 +162,8 @@ class MuGPT2(nn.Module):
         output_tied: bool = True,
         output_scale: float = 1.0,
         attn_scale: float = 1.0,
-        learnable_gains: bool = False
+        learnable_gains: bool = False,
+        nb_commands: int = 0,
     ) -> None:
 
         super().__init__()
@@ -183,6 +184,9 @@ class MuGPT2(nn.Module):
         self.nb_timesteps = nb_timesteps
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
         self.block_size = nb_timesteps * nb_tokens_per_timestep
+
+        if nb_commands > 0:
+            self.command_codebook = nn.Embedding(nb_commands, embedding_dim)
 
         self.transformer = nn.ModuleDict(dict(
             wie=nn.Embedding(vocabulary_size, embedding_dim),         # token embeddings
@@ -216,6 +220,9 @@ class MuGPT2(nn.Module):
 
         # report number of parameters
         print("number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,))
+        print(f"Codebook size: {(vocabulary_size, embedding_dim)}")
+        if nb_commands > 0:
+            print(f"Nb high-level commands defined: {nb_commands}")
         
     def load_pretrained_statedict(self, state_dict):
         """
@@ -227,11 +234,12 @@ class MuGPT2(nn.Module):
         
         # no need to extend vocabulary
         if orig_vocab_size == self.vocabulary_size:
-            self.load_state_dict(state_dict)
+            self.load_state_dict(state_dict, strict=False)
             return
         
         assert orig_vocab_dim == self.embedding_dim
         
+        print(f"Extending vocabulary from {orig_vocab_size} to {self.vocabulary_size}")
         new_emb = torch.zeros(self.vocabulary_size, self.embedding_dim)
         new_emb[:orig_vocab_size] = emb_weight
         
@@ -255,7 +263,7 @@ class MuGPT2(nn.Module):
             # Zero initialize new output weights as per model's initialization
             state_dict['lm_head.weight'] = new_out
             
-        self.load_state_dict(state_dict)
+        self.load_state_dict(state_dict, strict=False)
 
     def get_num_params(self, non_embedding=True):
         """
@@ -380,6 +388,8 @@ class MuGPT2(nn.Module):
         token_sequence,
         spatial_positions,
         temporal_positions,
+        visual_tokens_mask=None,
+        command=None,
         inference=False,
         start_pos=-1,
     ):
@@ -401,27 +411,34 @@ class MuGPT2(nn.Module):
         tok_emb = self.transformer.wie(token_sequence)
 
         emb_in = tok_emb + temporal_pos_emb + spatial_pos_emb
+        
+        if command is not None: # B, T
+            command = torch.gather(command, 1, temporal_positions) # B, S
+            command_embeddings = self.command_codebook(command) # B, S, D
+            # only apply commands embeddings to visual tokens
+            emb_in[visual_tokens_mask] += command_embeddings[visual_tokens_mask] 
 
-        seqlen = token_sequence.size(1)
+        seqlen = emb_in.size(1)
         if inference and start_pos != -1:
             attn_mask = None
             if seqlen > 1:
-                attn_mask = torch.full((seqlen, seqlen), float("-inf"), device=token_sequence.device)
+                attn_mask = torch.full((seqlen, seqlen), float("-inf"), device=emb_in.device)
                 attn_mask = torch.triu(attn_mask, diagonal=1)
                 # When performing key-value caching, we compute the attention scores
                 # only for the new sequence. Thus, the matrix of scores is of size
                 # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
                 # j > cache_len + i, since row i corresponds to token cache_len + i.
                 attn_mask = torch.hstack(
-                    [torch.zeros((seqlen, start_pos), device=token_sequence.device), attn_mask]
+                    [torch.zeros((seqlen, start_pos), device=emb_in.device), attn_mask]
                 ).type_as(emb_in)
         else:
-            attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
+            attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=emb_in.device, dtype=torch.bool))
 
         # forward world embeddings to the transformer
         x = self.transformer.drop(emb_in)
         for block in self.transformer.h:
             x = block(x, attn_mask, start_pos=start_pos)
+            
         emb_out = self.transformer.ln_f(x)
 
         if not inference:

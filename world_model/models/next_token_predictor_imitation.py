@@ -86,6 +86,8 @@ class NextTokenPredictor(LightningModule):
             'token_sequence': sequence_data['token_sequence'][:, :-1],
             'spatial_positions': sequence_data['spatial_positions'][:, :-1],
             'temporal_positions': sequence_data['temporal_positions'][:, :-1],
+            'visual_tokens_mask': sequence_data['visual_tokens_mask'][:, :-1],
+            'command': batch['commands']
         }
         
         # Create target_tokens by taking all but the first token (shifting by one)

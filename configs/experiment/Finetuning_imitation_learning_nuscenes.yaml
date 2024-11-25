@@ -36,7 +36,7 @@ data:
 # VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
 model:
   statedict_ckpt_path: "/lustre/fsn1/projects/rech/ycy/commun/output_data/opendv_GPT2_LlamaGen/large_scale/muP_GPT2_split_opendv_dim2048_part_3/checkpoints/end_of_epoch_epoch=002_step=0000149837_fused.pt"
-  mup_base_shapes: ./mup_shapes/gpt2_24layers_nobias_basewidth128.bsh
+  mup_base_shapes: ./mup_shapes/gpt2_24layers_nobias_basewidth128_with_commands.bsh
   network:
     embedding_dim: 128
     nb_heads: 1
@@ -51,6 +51,8 @@ model:
     output_tied: True
     output_scale: 1.0
     attn_scale: 1.0
+    learnable_gains: False
+    nb_commands: 3 # straight, left, right
   sequence_adapter:
     visual_vocab_size: 16384
     action_vocab_sizes:
