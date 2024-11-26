@@ -132,7 +132,7 @@ class NextTokenPredictor(LightningModule):
             )
             start_idx = end_idx
             
-            self.log(f"train/loss_codebook_{i}", loss, on_step=True, on_epoch=False, logger=True, prog_bar=False)
+            self.log(f"train/loss_codebook_{i}", codebook_loss, on_step=True, on_epoch=False, logger=True, prog_bar=False)
             
             loss += codebook_loss
             
