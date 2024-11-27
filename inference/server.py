@@ -1,6 +1,6 @@
 import argparse
 import io
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal
 
 import numpy as np
 import torch
@@ -46,17 +46,11 @@ class InferenceInputs(BaseModel):
     """Calibration data.""" ""
 
 
-class InferenceAuxOutputs(BaseModel):
-    generated_frames: Optional[List[List[List[float]]]] = None  # N x T x [width, height, 3]
-
-
 class InferenceOutputs(BaseModel):
     """Output / result from running the model."""
 
     trajectory: List[List[float]]
     """Predicted trajectory in the ego frame. A list of (x, y) points in BEV."""
-    aux_outputs: InferenceAuxOutputs
-    """Auxiliary outputs."""
 
 
 @app.get("/alive")
@@ -70,7 +64,6 @@ async def infer(data: InferenceInputs) -> InferenceOutputs:
     wm_output = wm_runner.forward_inference(wm_input)
     return InferenceOutputs(
         trajectory=wm_output.trajectory.tolist(),
-        aux_outputs=(InferenceAuxOutputs(**wm_output.aux_outputs.to_json())),
     )
 
 

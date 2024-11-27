@@ -5,15 +5,12 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from torch import Tensor
-from einops import rearrange
 from PIL import Image
 
-from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from world_model.inference import load_model, WorldModelInference, instantiate_samplers
+from world_model.utils.trajectory_inference import load_trajectory_model, WorldModelInference
+from world_model.dataloader.components.transforms import CropAndResizeTransform
 
-from llamagen import VQ_16
 
 NUSCENES_CAM_ORDER = [
     "CAM_FRONT",
@@ -36,71 +33,38 @@ class WMInferenceInput:
 
 
 @dataclass
-class WMAuxOutputs:
-    generated_frames: Tensor  # T x CAM x [3, h, w]
-
-    def to_json(self) -> dict:
-        return dict(
-            objects_in_bev=self.generated_frames.flaten(start_dim=2).tolist() if self.generated_frames is not None else None,
-        )
-
-    @classmethod
-    def empty(cls) -> "WMAuxOutputs":
-        return cls(
-            generated_frames=torch.zeros((0, len(NUSCENES_CAM_ORDER), 3, 0, 0), dtype=torch.float32),
-        )
-
-
-@dataclass
 class WMInferenceOutput:
     trajectory: np.ndarray
     """shape: (n-future (6), 2) | predicted trajectory in the ego-frame @ 2Hz"""
-    aux_outputs: WMAuxOutputs
-    """aux outputs such as objects, tracks, segmentation and motion forecast"""
 
 
 class WMRunner:
+
     def __init__(self, config_path: str, checkpoint_path: str, device: torch.device):
         with open(config_path, 'r') as file:
-            training_logged_config = yaml.safe_load(file)
-        self.inference_config = OmegaConf.create(training_logged_config)
+            inference_config = yaml.safe_load(file)
+        self.inference_config = OmegaConf.create(inference_config)
 
-        wm_checkpoint_path = self.inference_config.world_model_checkpoint_path
-        wm_ckpt = torch.load(wm_checkpoint_path, map_location='cpu')
-        model_config = OmegaConf.create(wm_ckpt['hyper_parameters'])
-        model_config.mup_base_shapes = self.inference_config.mup_base_shapes_path
+        image_tokenizer_path = self.inference_config.image_tokenizer_path
+        self.image_tokenizer = torch.jit.load(image_tokenizer_path)
+        self.image_tokenizer.to(device)
 
-        network, sequence_adapter, action_tokenizer = load_model(
-            wm_ckpt, model_config, device=device,
-        )
-        sampler = instantiate_samplers(self.inference_config.samplers)[0]
-        self.model = WorldModelInference(
-            network,
-            sequence_adapter,
-            action_tokenizer,
-            sampler=sampler,
-            return_logits=False,
-            verbose=False,
-        )
-        self.model.eval()
-        self.model.requires_grad_(False)
-        self.model.to(device)
+        trajectory_tokenizer_path = self.inference_config.trajectory_tokenizer_path
+        self.trajectory_tokenizer = torch.jit.load(trajectory_tokenizer_path)
+        self.trajectory_tokenizer.to(device)
 
-        tokenizer_checkpoint_path = self.inference_config.tokenizer_checkpoint_path
-        self.tokenizer = VQ_16()
-        keys = self.tokenizer.load_state_dict(
-            torch.load(tokenizer_checkpoint_path, map_location='cpu')['model'],
-            strict=False,
+        network, sequence_adapter = load_trajectory_model(
+            ckpt_file_path=self.inference_config.wm_ckpt_path,
+            config_file_path=self.inference_config.wm_config_path,
+            mup_base_shapes_path=self.inference_config.mup_base_shapes_path,
+            device=device
         )
-        assert keys.missing_keys == [], f"Missing keys: {keys.missing_keys}"
-        for k in keys.unexpected_keys:
-            assert any([x in k for x in ["distillation", "temporal"]]), f"Unexpected keys: {keys.unexpected_keys}"
-        self.tokenizer.eval()
-        self.tokenizer.requires_grad_(False)
-        self.tokenizer.to(device)
+        self.world_model = WorldModelInference(network=network, sequence_adapter=sequence_adapter)
 
         self.device = device
-        self.preproc_pipeline = instantiate(self.inference_config.transform)
+        self.top_crop = self.inference_config.top_crop
+        self.scale_factor = self.inference_config.scale_factor
+        self.preproc_pipeline = CropAndResizeTransform(self.top_crop, self.scale_factor)
         self.reset()
 
     def reset(self):
@@ -109,57 +73,58 @@ class WMRunner:
         self.prev_frame_info = {
             "scene_token": None,
             "prev_frames": None,
+            "prev_actions": None,
+            "prev_commands": None,
         }
 
     @torch.no_grad()
     def forward_inference(self, input: WMInferenceInput) -> WMInferenceOutput:
         """Run inference without all the preprocessed dataset stuff."""
+        # For now we only do single cam
+        preproc_output = self.preproc_pipeline(input.imgs[0])
         # run it through the inference pipeline (which is same as eval pipeline except not loading annotations)
-        preproc_output = torch.stack([self.preproc_pipeline(x) for x in input.imgs], dim=0)
+        # preproc_output = torch.stack([self.preproc_pipeline(x) for x in input.imgs], dim=0)
 
-        # first frame
         if self.prev_frame_info["scene_token"] is None:
+            # first frame
             self.prev_frame_info["scene_token"] = self.scene_token
             self.prev_frame_info["prev_frames"] = preproc_output.unsqueeze(0)
+            self.prev_frame_info["prev_command"] = [input.command]
         else:
             # append the current frame to the previous frames
             self.prev_frame_info["prev_frames"] = torch.cat(
                 [self.prev_frame_info["prev_frames"], preproc_output.unsqueeze(0)], dim=0,
             )
+            self.prev_frame_info["prev_command"].append(input.command)
 
+        # This should (T, c, h, w)
+        # So here the temporal frames play the role of batch size
         preproc_output = self.prev_frame_info["prev_frames"].to(self.device)
-        T_context, CAM, *_ = preproc_output.shape
-        preproc_output = rearrange(preproc_output, 'T CAM c h w -> (T CAM) c h w')
+        # Here we unsqueeze because the input of the world model is (B, T, h, w)
+        visual_tokens = self.image_tokenizer(preproc_output).unsqueeze(0)
 
-        quant, _, (_, _, tokens) = self.tokenizer.encode(preproc_output)
-        *_, h, w = quant.shape
-        # visual_tokens = rearrange(tokens, '(T CAM h w) -> 1 T CAM h w', T=T, CAM=CAM, h=h, w=w)
-        print("DEBUG PURPOSES")
-        visual_tokens = rearrange(tokens, '(T CAM h w) -> CAM T h w', T=T_context, CAM=CAM, h=h, w=w)
+        # Get the command tokens
+        command_tokens = torch.tensor(self.prev_frame_info["prev_command"]).unsqueeze(0).to(self.device)
 
-        print("DEBUG PURPOSES")
-        T_future = 4
-        future_shape = (CAM, T_future - 1, h, w)  # We have to put -1 to account for the +1 in the generation process
-        future_visual_tokens = torch.zeros(future_shape, dtype=visual_tokens.dtype, device=visual_tokens.device)
+        # get the trajectory tokens
+        trajectory_tokens = None
+        if self.prev_frame_info["prev_actions"] is not None:
+            trajectory_tokens = self.prev_frame_info["prev_actions"].unsqueeze(0)
 
-        input_data = {
-            'visual_tokens': torch.cat((visual_tokens, future_visual_tokens), dim=1),
-            'context_end_index': T_context,
-            'images_paths': [],
-        }
+        # Get the predicted trajectory tokens
+        predicted_trajectory_tokens = self.world_model(visual_tokens, command_tokens, trajectory_tokens)
 
-        generated_data, *_ = self.model.predict_step(input_data, batch_idx=0)
-        print("DEBUG PURPOSES")
-        generated_visual_tokens = rearrange(generated_data["visual_tokens"], 'CAM T h w -> (CAM T) h w', T=T_future, CAM=CAM, h=h, w=w)
-        shape = (T_future * CAM, self.tokenizer.quantize.e_dim, h, w)
-        generated_frames = self.tokenizer.decode_code(generated_visual_tokens, shape=shape)
-        print("DEBUG PURPOSES")
-        generated_frames = rearrange(generated_frames, '(CAM T) c h w -> CAM T c h w', T=T_future, CAM=CAM)
-        aux_outputs = WMAuxOutputs(generated_frames=generated_frames)
-        return WMInferenceOutput(
-            trajectory=_format_trajs(generated_data["visual_tokens"]).cpu().numpy(),
-            aux_outputs=aux_outputs,
-        )
+        if self.prev_frame_info["prev_actions"] is None:
+            self.prev_frame_info["prev_actions"] = predicted_trajectory_tokens
+        else:
+            self.prev_frame_info["prev_actions"] = torch.cat(
+                [self.prev_frame_info["prev_actions"], predicted_trajectory_tokens], dim=0
+            )
+
+        # decode the trajectory tokens
+        trajectory = self.trajectory_tokenizer(predicted_trajectory_tokens)
+
+        return WMInferenceOutput(trajectory=_format_trajs(trajectory))
 
 
 def _format_trajs(trajs: torch.Tensor) -> torch.Tensor:
@@ -167,34 +132,33 @@ def _format_trajs(trajs: torch.Tensor) -> torch.Tensor:
     Transform the trajector from the WM to the format expected by the server.
     dummy function for now
     """
-    return trajs
-
-
-def _get_sample_input(nusc, sample) -> WMInferenceInput:
-    timestamp = sample["timestamp"]
-
-    # get cameras
-    camera_tokens = [sample["data"][camera_type] for camera_type in NUSCENES_CAM_ORDER]
-    # get the image filepaths
-    image_filepaths = [
-        nusc.get_sample_data(cam_token)[0] for cam_token in camera_tokens
-    ]
-
-    # load the images in rgb hwc format
-    images = []
-    for filepath in image_filepaths:
-        img = Image.open(filepath)
-        images.append(img)
-    images = np.array(images)
-
-    return WMInferenceInput(
-        imgs=images,
-        timestamp=timestamp,
-        command=0,  # right
-    )
+    return trajs[0, 1:].cpu().numpy()
 
 
 if __name__ == "__main__":
+    def _get_sample_input(nusc, sample) -> WMInferenceInput:
+        timestamp = sample["timestamp"]
+
+        # get cameras
+        camera_tokens = [sample["data"][camera_type] for camera_type in NUSCENES_CAM_ORDER]
+        # get the image filepaths
+        image_filepaths = [
+            nusc.get_sample_data(cam_token)[0] for cam_token in camera_tokens
+        ]
+
+        # load the images in rgb hwc format
+        images = []
+        for filepath in image_filepaths:
+            img = Image.open(filepath)
+            images.append(img)
+        images = np.array(images)
+
+        return WMInferenceInput(
+            imgs=images,
+            timestamp=timestamp,
+            command=0,  # right
+        )
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     runner = WMRunner(
         config_path="configs/inference_ncap.yaml",
@@ -204,10 +168,10 @@ if __name__ == "__main__":
 
     # only load this for testing
     from nuscenes.nuscenes import NuScenes
-    # import matplotlib.pyplot as plt
 
     # load the first surround-cam in nusc mini
-    nusc = NuScenes(version="v1.0-mini", dataroot="/model/data/nuscenes")
+    nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
+    # nusc = NuScenes(version="v1.0-mini", dataroot="/model/data/nuscenes")
     scene_name = "scene-0103"
     scene = [s for s in nusc.scene if s["name"] == scene_name][0]
     # get the first sample in the scene
@@ -215,4 +179,8 @@ if __name__ == "__main__":
 
     inference_input = _get_sample_input(nusc, sample)
     plan = runner.forward_inference(inference_input)
+    assert plan.trajectory.shape == (6, 2)
     plan = runner.forward_inference(inference_input)
+    assert plan.trajectory.shape == (6, 2)
+    plan = runner.forward_inference(inference_input)
+    assert plan.trajectory.shape == (6, 2)
