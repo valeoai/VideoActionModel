@@ -49,6 +49,7 @@ class CausalSelfAttention(nn.Module):
 
         self.nb_heads = nb_heads
         self.dim_model = dim_model
+        self.head_dim = dim_model // nb_heads
 
         ########### muP ###########
         self.attn_scale = attn_scale
@@ -78,15 +79,19 @@ class CausalSelfAttention(nn.Module):
         # will be KVCache object managed by inference context manager
         self.cache = None
 
-    def forward(self, x, attn_mask, start_pos: int = None):
+    def forward(self, x, attn_mask, start_pos: int = -1):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (dim_model)
 
         # calculate query, key, values for all heads in batch
-        x = self.c_attn(x)
+        qkv = self.c_attn(x)
 
         # split into qkv and heads
-        q, k, v = rearrange(x, "b seq (n nb_heads dim_head) -> n b nb_heads seq dim_head", n=3, nb_heads=self.nb_heads)
-
+        qkv = qkv.reshape(B, T, 3, self.nb_heads, self.head_dim)
+        # permute to (3, B, nb_heads, T, head_dim)
+        qkv = qkv.permute(2, 0, 3, 1, 4)
+        # unpack q, k, v
+        q, k, v = qkv[0], qkv[1], qkv[2]
+        
         # KV cache update
         if self.cache is not None:
             assert isinstance(start_pos, int), "start_pos must be an integer"
@@ -105,13 +110,15 @@ class CausalSelfAttention(nn.Module):
         y = torch.nn.functional.scaled_dot_product_attention(
             q, k, v,
             attn_mask=attn_mask,
-            dropout_p=self.dropout if self.training else 0,
+            dropout_p=self.dropout if self.training else 0.,
             is_causal=False,
             scale=attn_scaling,  # muP: attention scaling
         )
 
-        y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")  # re-assemble all head outputs side by side
-
+        # reshape back: (B, nb_heads, T, head_dim) -> (B, T, nb_heads * head_dim)
+        y = y.permute(0, 2, 1, 3).contiguous()
+        y = y.reshape(B, T, C)
+        
         # output projection
         y = self.resid_dropout(self.c_proj(y))
 
@@ -127,7 +134,7 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
         self.mlp = MLP(dim_model, bias, dropout, mlp_dim_mult)
 
-    def forward(self, x, attn_mask, start_pos=None):
+    def forward(self, x, attn_mask, start_pos: int = -1):
         x = x + self.attn(self.ln_1(x), attn_mask, start_pos=start_pos)
         x = x + self.mlp(self.ln_2(x))
         return x
@@ -391,7 +398,7 @@ class MuGPT2(nn.Module):
         visual_tokens_mask=None,
         command=None,
         inference=False,
-        start_pos=-1,
+        start_pos:int = -1,
     ):
         """
         Args:
