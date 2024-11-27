@@ -12,6 +12,7 @@ from lightning.pytorch.utilities import grad_norm
 
 import mup
 
+from world_model.inference import remove_prefix
 
 class NextTokenPredictor(LightningModule):
     """
@@ -22,18 +23,17 @@ class NextTokenPredictor(LightningModule):
     def __init__(
         self,
         network: DictConfig,
-        action_tokenizer: DictConfig,
         sequence_adapter: DictConfig,
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
         compile: bool = False,
         log_norm: bool = False,
-        mup_base_shapes = None
+        mup_base_shapes = None,
+        statedict_ckpt_path: str = None
     ) -> None:
         """
         Args:
             network: The configuration of the model to train.
-            action_tokenizer: The configuration for a callable that takes as input the ego motion data and produce discrete tokens.
             sequence_adapter: The configuration of an adapter the produce a unified sequence of tokens from visual and action tokens.
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
@@ -49,7 +49,6 @@ class NextTokenPredictor(LightningModule):
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
         self.network = hydra.utils.instantiate(network)
-        self.action_tokenizer = hydra.utils.instantiate(action_tokenizer)
         self.sequence_adapter = hydra.utils.instantiate(sequence_adapter)
         
         if mup_base_shapes is not None:
@@ -59,6 +58,11 @@ class NextTokenPredictor(LightningModule):
             self.network.apply(self.network._init_weights)
         else:
             print('Network NOT mu-Parametrized')
+            
+        if statedict_ckpt_path is not None:
+            checkpoint_data = torch.load(statedict_ckpt_path, map_location=self.device)
+            network_state_dict = remove_prefix(checkpoint_data['state_dict'], 'network')
+            self.network.load_pretrained_statedict(network_state_dict)
         
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
     
@@ -73,7 +77,7 @@ class NextTokenPredictor(LightningModule):
         
         visual_tokens = batch['visual_tokens']
         
-        action_tokens = self.action_tokenizer(**batch)
+        action_tokens = batch['trajectory_tokens']
         
         sequence_data = self.sequence_adapter(visual_tokens, action_tokens)
         
@@ -82,6 +86,8 @@ class NextTokenPredictor(LightningModule):
             'token_sequence': sequence_data['token_sequence'][:, :-1],
             'spatial_positions': sequence_data['spatial_positions'][:, :-1],
             'temporal_positions': sequence_data['temporal_positions'][:, :-1],
+            'visual_tokens_mask': sequence_data['visual_tokens_mask'][:, :-1],
+            'command': batch['commands']
         }
         
         # Create target_tokens by taking all but the first token (shifting by one)
@@ -110,12 +116,28 @@ class NextTokenPredictor(LightningModule):
         input_data, target_data = self.create_inputs_and_target(batch)
                 
         logits_sequence = self.network(**input_data)
-        visual_logits = logits_sequence[target_data['visual_tokens_mask']]
+        action_logits = logits_sequence[~target_data['visual_tokens_mask']]
         
-        visual_target_tokens = target_data['token_sequence'][target_data['visual_tokens_mask']]
+        action_target_tokens = target_data['token_sequence'][~target_data['visual_tokens_mask']]
         
-        loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
-
+        loss = 0
+        nb_action_codebooks = len(self.sequence_adapter.action_vocab_sizes)
+        start_idx = self.sequence_adapter.visual_vocab_size
+        for i in range(nb_action_codebooks):
+            vocab_size = self.sequence_adapter.action_vocab_sizes[i]
+            end_idx = start_idx + vocab_size
+            codebook_loss = self.cross_entropy_loss(
+                action_logits[i::nb_action_codebooks, start_idx:end_idx], 
+                action_target_tokens[i::nb_action_codebooks] - start_idx # shifting indices
+            )
+            start_idx = end_idx
+            
+            self.log(f"train/loss_codebook_{i}", codebook_loss, on_step=True, on_epoch=False, logger=True, prog_bar=False)
+            
+            loss += codebook_loss
+            
+        loss /= nb_action_codebooks
+        
         # log losses
         self.log("train/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
 
@@ -140,11 +162,11 @@ class NextTokenPredictor(LightningModule):
         input_data, target_data = self.create_inputs_and_target(batch)
                 
         logits_sequence = self.network(**input_data)
-        visual_logits = logits_sequence[target_data['visual_tokens_mask']]
+        action_logits = logits_sequence[~target_data['visual_tokens_mask']]
         
-        visual_target_tokens = target_data['token_sequence'][target_data['visual_tokens_mask']]
+        action_target_tokens = target_data['token_sequence'][~target_data['visual_tokens_mask']]
         
-        loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
+        loss = self.cross_entropy_loss(action_logits, action_target_tokens)
 
         # log losses at the end of epoch, rest is automatic
         self.log("val/loss", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
@@ -237,12 +259,7 @@ class NextTokenPredictor(LightningModule):
         else:
             scheduler.step(metric)
 
-    def on_save_checkpoint(self, checkpoint):
-        repo = git.Repo(search_parent_directories=True)
-        sha = repo.head.object.hexsha
-        
-        checkpoint["git_sha"] = sha
-        
+    def on_save_checkpoint(self, checkpoint):        
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = (
             self.__module__ + "." + self.__class__.__qualname__

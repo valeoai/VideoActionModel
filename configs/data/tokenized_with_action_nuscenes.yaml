@@ -1,0 +1,15 @@
+_target_: world_model.dataloader.tokenized_nuscenes.TokenizedNuScenesDataModule
+pickle_path: ${paths.pickle_path}
+quantized_visual_tokens_root_dir: ???
+sequence_length: 20
+trajectory_length: 6
+subsampling_factor: 1
+camera: 'CAM_FRONT'
+quantized_trajectory_root_dir: ???
+command_db_path: ???
+dataloader_params: 
+  batch_size: 1
+  num_workers: 1
+  pin_memory: True
+  prefetch_factor: 1
+  multiprocessing_context: fork # default, try spawn if forking becomes a bottleneck/issue
