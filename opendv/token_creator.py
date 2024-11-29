@@ -1,11 +1,10 @@
 import json
 import logging
-import os
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from glob import glob
 from pathlib import Path
 from queue import Empty, Queue
 from typing import Any, Dict, List, Tuple
@@ -17,11 +16,35 @@ import torchvision.transforms.v2.functional as TF
 from PIL import Image
 from torch import Tensor
 from tqdm import tqdm
+from colorlog import ColoredFormatter
 
 logger = logging.getLogger("OpenDV")
 Kwargs = Dict[str, Any]
 Data = Any
 DataPoints = List[Any]
+
+
+logger.handlers.clear()
+formatter = ColoredFormatter(
+    """
+    [%(cyan)s%(asctime)s%(reset)s]
+    [%(light_blue)s%(name)s%(reset)s]
+    [%(log_color)s%(levelname)s%(reset)s] - %(message)s
+    """,
+    datefmt="%Y-%m-%d %H:%M:%S",
+    reset=True,
+    log_colors={
+        "DEBUG": "cyan",
+        "INFO": "green",
+        "WARNING": "yellow",
+        "ERROR": "red",
+        "CRITICAL": "red",
+    },
+)
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(formatter)
+handler.setLevel(logging.INFO)
+logger.addHandler(handler)
 
 
 @dataclass
@@ -84,6 +107,7 @@ class TokenCreator:
         target_frame_rate: int,
         target_width: int,
         target_height: int,
+        remove_temp_frames: bool = True,
     ) -> None:
         """
         Initialize the dataset creator with separate processing and writing threads.
@@ -105,6 +129,8 @@ class TokenCreator:
         self.outdir = Path(outdir)
         self.rank = rank
         self.tmpdir = Path(tmpdir)
+
+        self.remove_temp_frames = remove_temp_frames
 
         assert num_ffmpeg_threads > 0, "num_processor_threads must be positive"
         assert num_writer_threads > 0, "num_writer_threads must be positive"
@@ -210,7 +236,6 @@ class TokenCreator:
                     self.frames_created += 1
                     if self.pbar_frames is not None:
                         self.pbar_frames.set_postfix({"frames_created": self.frames_created})
-                        self.pbar_frames.refresh()
 
                 frame_count += 1
                 next_frame_idx += frame_interval
@@ -263,7 +288,8 @@ class TokenCreator:
         for path, token in zip(frames.paths, tokens):
             token_path = self.outdir / Path(path).parent.stem / f"{Path(path).stem}.npy"
             out_tokens.append(Tokens(data=token.cpu().numpy(), path=token_path))
-            # Path(path).unlink()
+            if self.remove_temp_frames:
+                Path(path).unlink()
 
         return out_tokens
 
@@ -298,7 +324,6 @@ class TokenCreator:
                     # Update progress
                     with self.lock:
                         self.frames_tokenized += len(current_batch)
-                        self.pbar_tokens.refresh()
                         self.pbar_tokens.total = self.frames_created
                         self.pbar_tokens.update(len(current_batch))
 
@@ -333,7 +358,6 @@ class TokenCreator:
             # Update progress
             with self.lock:
                 self.written_tokens += 1
-                self.pbar_write.refresh()
                 self.pbar_write.total = self.frames_created
                 self.pbar_write.update(1)
 
@@ -421,43 +445,51 @@ class TokenCreator:
         return dataset_info
 
 
-# Example usage:
 if __name__ == "__main__":
+    import argparse
     import logging
 
-    logging.basicConfig(level=logging.DEBUG)
+    parser = argparse.ArgumentParser(description="OpenDV Token Creator")
+    parser.add_argument("--video_list", type=str, help="Path to the video list (json)")
+    parser.add_argument("--outdir", type=str, help="Output directory")
+    parser.add_argument("--rank", type=int, help="Rank of the process")
+    parser.add_argument("--tmpdir", type=str, help="Temporary directory for storing video clips")
+    parser.add_argument("--tokenizer_jit_path", type=str, help="Path to the tokenizer jit model")
+    parser.add_argument("--num_ffmpeg_threads", type=int, help="Number of threads for ffmpeg")
+    parser.add_argument("--num_writer_threads", type=int, help="Number of threads for writing to disk")
+    parser.add_argument("--frames_queue_size", type=int, help="Size of the frames queue")
+    parser.add_argument("--writer_queue_size", type=int, help="Size of the writer queue")
+    parser.add_argument("--batch_size", type=int, help="Batch size for tokenization")
+    parser.add_argument("--target_frame_rate", type=int, help="Target frame rate for ffmpeg")
+    parser.add_argument("--target_width", type=int, help="Target width for resizing")
+    parser.add_argument("--target_height", type=int, help="Target height for resizing")
+    parser.add_argument("--keep_temp_frames", action="store_true", help="Keep temporary frames after tokenization")
+    args = parser.parse_args()
 
-    video_list = glob(os.path.expanduser("~/data/*.mp4"))
-    video_list = video_list[:1]
-    logger.info(f"Found {len(video_list)} videos")
-    outdir = os.path.expanduser("~/data/OpenDV_Youtube/tokens")
-    rank = 0
-    tmpdir = os.path.expanduser("~/data/OpenDV_Youtube/tmp")
-    tokenizer_jit_path = os.path.expanduser("~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit")
+    # Load the video list
+    with open(args.video_list, "r") as f:
+        video_list = json.load(f)
 
-    num_ffmpeg_threads = 1
-    num_writer_threads = 1
-    frames_queue_size = 100000
-    writer_queue_size = 10000
-    batch_size = 12
-    target_frame_rate = 5
-    target_width = 512
-    target_height = 288
-
-    token_creator = TokenCreator(
+    # Create the dataset creator
+    creator = TokenCreator(
         video_list=video_list,
-        outdir=outdir,
-        rank=rank,
-        tmpdir=tmpdir,
-        tokenizer_jit_path=tokenizer_jit_path,
-        num_ffmpeg_threads=num_ffmpeg_threads,
-        num_writer_threads=num_writer_threads,
-        frames_queue_size=frames_queue_size,
-        writer_queue_size=writer_queue_size,
-        batch_size=batch_size,
-        target_frame_rate=target_frame_rate,
-        target_width=target_width,
-        target_height=target_height,
+        outdir=args.outdir,
+        rank=args.rank,
+        tmpdir=args.tmpdir,
+        tokenizer_jit_path=args.tokenizer_jit_path,
+        num_ffmpeg_threads=args.num_ffmpeg_threads,
+        num_writer_threads=args.num_writer_threads,
+        frames_queue_size=args.frames_queue_size,
+        writer_queue_size=args.writer_queue_size,
+        batch_size=args.batch_size,
+        target_frame_rate=args.target_frame_rate,
+        target_width=args.target_width,
+        target_height=args.target_height,
+        remove_temp_frames=not args.keep_temp_frames,
     )
 
-    token_creator.create_opendv_dataset()
+    # Create the dataset
+    dataset_info = creator.create_opendv_dataset()
+
+    for key, value in dataset_info.items():
+        print(f"{key}: {value}")

@@ -1,36 +1,65 @@
 # Preparing OpenDV dataset
 
-## Downloading OpenDV dataset
+## Download the dataset
+
+First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDriveLab/DriveAGI) repository to download the data.
+
+## Donwload the metadata
 
 ```bash
-wget
+wget https://www.rocq.inria.fr/cluster-willow/amiech/OpenDV_Youtube_metadata.json
 ```
 
-## Extracting frames
+## Prepare the dataset
+
+Then you need to create the following folder structure:
 
 ```bash
-mkdir -p './!{video_id}'
+OpenDV_Youtube
+|––––videos
+|----------Driver1
+|-----------------video1.mp4
+|-----------------video2.webm
+|-----------------...
+|----------Driver2
+|----------...
+|––––metadata.csv
+```
 
-ffmpeg -ss '!{discard_start}' \
-        -i './!{input_video}' \
-        -vf "fps=!{params.fps},scale=!{params.frame_w}:!{params.frame_h}" \
-        -q:v 2 \
-        './!{video_id}/f_%06d.jpg' &> frames.log
+## Tokenizer
 
-tail_end=$(cat frames.log | grep -Eo 'frame= *[0-9]+ *' | grep -Eo '[0-9]+' | tail -1)
-if [ -z "$tail_end" ]; then
-    echo "Error: Could not extract frames from !{input_video}" >&2
-    exit 1
-fi
-tail_start=$((tail_end - !{discard_end}*!{params.fps}))
-echo -e "tail_start: $tail_start\ntail_end: $tail_end\nlast_frame:\n$((tail_start-1))" > './!{video_id}/frame_count'
+Then download the llamagen tokenizer jit file:
 
-for i in $(seq -f "%06g" $tail_start $tail_end); do
-    rm "./!{video_id}/f_$i.jpg"
-done
+```bash
+wget https://www.rocq.inria.fr/cluster-willow/amiech/llamagen.jit
 ```
 
 ## Preparint the tokens
 
+If you have jq installed, you can use the following command to create the video list
+
 ```bash
+find ~/iveco/datasets_iveco_raw/OpenDV_Youtube/videos \
+-type f \( -name "*.mp4" -o -name "*.webm" \) -print0 | \
+jq -R -s 'split("\u0000")[:-1]' | \
+jq . > opendv/opendv_video.json
+```
+
+Then you can use the following command to create the tokens:
+
+```bash
+python opendv/token_creator.py \
+--video_list opendv/opendv_video.json \
+--outdir ~/data/OpenDV_Youtube/tokens \
+--rank 0 \
+--tmpdir ~/data/OpenDV_Youtube/tmp \
+--tokenizer_jit_path ~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit \
+--num_ffmpeg_threads 10 \
+--num_writer_threads 5 \
+--frames_queue_size 10000 \
+--writer_queue_size 10000 \
+--batch_size 64 \
+--target_frame_rate 5 \
+--target_width 512 \
+--target_height 288
 ```

@@ -1,3 +1,8 @@
 lightning
 hydra-core
 mup
+tqdm
+numpy
+pillow
+av
+colorlog
