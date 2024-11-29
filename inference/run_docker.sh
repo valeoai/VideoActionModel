@@ -1,6 +1,7 @@
 #################################################################
 # Edit the following paths to match your setup
 BASE_DIR='/mnt/data/shared/eramzi'
+CKPT_BASE_DIR='/mnt/iveco'
 # Model related stuff
 MODEL_NAME='NextTokenPredictor'
 MODEL_FOLDER=$BASE_DIR/$MODEL_NAME
@@ -14,10 +15,10 @@ TORCH_HOME='/.cache'
 MODEL_DOCKER_NAME='ncap_model_debug'
 
 # Tokenizer paths
-IMAGE_TOKENIZER_PATH=~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit
-TRAJECTORY_TOKENIZER_PATH=~/iveco/scratch_iveco/world_model_JZGC4/jit_models/trajectory_decoder_RFSQ_2levels_8x5x5x5.jit
+IMAGE_TOKENIZER_PATH=$CKPT_BASE_DIR/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit
+TRAJECTORY_TOKENIZER_PATH=$CKPT_BASE_DIR/scratch_iveco/world_model_JZGC4/jit_models/trajectory_decoder_RFSQ_2levels_8x5x5x5.jit
 # WM paths
-WM_BASE_LOGDIR=~iveco/scratch_iveco/world_model_JZGC4/model_logs_and_checkpoints/Finetune_opendv_dim2048_part3_imitation_learning_nuscenes_2epoch_dropLR
+WM_BASE_LOGDIR=$CKPT_BASE_DIR/scratch_iveco/world_model_JZGC4/model_logs_and_checkpoints/Finetune_opendv_dim2048_part3_imitation_learning_nuscenes_2epoch_dropLR
 WM_CKPT_PATH=$WM_BASE_LOGDIR/"checkpoints/step=0000000056_fused.pt"
 WM_CONFIG_PATH=$WM_BASE_LOGDIR/"tensorboard/version_0/hparams.yaml"
 

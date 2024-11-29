@@ -157,3 +157,4 @@ train.log
 /notebooks/
 
 tmp/
+weights
