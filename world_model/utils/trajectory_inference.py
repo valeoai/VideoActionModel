@@ -68,7 +68,7 @@ def load_trajectory_model(
     return network, sequence_adapter
 
 
-class WorldModelInference(nn.Module):
+class WorldModelTrajectoryInference(nn.Module):
     def __init__(self, network, sequence_adapter, sampler=None):
         super().__init__()
 

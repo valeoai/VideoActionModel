@@ -8,7 +8,7 @@ import torch
 from PIL import Image
 
 from omegaconf import OmegaConf
-from world_model.utils.trajectory_inference import load_trajectory_model, WorldModelInference
+from world_model.utils.trajectory_inference import load_trajectory_model, WorldModelTrajectoryInference
 from world_model.dataloader.components.transforms import CropAndResizeTransform
 
 
@@ -59,7 +59,7 @@ class WMRunner:
             mup_base_shapes_path=self.inference_config.mup_base_shapes_path,
             device=device
         )
-        self.world_model = WorldModelInference(network=network, sequence_adapter=sequence_adapter)
+        self.world_model = WorldModelTrajectoryInference(network=network, sequence_adapter=sequence_adapter)
 
         self.device = device
         self.top_crop = self.inference_config.top_crop
@@ -170,8 +170,8 @@ if __name__ == "__main__":
     from nuscenes.nuscenes import NuScenes
 
     # load the first surround-cam in nusc mini
-    nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
-    # nusc = NuScenes(version="v1.0-mini", dataroot="/model/data/nuscenes")
+    # nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
+    nusc = NuScenes(version="v1.0-mini", dataroot="/model/data/nuscenes")
     scene_name = "scene-0103"
     scene = [s for s in nusc.scene if s["name"] == scene_name][0]
     # get the first sample in the scene
@@ -184,3 +184,4 @@ if __name__ == "__main__":
     assert plan.trajectory.shape == (6, 2)
     plan = runner.forward_inference(inference_input)
     assert plan.trajectory.shape == (6, 2)
+    print("All tests passed!")
