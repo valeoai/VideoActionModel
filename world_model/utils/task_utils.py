@@ -1,18 +1,18 @@
 import warnings
 from importlib.util import find_spec
-from typing import Any, Callable, Dict, Optional, Tuple, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 from omegaconf import DictConfig
 
-from world_model.utils.info_printing import print_config_tree
 from world_model.utils.cmd_line_logging import RankedLogger
+from world_model.utils.info_printing import print_config_tree
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
 
 def extras(
-    config: DictConfig, 
-    print_order: Sequence[str] = [], 
+    config: DictConfig,
+    print_order: Sequence[str] = [],
 ) -> None:
     """Applies optional utilities before the task is started.
 

@@ -1,0 +1,11 @@
+[tool.black]
+line-length = 127
+target-version = ['py39']
+include = '\.py?$'
+
+[tool.isort]
+atomic = true
+profile = "black"
+line_length = 127
+skip_gitignore = true
+# sort_reexports = true

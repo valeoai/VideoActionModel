@@ -1,6 +1,13 @@
-#!/usr/bin/env python
-
 from setuptools import find_packages, setup
+
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+with open('requirements.txt') as open_file:
+    install_requires = open_file.read()
+
+with open('dev_requirements.txt') as open_file:
+    install_requires_dev = open_file.read()
 
 setup(
     name="world_model",
@@ -9,13 +16,15 @@ setup(
     author="",
     author_email="florent.bartoccioni@valeo.com",
     url="https://github.com/valeoai/NextTokenPredictor",
-    install_requires=["lightning", "hydra-core"],
     packages=find_packages(),
-    # use this to customize global commands available in the terminal after installing the package
-    entry_points={
-        "console_scripts": [
-            "world_model_train = world_model.train:main",
-            "world_model_eval = world_model.eval:main",
-        ]
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: TO DEFINE",
+        "Operating System :: OS Independent",
+    ],
+    python_requires=">=3.0",
+    install_requires=install_requires,
+    extras_require={
+        'dev': install_requires_dev,
     },
 )

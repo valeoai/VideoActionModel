@@ -29,7 +29,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     Args:
         config: A DictConfig configuration composed by Hydra.
-        
+
     Returns:
         A tuple with metrics and dict with all instantiated objects.
     """
@@ -42,10 +42,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     log.info(f"Instantiating model <{config.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(
-        config.model,
-        optimizer_conf=config.optimizer,
-        scheduler_conf=config.scheduler,
-        _recursive_=False
+        config.model, optimizer_conf=config.optimizer, scheduler_conf=config.scheduler, _recursive_=False
     )
 
     log.info("Instantiating callbacks...")
@@ -73,7 +70,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     if config.get("train"):
         log.info("Starting training!")
         trainer.fit(model=model, datamodule=datamodule, ckpt_path=config.get("ckpt_path"))
-        
+
         # Print path to best checkpoint
         if not config.trainer.get("fast_dev_run"):
             log.info(f"Best model ckpt at {trainer.checkpoint_callback.best_model_path}")
@@ -89,7 +86,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         else:
             log.info(f"Best ckpt path: {ckpt_path}")
         trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
-        
+
     test_metrics = trainer.callback_metrics
 
     # merge train and test metrics
@@ -104,31 +101,29 @@ def main(config: DictConfig) -> Optional[float]:
 
     Args:
         config: DictConfig configuration composed by Hydra.
-        
+
     Returns
         Optional[float] with optimized metric value.
     """
     # apply extra utilities
     # (e.g. print config tree, etc.)
     extras(
-        config, 
-        print_order = (
+        config,
+        print_order=(
             "data",
             "model",
             "callbacks",
             "logger",
             "trainer",
             "paths",
-        )
+        ),
     )
 
     # train the model
     metric_dict, _ = train(config)
 
     # safely retrieve metric value for hydra-based hyperparameter optimization
-    metric_value = get_metric_value(
-        metric_dict=metric_dict, metric_name=config.get("optimized_metric")
-    )
+    metric_value = get_metric_value(metric_dict=metric_dict, metric_name=config.get("optimized_metric"))
 
     # return optimized metric
     return metric_value

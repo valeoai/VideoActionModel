@@ -6,31 +6,27 @@ import torch
 import torchvision
 from einops import rearrange
 
+
 class Detach:
     def __call__(self, image: torch.Tensor) -> np.array:
-        return  image.detach().cpu()
-    
+        return image.detach().cpu()
+
+
 class ToChannelsLast:
     def __call__(self, image):
-        return  rearrange(image, 'c ... -> ... c')
-    
+        return rearrange(image, "c ... -> ... c")
+
 
 class NormalizeInverse:
     """
-    Expect image input to be in [-1;1] rescale in [0;1] 
+    Expect image input to be in [-1;1] rescale in [0;1]
     """
-    
+
     def __call__(self, image):
-        return  (image + 1) / 2
+        return (image + 1) / 2
 
 
-denormalize_img = torchvision.transforms.Compose(
-    (
-        Detach(),
-        NormalizeInverse(),
-        ToChannelsLast()
-    )
-)
+denormalize_img = torchvision.transforms.Compose((Detach(), NormalizeInverse(), ToChannelsLast()))
 
 
 def gridplot(img_list, titles=[], cmaps=[], cols=2, figsize=(12, 12)):
@@ -53,7 +49,7 @@ def gridplot(img_list, titles=[], cmaps=[], cols=2, figsize=(12, 12)):
         if img is None:
             ax.set_visible(False)
             continue
-        
+
         if img.ndim == 2 and cmap is None:
             cmap = "gray"
 
@@ -73,7 +69,7 @@ def prepare_images_to_log(learning_phase, batch, preds, batch_idx, log_images_in
 
     prefix = f"{learning_phase}/batch_{batch_idx}"
 
-    img_list = [denormalize_img(preds[i]), denormalize_img(batch['images'][i])]
+    img_list = [denormalize_img(preds[i]), denormalize_img(batch["images"][i])]
     titles = ["estimation", "GT"]
     cmaps = [None, None]
 

@@ -15,12 +15,10 @@ MuReadout
 MuSharedReadout
 normal_ init
 """
+
 import torch
 import torch.nn as nn
-
 from einops import rearrange
-
-
 from mup import MuReadout, MuSharedReadout, normal_
 
 
@@ -69,7 +67,7 @@ class CausalSelfAttention(nn.Module):
 
         self.dropout = dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
         if not self.flash:
             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
@@ -103,7 +101,9 @@ class CausalSelfAttention(nn.Module):
 
         # efficient attention using Flash Attention CUDA kernels
         y = torch.nn.functional.scaled_dot_product_attention(
-            q, k, v,
+            q,
+            k,
+            v,
             attn_mask=attn_mask,
             dropout_p=self.dropout if self.training else 0,
             is_causal=False,
@@ -147,6 +147,7 @@ class MuGPT2(nn.Module):
         dropout_rate: dropout rate
         bias: True: bias in Linears. False: a bit better and faster
     """
+
     def __init__(
         self,
         embedding_dim: int = 256,
@@ -162,7 +163,7 @@ class MuGPT2(nn.Module):
         output_tied: bool = True,
         output_scale: float = 1.0,
         attn_scale: float = 1.0,
-        learnable_gains: bool = False
+        learnable_gains: bool = False,
     ) -> None:
 
         super().__init__()
@@ -183,17 +184,30 @@ class MuGPT2(nn.Module):
         self.nb_tokens_per_timestep = nb_tokens_per_timestep
         self.block_size = nb_timesteps * nb_tokens_per_timestep
 
-        self.transformer = nn.ModuleDict(dict(
-            wie=nn.Embedding(vocabulary_size, embedding_dim),         # token embeddings
-            wse=nn.Embedding(nb_tokens_per_timestep, embedding_dim),  # spatial position embeddings
-            wte=nn.Embedding(nb_timesteps, embedding_dim),            # temporal position embeddings
-            drop=nn.Dropout(dropout_rate),
-            h=nn.ModuleList([
-                Block(embedding_dim, nb_heads, bias, dropout_rate, self.block_size, attn_scale, learnable_gains, mlp_dim_mult)
-                for _ in range(nb_layers)
-            ]),
-            ln_f=nn.LayerNorm(embedding_dim, elementwise_affine=learnable_gains),
-        ))
+        self.transformer = nn.ModuleDict(
+            dict(
+                wie=nn.Embedding(vocabulary_size, embedding_dim),  # token embeddings
+                wse=nn.Embedding(nb_tokens_per_timestep, embedding_dim),  # spatial position embeddings
+                wte=nn.Embedding(nb_timesteps, embedding_dim),  # temporal position embeddings
+                drop=nn.Dropout(dropout_rate),
+                h=nn.ModuleList(
+                    [
+                        Block(
+                            embedding_dim,
+                            nb_heads,
+                            bias,
+                            dropout_rate,
+                            self.block_size,
+                            attn_scale,
+                            learnable_gains,
+                            mlp_dim_mult,
+                        )
+                        for _ in range(nb_layers)
+                    ]
+                ),
+                ln_f=nn.LayerNorm(embedding_dim, elementwise_affine=learnable_gains),
+            )
+        )
 
         if output_tied:
             self.lm_head = MuSharedReadout(self.transformer.wie.weight, bias=False, output_mult=output_scale)
@@ -232,7 +246,7 @@ class MuGPT2(nn.Module):
         return n_params
 
     def _init_c_proj_residual(self, module, is_mlp):
-        '''
+        """
         Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
 
             > A modified initialization which accounts for the accumulation on the residual path with model depth. Scale
@@ -242,7 +256,7 @@ class MuGPT2(nn.Module):
         This is combined with the muP initilization that is scaling init_std by 1/sqrt(width).
 
         Note: for the MLP c_proj, the scaling is 1/sqrt(width * mlp_hidden_mult)
-        '''
+        """
         # times 2 because in a block there are 2 residual paths, attn & mlp
         scaling = 2 * self.nb_layers * self.embedding_dim
 
@@ -252,11 +266,11 @@ class MuGPT2(nn.Module):
         depth_std = self.init_std * scaling**-0.5
 
         for p_name, p in module.named_parameters():
-            if p_name.endswith('c_proj.weight'):
+            if p_name.endswith("c_proj.weight"):
                 p.data.normal_(mean=0.0, std=depth_std)
 
     def _init_weights(self, module):
-        '''
+        """
         This function is called using model.apply(model._init_weights)
 
         This will apply `_init_weights` recursively to every submodule.
@@ -285,7 +299,7 @@ class MuGPT2(nn.Module):
         We use this fact apply specific initialization rules in some modules.
         For example the init scaling of the MLP hidden nn.Linear layer is different
         than other nn.Linear layers.
-        '''
+        """
 
         # MuReadout zero init
         if isinstance(module, MuReadout) and not self.output_tied:
@@ -296,7 +310,7 @@ class MuGPT2(nn.Module):
 
         elif isinstance(module, nn.Linear):
 
-            if hasattr(module.weight, 'infshape'):
+            if hasattr(module.weight, "infshape"):
                 normal_(module.weight, mean=0.0, std=self.init_std)
             else:
 
@@ -328,7 +342,7 @@ class MuGPT2(nn.Module):
 
             # if attention uses, nn.Linear change init in first dim
             # if using Conv1D, change init in last dim
-            module.c_attn.weight.data[:fanout // 3, :] = 0
+            module.c_attn.weight.data[: fanout // 3, :] = 0
 
             self._init_c_proj_residual(module, is_mlp=False)
 
@@ -351,8 +365,12 @@ class MuGPT2(nn.Module):
             temporal_positions: A tensor indicating the temporal position of each token in the sequence.
                 example: [0,0,0,0,1,1,1,1]
         """
-        assert spatial_positions.max() < self.nb_tokens_per_timestep, f"spatial_positions.max()={spatial_positions.max()} >= self.nb_tokens_per_timestep={self.nb_tokens_per_timestep}"
-        assert temporal_positions.max() < self.nb_timesteps, f"temporal_positions.max()={temporal_positions.max()} >= self.nb_timesteps={self.nb_timesteps}"
+        assert (
+            spatial_positions.max() < self.nb_tokens_per_timestep
+        ), f"spatial_positions.max()={spatial_positions.max()} >= self.nb_tokens_per_timestep={self.nb_tokens_per_timestep}"
+        assert (
+            temporal_positions.max() < self.nb_timesteps
+        ), f"temporal_positions.max()={temporal_positions.max()} >= self.nb_timesteps={self.nb_timesteps}"
 
         # compute spatio-temporal position embeddings
         spatial_pos_emb = self.transformer.wse(spatial_positions)
@@ -372,9 +390,9 @@ class MuGPT2(nn.Module):
                 # only for the new sequence. Thus, the matrix of scores is of size
                 # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
                 # j > cache_len + i, since row i corresponds to token cache_len + i.
-                attn_mask = torch.hstack(
-                    [torch.zeros((seqlen, start_pos), device=token_sequence.device), attn_mask]
-                ).type_as(emb_in)
+                attn_mask = torch.hstack([torch.zeros((seqlen, start_pos), device=token_sequence.device), attn_mask]).type_as(
+                    emb_in
+                )
         else:
             attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
 

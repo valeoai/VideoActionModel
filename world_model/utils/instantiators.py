@@ -56,6 +56,7 @@ def instantiate_loggers(logger_config: DictConfig) -> List[Logger]:
 
     return logger
 
+
 def instantiate_samplers(samplers_config: DictConfig) -> List[Sampler]:
     """Instantiates samplers from config.
 

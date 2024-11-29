@@ -1,8 +1,14 @@
-from typing import Dict, Any
+from typing import Any, Dict
+
 
 class WarmupStableDrop:
     def __init__(
-        self, optimizer, warmup_iter, end_iter, drop_iter=0, num_iter=0,
+        self,
+        optimizer,
+        warmup_iter,
+        end_iter,
+        drop_iter=0,
+        num_iter=0,
     ) -> None:
         self.warmup_iter = warmup_iter
         self.end_iter = end_iter
@@ -15,9 +21,9 @@ class WarmupStableDrop:
             self.start_lr.append(group["lr"])
 
         self.step(self.num_iter)
-        
+
     def state_dict(self) -> Dict[str, Any]:
-        return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
+        return {key: value for key, value in self.__dict__.items() if key != "optimizer"}
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         self.__dict__.update(state_dict)
@@ -29,13 +35,13 @@ class WarmupStableDrop:
         return base_lr
 
     def get_lr_drop(self, num_iter, base_lr):
-        progress = (self.end_iter - num_iter) / self.drop_iter
+        # progress = (self.end_iter - num_iter) / self.drop_iter
         return base_lr * (0.1 + max(0.9 * (self.end_iter - num_iter) / self.drop_iter, 0))
 
     def get_lr(self, base_lr):
-        
+
         assert self.num_iter >= 0
-        
+
         if self.num_iter < self.warmup_iter and self.warmup_iter > 0:
             return self.get_lr_warmup(self.num_iter, base_lr, self.warmup_iter)
 

@@ -1,11 +1,15 @@
 import os
+import pickle
+from typing import List, Optional, Tuple
+
 from lightning import LightningDataModule
 from lightning_utilities.core.rank_zero import rank_zero_only
 from torch.utils.data import DataLoader
-from typing import Optional, List, Tuple
-import pickle
 
-from world_model.dataloader.components.pickled_random_tokenized_sequence_opendv import PickledRandomTokenizedSequenceOpenDVDataset
+from world_model.dataloader.components.pickled_random_tokenized_sequence_opendv import (
+    PickledRandomTokenizedSequenceOpenDVDataset,
+)
+
 
 class PickledTokenizedSequenceOpenDVDataModule(LightningDataModule):
     def __init__(
@@ -28,7 +32,7 @@ class PickledTokenizedSequenceOpenDVDataModule(LightningDataModule):
         self.sequence_length = sequence_length
         self.batch_size = batch_size
         self.num_workers = num_workers
-    
+
     def check_video_existence(self, video_list: List[str]) -> Tuple[List[str], List[str]]:
         existing_videos = []
         missing_videos = []
@@ -39,7 +43,7 @@ class PickledTokenizedSequenceOpenDVDataModule(LightningDataModule):
             else:
                 missing_videos.append(video)
         return existing_videos, missing_videos
-    
+
     @rank_zero_only
     def print_missing_videos(self, missing_videos: List[str]) -> None:
         if missing_videos:
@@ -51,50 +55,34 @@ class PickledTokenizedSequenceOpenDVDataModule(LightningDataModule):
 
     def setup(self, stage: Optional[str] = None):
         # Read train and validation video lists
-        with open(self.video_list_path, 'r') as f:
+        with open(self.video_list_path, "r") as f:
             video_list = [line.strip() for line in f.readlines()]
         video_list, missing_videos = self.check_video_existence(video_list)
-        self.print_missing_videos(missing_videos) # Print missing videos only on rank 0
-        with open(self.pickle_path, 'rb') as f:
+        self.print_missing_videos(missing_videos)  # Print missing videos only on rank 0
+        with open(self.pickle_path, "rb") as f:
             video_windows = pickle.load(f)
 
         # Create datasets
-        if stage == 'fit' or stage is None:
+        if stage == "fit" or stage is None:
             self.train_dataset = PickledRandomTokenizedSequenceOpenDVDataset(
-                self.data_root_dir,
-                video_list,
-                video_windows,
-                self.sequence_length
+                self.data_root_dir, video_list, video_windows, self.sequence_length
             )
-            
+
             if self.val_video_list_path:
-                with open(self.val_video_list_path, 'r') as f:
+                with open(self.val_video_list_path, "r") as f:
                     val_video_list = [line.strip() for line in f.readlines()]
                 val_video_list, missing_val_videos = self.check_video_existence(val_video_list)
                 self.print_missing_videos(missing_val_videos)
-                
-                with open(self.val_pickle_path, 'rb') as f:
+
+                with open(self.val_pickle_path, "rb") as f:
                     val_video_windows = pickle.load(f)
-                
+
                 self.val_dataset = PickledRandomTokenizedSequenceOpenDVDataset(
-                    self.data_root_dir,
-                    val_video_list,
-                    val_video_windows,
-                    self.sequence_length
+                    self.data_root_dir, val_video_list, val_video_windows, self.sequence_length
                 )
 
     def train_dataloader(self):
-        return DataLoader(
-            self.train_dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers
-        )
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(
-            self.val_dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers
-        )
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
