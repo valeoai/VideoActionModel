@@ -154,6 +154,7 @@ train.log
 # Aim logging
 .aim
 
-/notebooks/
-
+# Local
+notebooks/
 tmp/
+weights
