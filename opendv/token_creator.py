@@ -1,23 +1,22 @@
 import json
 import logging
+import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from glob import glob
 from pathlib import Path
 from queue import Empty, Queue
-from threading import Thread
 from typing import Any, Dict, List, Tuple
-import signal
-import os
 
 import av
 import numpy as np
 import torch
+import torchvision.transforms.v2.functional as TF
+from PIL import Image
 from torch import Tensor
 from tqdm import tqdm
-from PIL import Image
-import torchvision.transforms.v2.functional as TF
 
 logger = logging.getLogger("OpenDV")
 Kwargs = Dict[str, Any]
@@ -64,7 +63,7 @@ def preprocess_batch_of_frames(frames: List[str]) -> Tensor:
 
     frames = [transform(frame) for frame in frames]
     frames = torch.stack(frames)
-    return frames.to('cuda', non_blocking=True)
+    return frames.to("cuda", non_blocking=True)
 
 
 class TokenCreator:
@@ -210,7 +209,7 @@ class TokenCreator:
                 with self.lock:
                     self.frames_created += 1
                     if self.pbar_frames is not None:
-                        self.pbar_frames.set_postfix({'frames_created': self.frames_created})
+                        self.pbar_frames.set_postfix({"frames_created": self.frames_created})
                         self.pbar_frames.refresh()
 
                 frame_count += 1
@@ -339,42 +338,75 @@ class TokenCreator:
                 self.pbar_write.update(1)
 
     def create_opendv_dataset(self) -> Tuple[Dict[str, int], List[str]]:
-        """Create the dataset using concurrent processing and writing."""
+        """Create the dataset using concurrent processing and writing with ThreadPoolExecutor."""
         # Initialize progress bars
         self.pbar_frames = tqdm(total=len(self.videos), desc="[OpenDV preprocess] Extracting frames from videos")
         self.pbar_tokens = tqdm(total=9e9, desc="[OpenDV preprocess] Encoding tokens")
         self.pbar_write = tqdm(total=9e9, desc="[OpenDV preprocess] Writing tokens to disk")
 
-        # Create save threads
-        ffmpeg_threads = []
-        for _ in range(self.num_ffmpeg_threads):
-            thread = Thread(target=self.ffmpeg_worker)
-            thread.start()
-            ffmpeg_threads.append(thread)
+        try:
+            # Create thread pools for each task type
+            with (
+                ThreadPoolExecutor(max_workers=self.num_ffmpeg_threads) as frame_executor,
+                ThreadPoolExecutor(max_workers=1) as tokenizer_executor,
+                ThreadPoolExecutor(max_workers=self.num_writer_threads) as writer_executor,
+            ):
 
-        # Create the tokenizer thread
-        tokenizer_thread = Thread(target=self.tokenize_worker)
-        tokenizer_thread.start()
+                # Submit frame extraction tasks
+                frame_futures = []
+                for video in self.videos:
+                    future = frame_executor.submit(self.create_frames_from_video, video)
+                    frame_futures.append(future)
 
-        # Create the writer thread
-        writer_threads = []
-        for _ in range(self.num_writer_threads):
-            thread = Thread(target=self.save_tokens)
-            thread.start()
-            writer_threads.append(thread)
+                # Start tokenizer task
+                tokenizer_future = tokenizer_executor.submit(self.tokenize_worker)
 
-        # # blocks the main thread until the all thread has completed
-        for thread in ffmpeg_threads:
-            thread.join()
+                # Start writer tasks
+                writer_futures = []
+                for _ in range(self.num_writer_threads):
+                    future = writer_executor.submit(self.save_tokens)
+                    writer_futures.append(future)
 
-        tokenizer_thread.join()
+                # Wait for frame extraction to complete and handle any exceptions
+                for future in as_completed(frame_futures):
+                    try:
+                        future.result()  # This will raise any exceptions that occurred
+                    except Exception as e:
+                        logger.error(f"Frame extraction failed: {str(e)}")
 
-        for thread in writer_threads:
-            thread.join()
+                # Signal that frame extraction is complete
+                self.all_frames_extracted.set()
 
-        self.pbar_frames.close()
-        self.pbar_tokens.close()
-        self.pbar_write.close()
+                # Wait for tokenizer to complete
+                try:
+                    tokenizer_future.result()
+                except Exception as e:
+                    logger.error(f"Tokenizer failed: {str(e)}")
+
+                # Signal that tokenization is complete
+                self.processing_complete.set()
+
+                # Wait for writers to complete
+                for future in as_completed(writer_futures):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        logger.error(f"Writer failed: {str(e)}")
+
+        except Exception as e:
+            logger.error(f"Dataset creation failed: {str(e)}")
+            raise
+
+        finally:
+            # Cleanup
+            self.pbar_frames.close()
+            self.pbar_tokens.close()
+            self.pbar_write.close()
+
+            # Make sure all event flags are set to prevent hanging
+            self.all_frames_extracted.set()
+            self.processing_complete.set()
+            self.writting_complete.set()
 
         # Write dataset info
         dataset_info = {
