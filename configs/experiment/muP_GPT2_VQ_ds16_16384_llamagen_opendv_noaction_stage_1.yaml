@@ -52,7 +52,7 @@ model:
     mlp_dim_mult: 4
     vocabulary_size: 16385 # 16384 + 1 | visual_vocab_size + sum(action_vocab_sizes)
     nb_timesteps: ${data.sequence_length}
-    nb_tokens_per_timestep: 578 # 18*32 + 2 = 576 + 2 = 578| visual tokens + action embeddings 
+    nb_tokens_per_timestep: 578 # 18*32 + 2 = 576 + 2 = 578| visual tokens + action embeddings
     dropout_rate: 0.0
     init_std: 0.02
     bias: False

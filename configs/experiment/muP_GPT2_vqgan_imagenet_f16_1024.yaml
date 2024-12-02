@@ -37,7 +37,7 @@ data:
     batch_size: 2
     num_workers: 7
     prefetch_factor: 1
-    multiprocessing_context: spawn 
+    multiprocessing_context: spawn
 
 paths:
   quantized_nuscenes_root_dir: /lus/work/CT10/cin4181/SHARED/datasets_processed/nuplan_tokenized/VQGAN_ImageNet_f16_1024
