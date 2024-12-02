@@ -18,6 +18,8 @@ from PIL import Image
 from torch import Tensor
 from tqdm import tqdm
 
+from world_model.opendv.struct_utils import save_struct
+
 logger = logging.getLogger("OpenDV")
 Kwargs = Dict[str, Any]
 Data = Any
@@ -181,6 +183,7 @@ class TokenCreator:
         self.tokenizer = torch.jit.load(tokenizer_jit_path)
         self.tokenizer.eval()
         self.tokenizer.cuda()
+        self.vocabulary_size = self.tokenizer.vocabulary_size
 
         # Progress bars for processing and writing
         self.pbar_frames = None
@@ -248,27 +251,6 @@ class TokenCreator:
             logger.error(f"Error extracting frames from {video.path}: {str(e)}")
         finally:
             container.close()
-
-    def ffmpeg_worker(self) -> None:
-        """Submit clips to the processor thread pool."""
-        while True:
-            try:
-                video = self.video_queue.get()
-            except Empty:
-                time.sleep(1)
-                self.all_frames_extracted.set()
-                break
-
-            try:
-                _ = self.create_frames_from_video(video)
-            except Exception as e:
-                logger.error(f"Error processing video {video.path}: {str(e)}")
-
-            self.video_queue.task_done()
-            # Update progress
-            with self.lock:
-                self.video_processed += 1
-                self.pbar_frames.update(1)
 
     def tokenize_frames(self, frames: FramesBatch) -> Tokens:
         """
@@ -350,7 +332,7 @@ class TokenCreator:
             try:
                 path = Path(token.path)
                 path.parent.mkdir(parents=True, exist_ok=True)
-                np.save(path, token.data, allow_pickle=False)
+                save_struct(token.data, path, self.vocabulary_size)
             except Exception as e:
                 logger.error(f"Error saving token {path}: {str(e)}")
 
@@ -400,6 +382,7 @@ class TokenCreator:
 
                 # Signal that frame extraction is complete
                 self.all_frames_extracted.set()
+                logger.info("All frames extracted")
 
                 # Wait for tokenizer to complete
                 try:
