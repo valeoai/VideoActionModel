@@ -20,18 +20,19 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 from mup import MuReadout, MuSharedReadout, normal_
+from torch import Tensor
 
 
 class MLP(nn.Module):
 
-    def __init__(self, dim_model, bias, dropout, hidden_dim_mult=4):
+    def __init__(self, dim_model: int, bias: bool, dropout: float, hidden_dim_mult: int = 4) -> None:
         super().__init__()
         self.c_fc = nn.Linear(dim_model, hidden_dim_mult * dim_model, bias=bias)
         self.gelu = nn.GELU()
         self.c_proj = nn.Linear(hidden_dim_mult * dim_model, dim_model, bias=bias)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         x = self.c_fc(x)
         x = self.gelu(x)
         x = self.c_proj(x)
@@ -41,7 +42,7 @@ class MLP(nn.Module):
 
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, dim_model, nb_heads, bias, dropout, block_size, attn_scale):
+    def __init__(self, dim_model: int, nb_heads: int, bias: bool, dropout: float, block_size: int, attn_scale: float) -> None:
         super().__init__()
         assert dim_model % nb_heads == 0, "dim_model must be divisible by nb_heads"
 
@@ -76,7 +77,7 @@ class CausalSelfAttention(nn.Module):
         # will be KVCache object managed by inference context manager
         self.cache = None
 
-    def forward(self, x, attn_mask, start_pos: int = None):
+    def forward(self, x: Tensor, attn_mask: Tensor, start_pos: int = -1) -> Tensor:
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (dim_model)
 
         # calculate query, key, values for all heads in batch
@@ -120,14 +121,24 @@ class CausalSelfAttention(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, dim_model, nb_heads, bias, dropout, block_size, attn_scale, learnable_gains=False, mlp_dim_mult=4):
+    def __init__(
+        self,
+        dim_model: int,
+        nb_heads: int,
+        bias: bool,
+        dropout: float,
+        block_size: int,
+        attn_scale: float,
+        learnable_gains: bool = False,
+        mlp_dim_mult: int = 4,
+    ) -> None:
         super().__init__()
         self.ln_1 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
         self.attn = CausalSelfAttention(dim_model, nb_heads, bias, dropout, block_size, attn_scale)
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
         self.mlp = MLP(dim_model, bias, dropout, mlp_dim_mult)
 
-    def forward(self, x, attn_mask, start_pos=None):
+    def forward(self, x: Tensor, attn_mask: Tensor, start_pos: int = -1) -> Tensor:
         x = x + self.attn(self.ln_1(x), attn_mask, start_pos=start_pos)
         x = x + self.mlp(self.ln_2(x))
         return x
@@ -230,7 +241,7 @@ class MuGPT2(nn.Module):
         # report number of parameters
         print("number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
-    def get_num_params(self, non_embedding=True):
+    def get_num_params(self, non_embedding: bool = True) -> int:
         """
         Return the number of parameters in the model.
         For non-embedding count (default), the position embeddings get subtracted.
@@ -245,7 +256,7 @@ class MuGPT2(nn.Module):
             n_params -= self.transformer.wie.weight.numel()
         return n_params
 
-    def _init_c_proj_residual(self, module, is_mlp):
+    def _init_c_proj_residual(self, module: nn.Module, is_mlp: bool) -> None:
         """
         Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
 
@@ -269,7 +280,7 @@ class MuGPT2(nn.Module):
             if p_name.endswith("c_proj.weight"):
                 p.data.normal_(mean=0.0, std=depth_std)
 
-    def _init_weights(self, module):
+    def _init_weights(self, module: nn.Module) -> None:
         """
         This function is called using model.apply(model._init_weights)
 
@@ -351,12 +362,12 @@ class MuGPT2(nn.Module):
 
     def forward(
         self,
-        token_sequence,
-        spatial_positions,
-        temporal_positions,
-        inference=False,
-        start_pos=-1,
-    ):
+        token_sequence: Tensor,
+        spatial_positions: Tensor,
+        temporal_positions: Tensor,
+        inference: bool = False,
+        start_pos: int = -1,
+    ) -> Tensor:
         """
         Args:
             token_sequence: A tensor of interleaved visual and action tokens.

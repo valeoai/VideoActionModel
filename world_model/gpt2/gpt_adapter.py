@@ -27,7 +27,7 @@ class GPTAdapter(nn.Module):
         This ensures that all tokens have unique values and can be distinguished by the model.
     """
 
-    def __init__(self, visual_vocab_size: int, action_vocab_sizes: List[int]):
+    def __init__(self, visual_vocab_size: int, action_vocab_sizes: List[int]) -> None:
         """
         Initializes the GPTAdapter with specified visual and action vocabulary sizes.
 

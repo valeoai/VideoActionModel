@@ -1,13 +1,18 @@
+from typing import Any, Dict
+
 import torch
 import torch.nn as nn
+from torch import Tensor
+
+Kwargs = Dict[str, Any]
 
 
 class ZeroSpeedAndCurvatureTokens(nn.Module):
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
-    def forward(self, visual_tokens, **kwargs):
+    def forward(self, visual_tokens: Tensor, **kwargs: Kwargs) -> Tensor:
         b, t, *_ = visual_tokens.shape
 
         speed_tokens = torch.zeros(size=(b, t), device=visual_tokens.device, dtype=torch.int64)

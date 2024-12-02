@@ -1,19 +1,22 @@
 import itertools
+from typing import Any, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
-import numpy as np
-import torch
 import torchvision
 from einops import rearrange
+from PIL import Image
+from torch import Tensor
+
+Batch = Dict[str, Any]
 
 
 class Detach:
-    def __call__(self, image: torch.Tensor) -> np.array:
+    def __call__(self, image: Tensor) -> Tensor:
         return image.detach().cpu()
 
 
 class ToChannelsLast:
-    def __call__(self, image):
+    def __call__(self, image: Tensor) -> Tensor:
         return rearrange(image, "c ... -> ... c")
 
 
@@ -22,14 +25,16 @@ class NormalizeInverse:
     Expect image input to be in [-1;1] rescale in [0;1]
     """
 
-    def __call__(self, image):
+    def __call__(self, image: Tensor) -> Tensor:
         return (image + 1) / 2
 
 
 denormalize_img = torchvision.transforms.Compose((Detach(), NormalizeInverse(), ToChannelsLast()))
 
 
-def gridplot(img_list, titles=[], cmaps=[], cols=2, figsize=(12, 12)):
+def gridplot(
+    img_list: List[Image.Image], titles: List[str] = [], cmaps: List[str] = [], cols: int = 2, figsize: Tuple[int] = (12, 12)
+) -> plt.Figure:
     """
     Plot a list of images in a grid format
 
@@ -61,7 +66,9 @@ def gridplot(img_list, titles=[], cmaps=[], cols=2, figsize=(12, 12)):
     return fig
 
 
-def prepare_images_to_log(learning_phase, batch, preds, batch_idx, log_images_interval):
+def prepare_images_to_log(
+    learning_phase: str, batch: Batch, preds: Tensor, batch_idx: int, log_images_interval: int
+) -> Dict[str, plt.Figure]:
     if log_images_interval == 0 or batch_idx % log_images_interval != 0:
         return {}
 

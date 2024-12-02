@@ -1,14 +1,16 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+from torch.optim.optimizer import Optimizer
 
 
 class WarmupStableDrop:
     def __init__(
         self,
-        optimizer,
-        warmup_iter,
-        end_iter,
-        drop_iter=0,
-        num_iter=0,
+        optimizer: Optimizer,
+        warmup_iter: int,
+        end_iter: int,
+        drop_iter: int = 0,
+        num_iter: int = 0,
     ) -> None:
         self.warmup_iter = warmup_iter
         self.end_iter = end_iter
@@ -28,17 +30,17 @@ class WarmupStableDrop:
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         self.__dict__.update(state_dict)
 
-    def get_lr_warmup(self, num_iter, base_lr, warmup_iter) -> float:
+    def get_lr_warmup(self, num_iter: int, base_lr: float, warmup_iter: int) -> float:
         return base_lr * num_iter / warmup_iter
 
-    def get_lr_stable(self, num_iter, base_lr):
+    def get_lr_stable(self, num_iter: int, base_lr: float) -> float:
         return base_lr
 
-    def get_lr_drop(self, num_iter, base_lr):
+    def get_lr_drop(self, num_iter: int, base_lr: float) -> float:
         # progress = (self.end_iter - num_iter) / self.drop_iter
         return base_lr * (0.1 + max(0.9 * (self.end_iter - num_iter) / self.drop_iter, 0))
 
-    def get_lr(self, base_lr):
+    def get_lr(self, base_lr: float) -> float:
 
         assert self.num_iter >= 0
 
@@ -50,7 +52,7 @@ class WarmupStableDrop:
 
         return self.get_lr_stable(self.num_iter, base_lr)
 
-    def step(self, num_iter=None) -> None:
+    def step(self, num_iter: Optional[int] = None) -> None:
         if num_iter is None:
             num_iter = self.num_iter + 1
         self.num_iter = num_iter

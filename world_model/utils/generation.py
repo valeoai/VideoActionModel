@@ -25,6 +25,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+from torch import Tensor
 from tqdm.auto import tqdm
 
 
@@ -45,7 +46,7 @@ class Sampler:
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         raise NotImplementedError(
             "Every sub-class of `Sampler` needs a string representation. " "For example, str(TopKSampler(k=5)) == 'top_5'"
         )
@@ -58,7 +59,7 @@ class ArgmaxSampler(Sampler):
     Useful for deterministic generation or testing purposes.
     """
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "argmax"
 
     def sample(self, next_token_probabilities: torch.Tensor) -> torch.Tensor:
@@ -82,10 +83,10 @@ class TopKSampler(Sampler):
             k: The number of highest probability tokens to consider for sampling.
     """
 
-    def __init__(self, k: int):
+    def __init__(self, k: int) -> None:
         self.k = k
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"top_{self.k}"
 
     def sample(self, next_token_probabilities: torch.Tensor) -> torch.Tensor:
@@ -115,13 +116,15 @@ class KVCache(nn.Module):
     https://github.com/karpathy/nano-llama31/blob/06461cada7744a7da86a408f094549800b6bee3f/llama31.py#L141
     """
 
-    def __init__(self, batch_size, seq_length, n_kv_heads, head_dim, dtype, device):
+    def __init__(
+        self, batch_size: int, seq_length: int, n_kv_heads: int, head_dim: int, dtype: torch.dtype, device: torch.device
+    ) -> None:
         super().__init__()
         cache_shape = (batch_size, n_kv_heads, seq_length, head_dim)
         self.register_buffer("cache_k", torch.zeros(cache_shape, dtype=dtype, device=device))
         self.register_buffer("cache_v", torch.zeros(cache_shape, dtype=dtype, device=device))
 
-    def update(self, start_pos, xk, xv):
+    def update(self, start_pos: int, xk: Tensor, xv: Tensor) -> Tuple[Tensor, Tensor]:
         if start_pos == -1:
             return xk, xv
         # changed from original implementation because shape in mup_GPT2 is (b nb_heads seq dim_head)
@@ -184,7 +187,9 @@ class GenerationConfig:
 class ImageGenerator:
     """Handles autoregressive generation of image sequences."""
 
-    def __init__(self, network: nn.Module, sampler: Sampler, sequence_adapter, max_rolling_context_frames: int):
+    def __init__(
+        self, network: nn.Module, sampler: Sampler, sequence_adapter: nn.Module, max_rolling_context_frames: int
+    ) -> None:
         self.network = network
         self.sampler = sampler
         self.sequence_adapter = sequence_adapter

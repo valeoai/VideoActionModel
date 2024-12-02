@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import git
 import hydra
@@ -7,6 +7,11 @@ import torch
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from omegaconf import DictConfig
+from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.optimizer import Optimizer
+
+Batch = Dict[str, torch.Tensor]
+mupShapes = Dict[str, Tuple[int, ...]]
 
 
 class NextTokenPredictor(LightningModule):
@@ -24,7 +29,7 @@ class NextTokenPredictor(LightningModule):
         scheduler_conf: Optional[DictConfig] = None,
         compile: bool = False,
         log_norm: bool = False,
-        mup_base_shapes=None,
+        mup_base_shapes: mupShapes = None,
     ) -> None:
         """
         Args:
@@ -60,14 +65,14 @@ class NextTokenPredictor(LightningModule):
 
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
 
-    def on_before_optimizer_step(self, optimizer):
+    def on_before_optimizer_step(self, optimizer: Optional[Optimizer]) -> None:
         if self.hparams.log_norm:
             # Compute the 2-norm for each layer
             # If using mixed precision, the gradients are already unscaled here
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
 
-    def create_inputs_and_target(self, batch):
+    def create_inputs_and_target(self, batch: Batch) -> Tuple[Batch, Batch]:
 
         visual_tokens = batch["visual_tokens"]
 
@@ -94,7 +99,7 @@ class NextTokenPredictor(LightningModule):
         """Lightning hook that is called when training begins."""
         pass
 
-    def training_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
         """Perform a single training step on a batch of data from the training set.
 
         Args:
@@ -128,7 +133,7 @@ class NextTokenPredictor(LightningModule):
         """Lightning hook that is called when training begins."""
         pass
 
-    def validation_step(self, batch: Any, batch_idx: int) -> None:
+    def validation_step(self, batch: Batch, batch_idx: int) -> None:
         """Perform a single validation step on a batch of data from the validation set.
 
         Args:
@@ -218,7 +223,7 @@ class NextTokenPredictor(LightningModule):
 
         return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_config}
 
-    def lr_scheduler_step(self, scheduler, metric) -> None:
+    def lr_scheduler_step(self, scheduler: _LRScheduler, metric: float) -> None:
         """
         Copy-pasting of Lightning code
         Manual override necessary for using custom LR schedulers otherwise it throws errors
@@ -228,7 +233,7 @@ class NextTokenPredictor(LightningModule):
         else:
             scheduler.step(metric)
 
-    def on_save_checkpoint(self, checkpoint):
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         repo = git.Repo(search_parent_directories=True)
         sha = repo.head.object.hexsha
 

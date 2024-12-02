@@ -40,27 +40,34 @@ generated_tokens_metadata.yaml contains:
 
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import lightning as L
 import mup
 import numpy as np
 import torch
+import torch.nn as nn
 from hydra.utils import instantiate
 from lightning.pytorch.callbacks import BasePredictionWriter, Callback
 from lightning.pytorch.utilities import rank_zero_only
+from omegaconf import DictConfig
+from torch import Tensor
 
 from world_model.utils import RankedLogger
-from world_model.utils.generation import GenerationConfig, ImageGenerator
+from world_model.utils.generation import GenerationConfig, ImageGenerator, Sampler
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
+Value = Any
+Batch = Dict[str, Any]
+StateDict = Dict[str, Any]
 
-def worker_rnd_init(x):
+
+def worker_rnd_init(x: int) -> None:
     np.random.seed(42 + x)
 
 
-def get_nested_value(config, key_path):
+def get_nested_value(config: Dict[str, Any], key_path: str) -> Value:
     """Helper to safely get nested dictionary values using dot notation."""
     try:
         value = config
@@ -71,13 +78,13 @@ def get_nested_value(config, key_path):
         return "NOT FOUND"
 
 
-def print_config_value(config, title, key, indent="\t"):
+def print_config_value(config: Dict[str, Any], title: str, key: str, indent: str = "\t") -> None:
     """Helper to print a single config value with proper formatting."""
     value = get_nested_value(config, key)
     log.info(f'{indent}{key.split(".")[-1]}: {" " * (25 - len(key.split(".")[-1]))}{value}')
 
 
-def print_log_and_current_config(inference_config, training_logged_config):
+def print_log_and_current_config(inference_config: Dict[str, Any], training_logged_config: Dict[str, Any]) -> None:
     # Original configuration overview
     log.info("ORIGINAL configuration")
     log.info(training_logged_config)
@@ -113,25 +120,33 @@ def print_log_and_current_config(inference_config, training_logged_config):
 
 
 class GPUMemoryMonitor(Callback):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.max_memory = 0
+        self.max_memory: float = 0.0
 
-    def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+    def on_predict_batch_end(
+        self,
+        trainer: "L.Trainer",
+        pl_module: "L.LightningModule",
+        outputs: Tuple[Tensor],
+        batch: Batch,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
         if torch.cuda.is_available():
-            memory = torch.cuda.max_memory_allocated() / (1024**3)  # Convert to GB
+            memory: float = torch.cuda.max_memory_allocated() / (1024**3)  # Convert to GB
             self.max_memory = max(self.max_memory, memory)
             trainer.logger.log_metrics({"gpu_memory_usage_gb": memory}, step=trainer.global_step)
 
-    def on_predict_epoch_end(self, trainer, pl_module):
+    def on_predict_epoch_end(self, trainer: "L.Trainer", pl_module: "L.LightningModule") -> None:
         if torch.cuda.is_available():
             trainer.logger.log_metrics({"max_gpu_memory_usage_gb": self.max_memory}, step=trainer.global_step)
         torch.cuda.reset_peak_memory_stats()
-        self.max_memory = 0
+        self.max_memory = 0.0
 
 
 class WorldModelPredictionWriter(BasePredictionWriter):
-    def __init__(self, output_dir: Path, write_interval: str = "batch", max_queue_size: int = 50):
+    def __init__(self, output_dir: Path, write_interval: str = "batch", max_queue_size: int = 50) -> None:
         super().__init__(write_interval)
         self.output_dir = output_dir
         self.max_queue_size = max_queue_size
@@ -139,8 +154,15 @@ class WorldModelPredictionWriter(BasePredictionWriter):
         self.executor = ThreadPoolExecutor(max_workers=20)
 
     def write_on_batch_end(
-        self, trainer, pl_module, prediction: Any, batch_indices: List[int], batch: Any, batch_idx: int, dataloader_idx: int
-    ):
+        self,
+        trainer: "L.Trainer",
+        pl_module: "L.LightningModule",
+        prediction: Tuple[Tensor, List[str], int],
+        batch_indices: List[int],
+        batch: Batch,
+        batch_idx: int,
+        dataloader_idx: int,
+    ) -> None:
         generated_data, image_paths, context_end_index = prediction
 
         for data_type, data in generated_data.items():
@@ -151,7 +173,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
             output_subdir = self.output_dir / data_type
             self.queue_data(output_subdir, image_paths, context_end_index, data)
 
-    def queue_data(self, output_dir, image_paths, context_end_index, data):
+    def queue_data(self, output_dir: str, image_paths: List[str], context_end_index: int, data: torch.Tensor) -> None:
         if data.device != "cpu":
             data = data.cpu()
 
@@ -164,7 +186,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
         if len(self.write_queue) >= self.max_queue_size:
             self.flush_queue()
 
-    def flush_queue(self):
+    def flush_queue(self) -> None:
         futures = []
         for output_path, data in self.write_queue:
             if not output_path.parent.exists():
@@ -177,7 +199,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
 
         self.write_queue.clear()
 
-    def on_predict_epoch_end(self, trainer, pl_module):
+    def on_predict_epoch_end(self, trainer: "L.Trainer", pl_module: "L.LightningModule") -> None:
         self.flush_queue()  # Ensure all remaining data is written
 
     def teardown(self, trainer: "L.Trainer", pl_module: "L.LightningModule", stage: str) -> None:
@@ -185,13 +207,21 @@ class WorldModelPredictionWriter(BasePredictionWriter):
 
 
 class PredictionPathLogger(Callback):
-    def __init__(self, output_dir: Path):
+    def __init__(self, output_dir: Path) -> None:
         super().__init__()
         self.output_dir = output_dir
         self.context_sequences = []
         self.generated_sequences = []
 
-    def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+    def on_predict_batch_end(
+        self,
+        trainer: "L.Trainer",
+        pl_module: "L.LightningModule",
+        outputs: Tuple[Tensor],
+        batch: Batch,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
         _, image_paths, context_end_index = outputs
 
         for sequence_image_paths in image_paths:
@@ -201,7 +231,7 @@ class PredictionPathLogger(Callback):
             self.context_sequences.append(context_seq)
             self.generated_sequences.append(generated_seq)
 
-    def on_predict_epoch_end(self, trainer, pl_module):
+    def on_predict_epoch_end(self, trainer: "L.Trainer", pl_module: "L.LightningModule") -> None:
         # Gather data from all GPUs
         context_sequences = self.all_gather(self.context_sequences)
         generated_sequences = self.all_gather(self.generated_sequences)
@@ -213,7 +243,7 @@ class PredictionPathLogger(Callback):
         # Write files only on the main process
         self.write_files(context_sequences, generated_sequences)
 
-    def all_gather(self, data):
+    def all_gather(self, data: Value) -> List[Value]:
         if torch.distributed.is_initialized():
             gathered_data = [None] * torch.distributed.get_world_size()
             torch.distributed.all_gather_object(gathered_data, data)
@@ -221,7 +251,7 @@ class PredictionPathLogger(Callback):
         return [data]
 
     @rank_zero_only
-    def write_files(self, context_sequences, generated_sequences):
+    def write_files(self, context_sequences: List[str], generated_sequences: List[str]) -> None:
         # Write generated_frames.txt
         with open(self.output_dir / "generated_frames.txt", "w") as f:
             for seq in generated_sequences:
@@ -240,7 +270,15 @@ class PredictionPathLogger(Callback):
 
 
 class WorldModelInference(L.LightningModule):
-    def __init__(self, network, sequence_adapter, action_tokenizer, sampler, return_logits, max_rolling_context_frames=None):
+    def __init__(
+        self,
+        network: nn.Module,
+        sequence_adapter: nn.Module,
+        action_tokenizer: nn.Module,
+        sampler: Sampler,
+        return_logits: bool,
+        max_rolling_context_frames: Optional[int] = None,
+    ) -> None:
         super().__init__()
 
         if max_rolling_context_frames is None:
@@ -268,7 +306,7 @@ class WorldModelInference(L.LightningModule):
             verbose=False,
         )
 
-    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
+    def predict_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> Tuple[Dict[str, Tensor], List[str], int]:
         action_tokens = self.action_tokenizer(**batch)
 
         burnin_visual_tokens = batch["visual_tokens"][:, : batch["context_end_index"]]
@@ -283,7 +321,7 @@ class WorldModelInference(L.LightningModule):
         return generated_data, batch["images_paths"], batch["context_end_index"]
 
 
-def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
+def remove_prefix(state_dict: StateDict, prefix: str) -> Dict:
     result = dict()
     for k, v in state_dict.items():
         tokens = k.split(".")
@@ -294,7 +332,9 @@ def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
     return result
 
 
-def load_model(checkpoint_path, model_config, device, inference_sha=None):
+def load_model(
+    checkpoint_path: str, model_config: DictConfig, device: str, inference_sha: str = None
+) -> Tuple[nn.Module, ...]:
     checkpoint_data = torch.load(checkpoint_path, map_location=torch.device(device))
 
     if checkpoint_data["git_sha"] != inference_sha and inference_sha is not None:

@@ -13,10 +13,10 @@ import av
 import numpy as np
 import torch
 import torchvision.transforms.v2.functional as TF
+from colorlog import ColoredFormatter
 from PIL import Image
 from torch import Tensor
 from tqdm import tqdm
-from colorlog import ColoredFormatter
 
 logger = logging.getLogger("OpenDV")
 Kwargs = Dict[str, Any]
@@ -75,9 +75,9 @@ class FramesBatch:
 
 
 def preprocess_batch_of_frames(frames: List[str]) -> Tensor:
-    frames = [np.array(Image.open(frame).convert("RGB")) for frame in frames]
+    frames = [Image.open(frame).convert("RGB") for frame in frames]
 
-    def transform(frame):
+    def transform(frame: Image.Image) -> Tensor:
         frame = TF.to_image(frame)
         frame = TF.to_dtype(frame, torch.uint8, scale=True)
         frame = TF.to_dtype(frame, torch.float32, scale=True)
