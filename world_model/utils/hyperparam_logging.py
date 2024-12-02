@@ -1,6 +1,9 @@
 from typing import Any, Dict
 from omegaconf import OmegaConf
-import git
+try:
+    import git
+except ImportError:
+    git = None
 import torch
 from pathlib import Path
 
@@ -44,7 +47,7 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     hparams["model/params/non_trainable"] = sum(
         p.numel() for p in model.parameters() if not p.requires_grad
     )
-    
+
     hparams["paths"] = config["paths"]
 
     hparams["data"] = config["data"]
@@ -56,18 +59,18 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     hparams["callbacks"] = config.get("callbacks")
     hparams["name"] = config.get("name")
     hparams["seed"] = config.get("seed")
-    
+
     # Check if CUDA is available
     if torch.cuda.is_available():
         hparams["training_device"] = torch.cuda.get_device_name(0)
     else:
         hparams["training_device"] = "cpu"  # or handle the situation appropriately
-    
+
     try:
         repo = git.Repo(search_parent_directories=True)
         sha = repo.head.object.hexsha
         hparams["git_sha"] = sha
-    except git.exc.InvalidGitRepositoryError:
+    except (git.exc.InvalidGitRepositoryError, AttributeError):
         log.warning("Not in a Git repository, sha key not registered in hparams logging")
 
     # send hparams to all loggers
@@ -76,7 +79,7 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
 
     output_dir = Path(config["paths"]["output_dir"]) / config['name']
     save_hparams_to_yaml(output_dir / 'hparams.yaml', hparams, use_omegaconf=True)
-    
+
     if not output_dir.exists():
         log.info(f'"{output_dir}" does not exists... creating it.')
-        output_dir.mkdir(parents=True, exist_ok=True)    
+        output_dir.mkdir(parents=True, exist_ok=True)

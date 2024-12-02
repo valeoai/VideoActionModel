@@ -37,8 +37,10 @@ generated_tokens_metadata.yaml contains:
     - training_config: the initial configuration (e.g., hyperparams) and metadata (training code git hash)
     used to train the model.
 """
-
-import git
+try:
+    import git
+except ImportError:
+    git = None
 import yaml
 import pickle
 from pathlib import Path

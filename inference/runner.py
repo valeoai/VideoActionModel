@@ -33,9 +33,39 @@ class WMInferenceInput:
 
 
 @dataclass
+class UniADAuxOutputs:
+    objects_in_bev: np.ndarray  # N x [x, y, width, height, yaw]
+    object_classes: List[str]  # (N, )
+    object_scores: np.ndarray  # (N, )
+    object_ids: np.ndarray  # (N, )
+    future_trajs: np.ndarray  # (N, 6 modes, 12 timesteps, [x y])
+
+    def to_json(self) -> dict:
+        n_objects = len(self.object_classes)
+        return dict(
+            objects_in_bev=self.objects_in_bev.tolist() if n_objects > 0 else None,
+            object_classes=self.object_classes if n_objects > 0 else None,
+            object_scores=self.object_scores.tolist() if n_objects > 0 else None,
+            object_ids=self.object_ids.tolist() if n_objects > 0 else None,
+            future_trajs=self.future_trajs.tolist() if n_objects > 0 else None,
+        )
+
+    @classmethod
+    def empty(cls) -> "UniADAuxOutputs":
+        return cls(
+            objects_in_bev=np.zeros((0, 5)),
+            object_classes=[],
+            object_scores=np.zeros((0, 1)),
+            object_ids=np.zeros((0, 1)),
+            future_trajs=np.zeros((0, 6, 12, 2)),
+        )
+
+
+@dataclass
 class WMInferenceOutput:
     trajectory: np.ndarray
     """shape: (n-future (6), 2) | predicted trajectory in the ego-frame @ 2Hz"""
+    aux_outputs: UniADAuxOutputs
 
 
 class WMRunner:
@@ -124,7 +154,10 @@ class WMRunner:
         # decode the trajectory tokens
         trajectory = self.trajectory_tokenizer(predicted_trajectory_tokens)
 
-        return WMInferenceOutput(trajectory=_format_trajs(trajectory))
+        return WMInferenceOutput(
+            trajectory=_format_trajs(trajectory),
+            aux_outputs=UniADAuxOutputs.empty(),
+        )
 
 
 def _format_trajs(trajs: torch.Tensor) -> torch.Tensor:
