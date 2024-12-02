@@ -158,3 +158,5 @@ train.log
 
 tmp/
 weights
+.docker_temp_*
+opendv_video.json
