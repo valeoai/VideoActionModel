@@ -1,7 +1,7 @@
-import os
-import json
 import argparse
+import json
 import logging
+import os
 import sys
 from typing import Optional
 
@@ -55,6 +55,7 @@ parser = argparse.ArgumentParser(description="OpenDV Token Creator")
 parser.add_argument("--video_list", type=_path, help="Path to the video list (json)")
 parser.add_argument("--metadata", type=_path, help="Path to the metadata file")
 parser.add_argument("--outdir", type=_path, help="Output directory")
+parser.add_argument("--tmpdir", type=_path, help="Temporary directory")
 parser.add_argument("--tokenizer_jit_path", type=_path, help="Path to the tokenizer jit model")
 parser.add_argument("--num_frames_threads", type=int, help="Number of threads for frame extraction")
 parser.add_argument("--num_writer_threads", type=int, help="Number of threads for writing to disk")
@@ -66,7 +67,7 @@ parser.add_argument("--target_width", type=int, help="Target width for resizing"
 parser.add_argument("--target_height", type=int, help="Target height for resizing")
 parser.add_argument("--keep_temp_frames", action="store_true", help="Keep temporary frames after tokenization")
 args = parser.parse_args()
-setup_logger(logdir='./')
+setup_logger(logdir="./")
 
 if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
     # multiprocessing with torchrun
@@ -97,6 +98,7 @@ creator = TokenCreator(
     video_list=video_list,
     metadata=metadata,
     outdir=args.outdir,
+    tmpdir=args.tmpdir,
     rank=rank,
     tokenizer_jit_path=args.tokenizer_jit_path,
     num_frames_threads=args.num_frames_threads,

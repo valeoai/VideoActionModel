@@ -52,8 +52,9 @@ python world_model/opendv/create_opendv_tokens.py \
 --video_list world_model/opendv/opendv_video.json \
 --metadata ~/iveco/datasets_iveco_raw/OpenDV_Youtube/videos_metadata.csv \
 --outdir ~/data/OpenDV_Youtube/tokens \
+--tmpdir ~/data/OpenDV_Youtube/tmp \
 --tokenizer_jit_path ~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit \
---num_frames_threads 15 \
+--num_frames_threads 1 \
 --num_writer_threads 1 \
 --frames_queue_size 10000 \
 --writer_queue_size 10000 \

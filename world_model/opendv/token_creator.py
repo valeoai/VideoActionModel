@@ -1,17 +1,18 @@
 import json
-import os
 import logging
+import os
+import subprocess
 import sys
 import threading
 import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Queue
-from collections import defaultdict
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Generator, List, Tuple
 
-import av
 import numpy as np
 import pandas as pd
 import torch
@@ -29,9 +30,7 @@ DataPoints = List[Any]
 
 logger.handlers.clear()
 formatter = ColoredFormatter(
-    "[%(cyan)s%(asctime)s%(reset)s]"
-    "[%(light_blue)s%(name)s%(reset)s]"
-    "[%(log_color)s%(levelname)s%(reset)s] - %(message)s",
+    "[%(cyan)s%(asctime)s%(reset)s]" "[%(light_blue)s%(name)s%(reset)s]" "[%(log_color)s%(levelname)s%(reset)s] - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     reset=True,
     log_colors={
@@ -53,6 +52,7 @@ class VideoInfo:
     path: str
     trim_start: int
     trim_end: int
+    duration: int = None
 
 
 @dataclass
@@ -80,8 +80,22 @@ class FramesBatch:
     paths: List[str]
 
 
+@contextmanager
+def ffmpeg_process(cmd: List[str]) -> Generator[subprocess.Popen, None, None]:
+    process = subprocess.Popen(cmd)
+    try:
+        yield process
+    finally:
+        process.terminate()
+        process.wait(timeout=5)  # Wait up to 5 seconds for graceful termination
+        try:
+            process.kill()  # Force kill if still running
+        except ProcessLookupError:
+            pass  # Process already terminated
+
+
 def preprocess_batch_of_frames(frames: List[str]) -> Tensor:
-    # frames = [Image.open(frame).convert("RGB") for frame in frames]
+    frames = [Image.open(frame).convert("RGB") for frame in frames]
 
     def transform(frame: Image.Image) -> Tensor:
         frame = TF.to_image(frame)
@@ -102,6 +116,7 @@ class TokenCreator:
         *,
         video_list: List[str],
         metadata: pd.DataFrame,
+        tmpdir: str,
         outdir: str,
         rank: int,
         tokenizer_jit_path: str,
@@ -133,6 +148,7 @@ class TokenCreator:
         """
         self.video_list = video_list
         self.outdir = Path(outdir)
+        self.tmpdir = Path(tmpdir)
         self.rank = rank
 
         self.remove_temp_frames = remove_temp_frames
@@ -145,6 +161,8 @@ class TokenCreator:
 
         # Create output directory
         self.outdir.mkdir(exist_ok=True, parents=True)
+        # Create temporary directory
+        self.tmpdir.mkdir(exist_ok=True, parents=True)
 
         # Initialize queues
         self.frames_queue = Queue(maxsize=frames_queue_size)
@@ -155,7 +173,12 @@ class TokenCreator:
         self.videos = []
         for video_pth in self.video_list:
             meta = self.metadata[os.path.basename(video_pth)]
-            video = VideoInfo(path=video_pth, trim_start=meta["trim_start"], trim_end=meta["trim_end"])
+            video = VideoInfo(
+                path=video_pth,
+                trim_start=meta["trim_start"],
+                trim_end=meta["trim_end"],
+                duration=meta["duration"],
+            )
             self.videos.append(video)
 
         # Batch size for the tokenizer
@@ -196,6 +219,10 @@ class TokenCreator:
             video_id = row["video_id"].replace("@", "-") + "." + row["container"]
             self.metadata[video_id]["trim_start"] = row["discard_start"]
             self.metadata[video_id]["trim_end"] = row["discard_end"]
+            if not np.isnan(duration := row["duration"]):
+                self.metadata[video_id]["duration"] = duration - row["discard_start"] - row["discard_end"]
+            else:
+                self.metadata[video_id]["duration"] = None
 
     def create_frames_from_video(
         self,
@@ -205,52 +232,54 @@ class TokenCreator:
         config = self.processing_config
 
         try:
-            container = av.open(video.path)
-            stream = container.streams.video[0]
-            container.seek(video.trim_start * av.time_base)
-            # Get the duration of the video
-            duration = container.duration // stream.time_base - video.trim_end
+            frames_outdir = self.tmpdir / Path(video.path).stem
+            frames_outdir.mkdir(exist_ok=True)
 
-            # Calculate frame intervals for desired FPS
-            source_fps = float(stream.average_rate)
-            frame_interval = source_fps / config.fps
-            next_frame_idx = 0.0
-            frame_count = 0
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-hide_banner",
+                "-ss",
+                "10",
+                "-i",
+                f"{video.path}",
+                "-t",
+                f"{video.duration}",
+                "-vf",
+                f"fps={config.fps},scale={config.width}:{config.height}",
+                "-threads",
+                "2",  # Use all available threads
+                "-q:v",
+                "2",
+                "-vsync",
+                "0",  # Disable video sync to speed up processing
+                "-frame_pts",
+                "0",  # Don't write presentation timestamp
+                "-movflags",
+                "+faststart",
+                "-loglevel",
+                "error",  # Add this line to suppress ffmpeg logs
+                frames_outdir / "f_%06d.jpg",
+            ]
 
-            for frame_idx, frame in enumerate(container.decode(video=0)):
-                if frame_idx < next_frame_idx:
-                    continue
+            with ffmpeg_process(cmd):
+                processed_frames = set()
 
-                # Check if we've reached the end time
-                frame_time = frame.pts * float(stream.time_base)
-                if frame_time > duration:
-                    break
+                while True:
+                    new_frames = set(list(frames_outdir.glob("*.jpg"))) - processed_frames
+                    processed_frames.update(new_frames)
 
-                # Save the frame
-                frame_path = os.path.join(Path(video.path).stem, f"f_{frame_count:06d}.jpg")
-                img = frame.to_image()
-
-                # Resize if needed
-                if (img.width != config.width) or (img.height != config.height):
-                    img = img.resize((config.width, config.height), Image.Resampling.LANCZOS)
-
-                # img.save(str(frame_path), quality=95)
-                # self.frames_queue.put(str(frame_path))
-                self.frames_queue.put(Frame(data=img, path=str(frame_path)))
-
-                # Update progress
-                with self.lock:
-                    self.frames_created += 1
-                    if self.pbar_frames is not None:
+                    # Update progress
+                    with self.lock:
+                        self.frames_created += len(new_frames)
                         self.pbar_frames.set_postfix({"frames_created": self.frames_created})
 
-                frame_count += 1
-                next_frame_idx += frame_interval
+                    for frame in new_frames:
+                        self.frames_queue.put(frame)
+                    time.sleep(1.0)
 
         except Exception as e:
             logger.error(f"Error extracting frames from {video.path}: {str(e)}")
-        finally:
-            container.close()
 
     def tokenize_frames(self, frames: FramesBatch) -> Tokens:
         """
@@ -297,8 +326,8 @@ class TokenCreator:
                         continue
 
                 if (len(current_batch) == self.batch_size) or (self.all_frames_extracted.is_set() and len(current_batch) > 0):
-                    batch = preprocess_batch_of_frames([x.data for x in current_batch])
-                    tokens = self.tokenize_frames(FramesBatch(data=batch, paths=[x.path for x in current_batch]))
+                    batch = preprocess_batch_of_frames(current_batch)
+                    tokens = self.tokenize_frames(FramesBatch(data=batch, paths=current_batch))
 
                     # Update progress
                     with self.lock:
