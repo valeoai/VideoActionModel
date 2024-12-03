@@ -5,6 +5,7 @@ import logging
 import sys
 from typing import Optional
 
+import pandas as pd
 from colorlog import ColoredFormatter
 
 from world_model.opendv import TokenCreator
@@ -45,12 +46,17 @@ def setup_logger(logdir: Optional[str] = None) -> None:
     return logging.getLogger()
 
 
+def _path(path: str) -> str:
+    path = os.path.expanduser(os.path.expandvars(path))
+    return path
+
+
 parser = argparse.ArgumentParser(description="OpenDV Token Creator")
-parser.add_argument("--video_list", type=str, help="Path to the video list (json)")
-parser.add_argument("--outdir", type=str, help="Output directory")
-parser.add_argument("--tmpdir", type=str, help="Temporary directory for storing video clips")
-parser.add_argument("--tokenizer_jit_path", type=str, help="Path to the tokenizer jit model")
-parser.add_argument("--num_ffmpeg_threads", type=int, help="Number of threads for ffmpeg")
+parser.add_argument("--video_list", type=_path, help="Path to the video list (json)")
+parser.add_argument("--metadata", type=_path, help="Path to the metadata file")
+parser.add_argument("--outdir", type=_path, help="Output directory")
+parser.add_argument("--tokenizer_jit_path", type=_path, help="Path to the tokenizer jit model")
+parser.add_argument("--num_frames_threads", type=int, help="Number of threads for frame extraction")
 parser.add_argument("--num_writer_threads", type=int, help="Number of threads for writing to disk")
 parser.add_argument("--frames_queue_size", type=int, help="Size of the frames queue")
 parser.add_argument("--writer_queue_size", type=int, help="Size of the writer queue")
@@ -60,7 +66,7 @@ parser.add_argument("--target_width", type=int, help="Target width for resizing"
 parser.add_argument("--target_height", type=int, help="Target height for resizing")
 parser.add_argument("--keep_temp_frames", action="store_true", help="Keep temporary frames after tokenization")
 args = parser.parse_args()
-setup_logger(logdir=args.outdir)
+setup_logger(logdir='./')
 
 if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
     # multiprocessing with torchrun
@@ -82,15 +88,18 @@ with open(args.video_list, "r") as f:
 # Divide video_list into `world_size` parts
 video_list = video_list[rank::world_size]
 
+# Load the metadata
+metadata = pd.read_csv(args.metadata, sep="\t")
+
 
 # Create the dataset creator
 creator = TokenCreator(
     video_list=video_list,
+    metadata=metadata,
     outdir=args.outdir,
     rank=rank,
-    tmpdir=args.tmpdir,
     tokenizer_jit_path=args.tokenizer_jit_path,
-    num_ffmpeg_threads=args.num_ffmpeg_threads,
+    num_frames_threads=args.num_frames_threads,
     num_writer_threads=args.num_writer_threads,
     frames_queue_size=args.frames_queue_size,
     writer_queue_size=args.writer_queue_size,

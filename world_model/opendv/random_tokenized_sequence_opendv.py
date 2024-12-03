@@ -5,8 +5,6 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from world_model.opendv.struct_utils import load_struct
-
 
 class RandomTokenizedSequenceOpenDVDataset(Dataset):
     def __init__(self, data_root_dir: str, video_list: List[str], sequence_length: int) -> None:
@@ -37,7 +35,7 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
 
         for i in range(self.sequence_length):
             frame_path = os.path.join(self.data_root_dir, video_id, self.video_frames[video_id][start_idx + i])
-            frame_data = load_struct(frame_path).astype(np.uint16)
+            frame_data = np.load(frame_path)
             frame_tensor = torch.from_numpy(frame_data).long().view(-1)
             frame_sequence.append(frame_tensor)
 

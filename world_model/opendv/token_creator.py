@@ -1,4 +1,5 @@
 import json
+import os
 import logging
 import sys
 import threading
@@ -7,18 +8,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Queue
+from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
 import av
 import numpy as np
+import pandas as pd
 import torch
 import torchvision.transforms.v2.functional as TF
 from colorlog import ColoredFormatter
 from PIL import Image
 from torch import Tensor
 from tqdm import tqdm
-
-from world_model.opendv.struct_utils import save_struct
 
 logger = logging.getLogger("OpenDV")
 Kwargs = Dict[str, Any]
@@ -28,11 +29,9 @@ DataPoints = List[Any]
 
 logger.handlers.clear()
 formatter = ColoredFormatter(
-    """
-    [%(cyan)s%(asctime)s%(reset)s]
-    [%(light_blue)s%(name)s%(reset)s]
-    [%(log_color)s%(levelname)s%(reset)s] - %(message)s
-    """,
+    "[%(cyan)s%(asctime)s%(reset)s]"
+    "[%(light_blue)s%(name)s%(reset)s]"
+    "[%(log_color)s%(levelname)s%(reset)s] - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     reset=True,
     log_colors={
@@ -58,7 +57,6 @@ class VideoInfo:
 
 @dataclass
 class ProcessingConfig:
-    tmpdir: str
     fps: int
     width: int
     height: int
@@ -71,19 +69,25 @@ class Tokens:
 
 
 @dataclass
+class Frame:
+    data: Image.Image
+    path: str
+
+
+@dataclass
 class FramesBatch:
     data: Tensor
     paths: List[str]
 
 
 def preprocess_batch_of_frames(frames: List[str]) -> Tensor:
-    frames = [Image.open(frame).convert("RGB") for frame in frames]
+    # frames = [Image.open(frame).convert("RGB") for frame in frames]
 
     def transform(frame: Image.Image) -> Tensor:
         frame = TF.to_image(frame)
         frame = TF.to_dtype(frame, torch.uint8, scale=True)
         frame = TF.to_dtype(frame, torch.float32, scale=True)
-        frame = TF.normalize(frame, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], inplace=True)
+        frame = 2.0 * frame - 1.0
         return frame
 
     frames = [transform(frame) for frame in frames]
@@ -96,12 +100,12 @@ class TokenCreator:
     def __init__(
         self,
         *,
-        video_list: str,
+        video_list: List[str],
+        metadata: pd.DataFrame,
         outdir: str,
         rank: int,
-        tmpdir: str,
         tokenizer_jit_path: str,
-        num_ffmpeg_threads: int,
+        num_frames_threads: int,
         num_writer_threads: int,
         frames_queue_size: int,
         writer_queue_size: int,
@@ -130,37 +134,35 @@ class TokenCreator:
         self.video_list = video_list
         self.outdir = Path(outdir)
         self.rank = rank
-        self.tmpdir = Path(tmpdir)
 
         self.remove_temp_frames = remove_temp_frames
 
-        assert num_ffmpeg_threads > 0, "num_processor_threads must be positive"
+        assert num_frames_threads > 0, "num_processor_threads must be positive"
         assert num_writer_threads > 0, "num_writer_threads must be positive"
 
-        self.num_ffmpeg_threads = num_ffmpeg_threads
+        self.num_frames_threads = num_frames_threads
         self.num_writer_threads = num_writer_threads
 
         # Create output directory
         self.outdir.mkdir(exist_ok=True, parents=True)
-        # Temporary folder for storing video clips
-        self.tmpdir.mkdir(exist_ok=True, parents=True)
 
         # Initialize queues
-        self.video_queue = Queue(maxsize=len(self.video_list))
         self.frames_queue = Queue(maxsize=frames_queue_size)
         self.writer_queue = Queue(maxsize=writer_queue_size)
 
         # Load the videos
-        self.videos = [VideoInfo(path=video, trim_start=0, trim_end=10) for video in self.video_list]
-        for video in self.videos:
-            self.video_queue.put(video)
+        _ = self.format_metadata(metadata)
+        self.videos = []
+        for video_pth in self.video_list:
+            meta = self.metadata[os.path.basename(video_pth)]
+            video = VideoInfo(path=video_pth, trim_start=meta["trim_start"], trim_end=meta["trim_end"])
+            self.videos.append(video)
 
         # Batch size for the tokenizer
         self.batch_size = batch_size
 
-        # Target frame rate for FFMPEG
+        # Target frame rate for frames extraction
         self.processing_config = ProcessingConfig(
-            tmpdir=tmpdir,
             fps=target_frame_rate,
             width=target_width,
             height=target_height,
@@ -177,18 +179,23 @@ class TokenCreator:
         self.frames_tokenized = 0
         self.written_tokens = 0
         self.lock = threading.Lock()
-        self.ffmpeg_processes = []
 
         # Load the tokenizer
         self.tokenizer = torch.jit.load(tokenizer_jit_path)
         self.tokenizer.eval()
         self.tokenizer.cuda()
-        self.vocabulary_size = self.tokenizer.vocabulary_size
 
         # Progress bars for processing and writing
         self.pbar_frames = None
         self.pbar_tokens = None
         self.pbar_write = None
+
+    def format_metadata(self, db: pd.DataFrame) -> None:
+        self.metadata = defaultdict(dict)
+        for _, row in db.iterrows():
+            video_id = row["video_id"].replace("@", "-") + "." + row["container"]
+            self.metadata[video_id]["trim_start"] = row["discard_start"]
+            self.metadata[video_id]["trim_end"] = row["discard_end"]
 
     def create_frames_from_video(
         self,
@@ -196,17 +203,13 @@ class TokenCreator:
     ) -> None:
         """Extract frames from video using PyAV."""
         config = self.processing_config
-        tmpdir = Path(config.tmpdir) / Path(video.path).stem
-        tmpdir.mkdir(exist_ok=True, parents=True)
 
         try:
             container = av.open(video.path)
             stream = container.streams.video[0]
-
-            # Set the timebase and start time
-            # stream.codec_context.skip_frame = "NONKEY"  # Only decode keyframes for speed
-            # start_pts = int(video.trim_start * stream.time_base.denominator)
-            # container.seek(start_pts)
+            container.seek(video.trim_start * av.time_base)
+            # Get the duration of the video
+            duration = container.duration // stream.time_base - video.trim_end
 
             # Calculate frame intervals for desired FPS
             source_fps = float(stream.average_rate)
@@ -218,21 +221,22 @@ class TokenCreator:
                 if frame_idx < next_frame_idx:
                     continue
 
-                # # Check if we've reached the end time
-                # frame_time = frame.pts * float(stream.time_base)
-                # if frame_time > video.trim_end:
-                #     break
+                # Check if we've reached the end time
+                frame_time = frame.pts * float(stream.time_base)
+                if frame_time > duration:
+                    break
 
                 # Save the frame
-                frame_path = tmpdir / f"f_{frame_count:06d}.jpg"
+                frame_path = os.path.join(Path(video.path).stem, f"f_{frame_count:06d}.jpg")
                 img = frame.to_image()
 
                 # Resize if needed
                 if (img.width != config.width) or (img.height != config.height):
                     img = img.resize((config.width, config.height), Image.Resampling.LANCZOS)
 
-                img.save(str(frame_path), quality=95)
-                self.frames_queue.put(str(frame_path))
+                # img.save(str(frame_path), quality=95)
+                # self.frames_queue.put(str(frame_path))
+                self.frames_queue.put(Frame(data=img, path=str(frame_path)))
 
                 # Update progress
                 with self.lock:
@@ -242,10 +246,6 @@ class TokenCreator:
 
                 frame_count += 1
                 next_frame_idx += frame_interval
-
-                # Optional: add check for early termination
-                if frame_count >= 100:  # Keep your original limit if needed
-                    break
 
         except Exception as e:
             logger.error(f"Error extracting frames from {video.path}: {str(e)}")
@@ -270,8 +270,6 @@ class TokenCreator:
         for path, token in zip(frames.paths, tokens):
             token_path = self.outdir / Path(path).parent.stem / f"{Path(path).stem}.npy"
             out_tokens.append(Tokens(data=token.cpu().numpy(), path=token_path))
-            if self.remove_temp_frames:
-                Path(path).unlink()
 
         return out_tokens
 
@@ -281,7 +279,6 @@ class TokenCreator:
         timeout = 1.0
 
         while not self.processing_complete.is_set():
-            print(self.frames_queue.qsize())
             try:
                 # Try to fill batch with timeout
                 while len(current_batch) < self.batch_size:
@@ -300,8 +297,8 @@ class TokenCreator:
                         continue
 
                 if (len(current_batch) == self.batch_size) or (self.all_frames_extracted.is_set() and len(current_batch) > 0):
-                    batch = preprocess_batch_of_frames(current_batch)
-                    tokens = self.tokenize_frames(FramesBatch(data=batch, paths=current_batch))
+                    batch = preprocess_batch_of_frames([x.data for x in current_batch])
+                    tokens = self.tokenize_frames(FramesBatch(data=batch, paths=[x.path for x in current_batch]))
 
                     # Update progress
                     with self.lock:
@@ -332,7 +329,7 @@ class TokenCreator:
             try:
                 path = Path(token.path)
                 path.parent.mkdir(parents=True, exist_ok=True)
-                save_struct(token.data, path, self.vocabulary_size)
+                np.save(path, token.data.astype(np.uint16))
             except Exception as e:
                 logger.error(f"Error saving token {path}: {str(e)}")
 
@@ -353,7 +350,7 @@ class TokenCreator:
         try:
             # Create thread pools for each task type
             with (
-                ThreadPoolExecutor(max_workers=self.num_ffmpeg_threads) as frame_executor,
+                ThreadPoolExecutor(max_workers=self.num_frames_threads) as frame_executor,
                 ThreadPoolExecutor(max_workers=1) as tokenizer_executor,
                 ThreadPoolExecutor(max_workers=self.num_writer_threads) as writer_executor,
             ):

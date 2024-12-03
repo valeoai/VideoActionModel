@@ -48,14 +48,13 @@ jq . > opendv/opendv_video.json
 Then you can use the following command to create the tokens:
 
 ```bash
-python opendv/token_creator.py \
---video_list opendv/opendv_video.json \
+python world_model/opendv/create_opendv_tokens.py \
+--video_list world_model/opendv/opendv_video.json \
+--metadata ~/iveco/datasets_iveco_raw/OpenDV_Youtube/videos_metadata.csv \
 --outdir ~/data/OpenDV_Youtube/tokens \
---rank 0 \
---tmpdir ~/data/OpenDV_Youtube/tmp \
 --tokenizer_jit_path ~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit \
---num_ffmpeg_threads 10 \
---num_writer_threads 5 \
+--num_frames_threads 15 \
+--num_writer_threads 1 \
 --frames_queue_size 10000 \
 --writer_queue_size 10000 \
 --batch_size 64 \
