@@ -1,11 +1,13 @@
 import os
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from lightning import LightningDataModule
 from lightning_utilities.core.rank_zero import rank_zero_only
-from torch.utils.data import DataLoader
 
 from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
+from world_model.opendv.stateful_dataloader import StatefulDataLoader
+
+StateDict = Dict[str, Any]
 
 
 class TokenizedSequenceOpenDVDataModule(LightningDataModule):
@@ -71,8 +73,43 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
 
         return self
 
-    def train_dataloader(self) -> DataLoader:
-        return DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
+    def train_dataloader(self) -> StatefulDataLoader:
+        if not hasattr(self, "train_dataloader_"):
+            self.train_dataloader_ = StatefulDataLoader(
+                self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers, pin_memory=True
+            )
+        return self.train_dataloader_
 
-    def val_dataloader(self) -> DataLoader:
-        return DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
+    def val_dataloader(self) -> StatefulDataLoader:
+        if not hasattr(self, "val_dataloader_"):
+            self.val_dataloader_ = StatefulDataLoader(
+                self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True
+            )
+        return self.val_dataloader_
+
+    def state_dict(self) -> StateDict:
+        return {
+            "data_root_dir": self.data_root_dir,
+            "video_list_path": self.video_list_path,
+            "val_video_list_path": self.val_video_list_path,
+            "sequence_length": self.sequence_length,
+            "batch_size": self.batch_size,
+            "num_workers": self.num_workers,
+            "train_loader_state_dict": self.train_dataloader_.state_dict(),
+        }
+
+    def load_state_dict(self, state_dict: StateDict) -> None:
+        self.data_root_dir = state_dict["data_root_dir"]
+        self.video_list_path = state_dict["video_list_path"]
+        self.val_video_list_path = state_dict["val_video_list_path"]
+        self.sequence_length = state_dict["sequence_length"]
+        self.batch_size = state_dict["batch_size"]
+        self.num_workers = state_dict["num_workers"]
+        self.setup()
+        self.train_dataloader_ = StatefulDataLoader(
+            self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers
+        )
+        self.train_dataloader_.load_state_dict(state_dict["train_loader_state_dict"])
+        self.val_dataloader_ = StatefulDataLoader(
+            self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers
+        )

@@ -1,8 +1,6 @@
-import json
 import logging
 import os
 import subprocess
-import sys
 import threading
 import time
 from collections import defaultdict
@@ -11,48 +9,30 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Any, Dict, Generator, List, Tuple
+from typing import Any, Dict, Generator, List
 
 import numpy as np
 import pandas as pd
 import torch
 import torchvision.transforms.v2.functional as TF
-from colorlog import ColoredFormatter
 from PIL import Image
 from torch import Tensor
 from tqdm import tqdm
 
-logger = logging.getLogger("OpenDV")
 Kwargs = Dict[str, Any]
 Data = Any
 DataPoints = List[Any]
 
 
-logger.handlers.clear()
-formatter = ColoredFormatter(
-    "[%(cyan)s%(asctime)s%(reset)s]" "[%(light_blue)s%(name)s%(reset)s]" "[%(log_color)s%(levelname)s%(reset)s] - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    reset=True,
-    log_colors={
-        "DEBUG": "cyan",
-        "INFO": "green",
-        "WARNING": "yellow",
-        "ERROR": "red",
-        "CRITICAL": "red",
-    },
-)
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(formatter)
-handler.setLevel(logging.INFO)
-logger.addHandler(handler)
-
-
 @dataclass
 class VideoInfo:
     path: str
-    trim_start: int
-    trim_end: int
-    duration: int = None
+    video_id: str
+    discard_start: int
+    discard_end: int
+    duration: int
+    end: int
+    expected_frames: int
 
 
 @dataclass
@@ -80,6 +60,22 @@ class FramesBatch:
     paths: List[str]
 
 
+def get_duration_from_path(video_path: str) -> float:
+    # $(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 !{input_video})
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        video_path,
+    ]
+    duration = subprocess.check_output(cmd).decode("utf-8").strip()
+    return float(duration)
+
+
 @contextmanager
 def ffmpeg_process(cmd: List[str]) -> Generator[subprocess.Popen, None, None]:
     process = subprocess.Popen(cmd)
@@ -94,7 +90,7 @@ def ffmpeg_process(cmd: List[str]) -> Generator[subprocess.Popen, None, None]:
             pass  # Process already terminated
 
 
-def preprocess_batch_of_frames(frames: List[str]) -> Tensor:
+def preprocess_batch_of_frames(frames: List[str], device: str) -> Tensor:
     frames = [Image.open(frame).convert("RGB") for frame in frames]
 
     def transform(frame: Image.Image) -> Tensor:
@@ -106,7 +102,7 @@ def preprocess_batch_of_frames(frames: List[str]) -> Tensor:
 
     frames = [transform(frame) for frame in frames]
     frames = torch.stack(frames)
-    return frames.to("cuda", non_blocking=True)
+    return frames.to(device, non_blocking=True)
 
 
 class TokenCreator:
@@ -114,20 +110,19 @@ class TokenCreator:
     def __init__(
         self,
         *,
-        video_list: List[str],
-        metadata: pd.DataFrame,
+        video: str,
+        device: str,
+        metadata: str,
         tmpdir: str,
         outdir: str,
-        rank: int,
         tokenizer_jit_path: str,
-        num_frames_threads: int,
-        num_writer_threads: int,
         frames_queue_size: int,
         writer_queue_size: int,
         batch_size: int,
         target_frame_rate: int,
         target_width: int,
         target_height: int,
+        num_writer_threads: int = 1,
         remove_temp_frames: bool = True,
     ) -> None:
         """
@@ -146,17 +141,17 @@ class TokenCreator:
             check_kill_signal: Function to check if the process should terminate
             preprocessor_kwargs: Additional arguments for the preprocessor
         """
-        self.video_list = video_list
+        self.video_path = video
         self.outdir = Path(outdir)
         self.tmpdir = Path(tmpdir)
-        self.rank = rank
+        self.device = device
+
+        self.logger = logging.getLogger(os.path.basename(video))
 
         self.remove_temp_frames = remove_temp_frames
 
-        assert num_frames_threads > 0, "num_processor_threads must be positive"
         assert num_writer_threads > 0, "num_writer_threads must be positive"
 
-        self.num_frames_threads = num_frames_threads
         self.num_writer_threads = num_writer_threads
 
         # Create output directory
@@ -168,28 +163,24 @@ class TokenCreator:
         self.frames_queue = Queue(maxsize=frames_queue_size)
         self.writer_queue = Queue(maxsize=writer_queue_size)
 
-        # Load the videos
-        _ = self.format_metadata(metadata)
-        self.videos = []
-        for video_pth in self.video_list:
-            meta = self.metadata[os.path.basename(video_pth)]
-            video = VideoInfo(
-                path=video_pth,
-                trim_start=meta["trim_start"],
-                trim_end=meta["trim_end"],
-                duration=meta["duration"],
-            )
-            self.videos.append(video)
-
-        # Batch size for the tokenizer
-        self.batch_size = batch_size
-
         # Target frame rate for frames extraction
         self.processing_config = ProcessingConfig(
             fps=target_frame_rate,
             width=target_width,
             height=target_height,
         )
+
+        # Load the videos
+        _ = self.format_metadata(metadata)
+        meta = self.metadata[os.path.basename(video)]
+        video_id = os.path.basename(video).split(".")[0]
+        self.video = VideoInfo(path=video, video_id=video_id, **meta)
+        self.video.discard_start = 10
+        self.video.end = 63
+        self.video.expected_frames = 50 * 5
+
+        # Batch size for the tokenizer
+        self.batch_size = batch_size
 
         # Flag to signal when processing is complete
         self.processing_complete = threading.Event()
@@ -206,33 +197,34 @@ class TokenCreator:
         # Load the tokenizer
         self.tokenizer = torch.jit.load(tokenizer_jit_path)
         self.tokenizer.eval()
-        self.tokenizer.cuda()
+        self.tokenizer.to(self.device, non_blocking=True)
 
         # Progress bars for processing and writing
         self.pbar_frames = None
         self.pbar_tokens = None
         self.pbar_write = None
 
-    def format_metadata(self, db: pd.DataFrame) -> None:
+    def format_metadata(self, metadata: str) -> None:
+        db = pd.read_csv(metadata, sep="\t")
         self.metadata = defaultdict(dict)
         for _, row in db.iterrows():
             video_id = row["video_id"].replace("@", "-") + "." + row["container"]
-            self.metadata[video_id]["trim_start"] = row["discard_start"]
-            self.metadata[video_id]["trim_end"] = row["discard_end"]
-            if not np.isnan(duration := row["duration"]):
-                self.metadata[video_id]["duration"] = duration - row["discard_start"] - row["discard_end"]
-            else:
-                self.metadata[video_id]["duration"] = None
+            self.metadata[video_id]["discard_start"] = row["discard_start"]
+            self.metadata[video_id]["discard_end"] = row["discard_end"]
+            duration = row["duration"]
+            if np.isnan(duration):
+                duration = get_duration_from_path(self.video_path)
 
-    def create_frames_from_video(
-        self,
-        video: VideoInfo,
-    ) -> None:
+            self.metadata[video_id]["duration"] = duration - row["discard_start"] - row["discard_end"]
+            self.metadata[video_id]["end"] = duration - row["discard_end"]
+            self.metadata[video_id]["expected_frames"] = int(self.metadata[video_id]["duration"] * self.processing_config.fps)
+
+    def create_frames_from_video(self) -> None:
         """Extract frames from video using PyAV."""
         config = self.processing_config
 
         try:
-            frames_outdir = self.tmpdir / Path(video.path).stem
+            frames_outdir = self.tmpdir / Path(self.video.path).stem
             frames_outdir.mkdir(exist_ok=True)
 
             cmd = [
@@ -240,15 +232,13 @@ class TokenCreator:
                 "-y",
                 "-hide_banner",
                 "-ss",
-                "10",
+                f"{self.video.discard_start}",
                 "-i",
-                f"{video.path}",
-                "-t",
-                f"{video.duration}",
+                f"{self.video.path}",
+                "-to",
+                f"{self.video.end}",
                 "-vf",
                 f"fps={config.fps},scale={config.width}:{config.height}",
-                "-threads",
-                "2",  # Use all available threads
                 "-q:v",
                 "2",
                 "-vsync",
@@ -262,24 +252,37 @@ class TokenCreator:
                 frames_outdir / "f_%06d.jpg",
             ]
 
-            with ffmpeg_process(cmd):
+            with ffmpeg_process(cmd) as process:
                 processed_frames = set()
+                no_new_frames_count = 0
 
                 while True:
                     new_frames = set(list(frames_outdir.glob("*.jpg"))) - processed_frames
+
+                    if not new_frames:
+                        # If no new frames were found, check if the process is still running
+                        if process.poll() is not None:
+                            # Process has finished, exit if we've checked a few times with no new frames
+                            no_new_frames_count += 1
+                            if no_new_frames_count >= 3:  # Check 3 times to be sure
+                                break
+                        time.sleep(1.0)
+                        continue
+
+                    # Reset the counter since we found new frames
+                    no_new_frames_count = 0
                     processed_frames.update(new_frames)
 
                     # Update progress
                     with self.lock:
                         self.frames_created += len(new_frames)
-                        self.pbar_frames.set_postfix({"frames_created": self.frames_created})
+                        self.pbar_frames.update(len(new_frames))
 
                     for frame in new_frames:
                         self.frames_queue.put(frame)
-                    time.sleep(1.0)
 
         except Exception as e:
-            logger.error(f"Error extracting frames from {video.path}: {str(e)}")
+            self.logger.error(f"Error extracting frames from {self.video.path}: {str(e)}")
 
     def tokenize_frames(self, frames: FramesBatch) -> Tokens:
         """
@@ -326,7 +329,7 @@ class TokenCreator:
                         continue
 
                 if (len(current_batch) == self.batch_size) or (self.all_frames_extracted.is_set() and len(current_batch) > 0):
-                    batch = preprocess_batch_of_frames(current_batch)
+                    batch = preprocess_batch_of_frames(current_batch, self.device)
                     tokens = self.tokenize_frames(FramesBatch(data=batch, paths=current_batch))
 
                     # Update progress
@@ -342,7 +345,7 @@ class TokenCreator:
 
             except Exception as e:
                 current_batch = []
-                logger.error(f"Error tokenizing frames: {str(e)}")
+                self.logger.error(f"Error tokenizing frames: {str(e)}")
 
     def save_tokens(self) -> None:
         while not self.writting_complete.is_set():
@@ -360,7 +363,7 @@ class TokenCreator:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 np.save(path, token.data.astype(np.uint16))
             except Exception as e:
-                logger.error(f"Error saving token {path}: {str(e)}")
+                self.logger.error(f"Error saving token {path}: {str(e)}")
 
             self.writer_queue.task_done()
             # Update progress
@@ -369,26 +372,28 @@ class TokenCreator:
                 self.pbar_write.total = self.frames_created
                 self.pbar_write.update(1)
 
-    def create_opendv_dataset(self) -> Tuple[Dict[str, int], List[str]]:
+    def create_opendv_dataset(self) -> bool:
         """Create the dataset using concurrent processing and writing with ThreadPoolExecutor."""
         # Initialize progress bars
-        self.pbar_frames = tqdm(total=len(self.videos), desc="[OpenDV preprocess] Extracting frames from videos")
-        self.pbar_tokens = tqdm(total=9e9, desc="[OpenDV preprocess] Encoding tokens")
-        self.pbar_write = tqdm(total=9e9, desc="[OpenDV preprocess] Writing tokens to disk")
+        self.pbar_frames = tqdm(
+            total=self.video.expected_frames, desc=f"[Processing {self.video.video_id}] Extracting frames from videos"
+        )
+        self.pbar_tokens = tqdm(total=self.video.expected_frames, desc=f"[Processing {self.video.video_id}] Encoding tokens")
+        self.pbar_write = tqdm(
+            total=self.video.expected_frames, desc=f"[Processing {self.video.video_id}] Writing tokens to disk"
+        )
 
+        success = True
         try:
             # Create thread pools for each task type
             with (
-                ThreadPoolExecutor(max_workers=self.num_frames_threads) as frame_executor,
+                ThreadPoolExecutor(max_workers=1) as frame_executor,
                 ThreadPoolExecutor(max_workers=1) as tokenizer_executor,
                 ThreadPoolExecutor(max_workers=self.num_writer_threads) as writer_executor,
             ):
 
-                # Submit frame extraction tasks
-                frame_futures = []
-                for video in self.videos:
-                    future = frame_executor.submit(self.create_frames_from_video, video)
-                    frame_futures.append(future)
+                # Submit frame extraction task
+                extraction_future = frame_executor.submit(self.create_frames_from_video)
 
                 # Start tokenizer task
                 tokenizer_future = tokenizer_executor.submit(self.tokenize_worker)
@@ -400,22 +405,19 @@ class TokenCreator:
                     writer_futures.append(future)
 
                 # Wait for frame extraction to complete and handle any exceptions
-                for future in as_completed(frame_futures):
-                    try:
-                        future.result()  # This will raise any exceptions that occurred
-                    except Exception as e:
-                        logger.error(f"Frame extraction failed: {str(e)}")
-
+                try:
+                    extraction_future.result()  # This will raise any exceptions that occurred
+                except Exception as e:
+                    self.logger.error(f"Frame extraction failed: {str(e)}")
                 # Signal that frame extraction is complete
                 self.all_frames_extracted.set()
-                logger.info("All frames extracted")
+                self.logger.info("All frames extracted")
 
                 # Wait for tokenizer to complete
                 try:
                     tokenizer_future.result()
                 except Exception as e:
-                    logger.error(f"Tokenizer failed: {str(e)}")
-
+                    self.logger.error(f"Tokenizer failed: {str(e)}")
                 # Signal that tokenization is complete
                 self.processing_complete.set()
 
@@ -424,11 +426,12 @@ class TokenCreator:
                     try:
                         future.result()
                     except Exception as e:
-                        logger.error(f"Writer failed: {str(e)}")
+                        self.logger.error(f"Writer failed: {str(e)}")
+                        success = False
 
         except Exception as e:
-            logger.error(f"Dataset creation failed: {str(e)}")
-            raise
+            self.logger.error(f"Dataset creation failed: {str(e)}")
+            success = False
 
         finally:
             # Cleanup
@@ -441,14 +444,14 @@ class TokenCreator:
             self.processing_complete.set()
             self.writting_complete.set()
 
-        # Write dataset info
-        dataset_info = {
-            "frames_created": self.frames_created,
-            "frames_tokenized": self.frames_tokenized,
-            "written_tokens": self.written_tokens,
-        }
+        return success
 
-        with open(self.outdir / f"rank-{self.rank}-dataset_info.json", "w") as f:
-            json.dump(dataset_info, f, indent=4)
 
-        return dataset_info
+def create_tokens(**kwargs) -> bool:
+    token_creator = TokenCreator(**kwargs)
+    success = token_creator.create_opendv_dataset()
+    if success:
+        token_creator.logger.info(f"Dataset creation for {token_creator.video.video_id} completed successfully")
+    else:
+        token_creator.logger.error(f"Dataset creation for {token_creator.video.video_id} failed")
+    return success
