@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Queue
-from typing import Any, Dict, Generator, List
+from typing import Any, Dict, Generator, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -110,7 +110,8 @@ class TokenCreator:
     def __init__(
         self,
         *,
-        video: str,
+        video: Optional[str] = None,
+        frames: Optional[str] = None,
         device: str,
         metadata: str,
         tmpdir: str,
@@ -146,9 +147,15 @@ class TokenCreator:
         self.tmpdir = Path(tmpdir)
         self.device = device
 
-        self.logger = logging.getLogger(os.path.basename(video))
+        if video is not None:
+            self.logger = logging.getLogger(os.path.basename(video))
+        elif frames is not None:
+            self.logger = logging.getLogger("world_model/TokenCreator")
+        else:
+            raise ValueError("Either video or frames must be provided")
 
-        self.remove_temp_frames = remove_temp_frames
+        # If frames are provided, we force not removing them
+        self.remove_temp_frames = remove_temp_frames if frames is None else False
 
         assert num_writer_threads > 0, "num_writer_threads must be positive"
 
@@ -163,21 +170,28 @@ class TokenCreator:
         self.frames_queue = Queue(maxsize=frames_queue_size)
         self.writer_queue = Queue(maxsize=writer_queue_size)
 
-        # Target frame rate for frames extraction
-        self.processing_config = ProcessingConfig(
-            fps=target_frame_rate,
-            width=target_width,
-            height=target_height,
-        )
+        if frames is not None:
+            self.job_name = f"{len(frames)} frames"
+            self.expected_frames = len(frames)
+            self.frames_queue = Queue(maxsize=len(frames))
+            for frame in frames:
+                self.frames_queue.put(frame)
 
         # Load the videos
-        _ = self.format_metadata(metadata)
-        meta = self.metadata[os.path.basename(video)]
-        video_id = os.path.basename(video).split(".")[0]
-        self.video = VideoInfo(path=video, video_id=video_id, **meta)
-        self.video.discard_start = 10
-        self.video.end = 63
-        self.video.expected_frames = 50 * 5
+        if video is not None:
+            # Target frame rate for frames extraction
+            self.processing_config = ProcessingConfig(
+                fps=target_frame_rate,
+                width=target_width,
+                height=target_height,
+            )
+
+            _ = self.format_metadata(metadata)
+            meta = self.metadata[os.path.basename(video)]
+            video_id = os.path.basename(video).split(".")[0]
+            self.video = VideoInfo(path=video, video_id=video_id, **meta)
+            self.expected_frames = self.video.expected_frames
+            self.job_name = self.video.video_id
 
         # Batch size for the tokenizer
         self.batch_size = batch_size
@@ -375,13 +389,9 @@ class TokenCreator:
     def create_opendv_dataset(self) -> bool:
         """Create the dataset using concurrent processing and writing with ThreadPoolExecutor."""
         # Initialize progress bars
-        self.pbar_frames = tqdm(
-            total=self.video.expected_frames, desc=f"[Processing {self.video.video_id}] Extracting frames from videos"
-        )
-        self.pbar_tokens = tqdm(total=self.video.expected_frames, desc=f"[Processing {self.video.video_id}] Encoding tokens")
-        self.pbar_write = tqdm(
-            total=self.video.expected_frames, desc=f"[Processing {self.video.video_id}] Writing tokens to disk"
-        )
+        self.pbar_frames = tqdm(total=self.expected_frames, desc=f"[Processing {self.job_name}] Extracting frames from videos")
+        self.pbar_tokens = tqdm(total=self.expected_frames, desc=f"[Processing {self.job_name}] Encoding tokens")
+        self.pbar_write = tqdm(total=self.expected_frames, desc=f"[Processing {self.job_name}] Writing tokens to disk")
 
         success = True
         try:
@@ -393,7 +403,8 @@ class TokenCreator:
             ):
 
                 # Submit frame extraction task
-                extraction_future = frame_executor.submit(self.create_frames_from_video)
+                if self.video_path is not None:
+                    extraction_future = frame_executor.submit(self.create_frames_from_video)
 
                 # Start tokenizer task
                 tokenizer_future = tokenizer_executor.submit(self.tokenize_worker)
@@ -405,10 +416,11 @@ class TokenCreator:
                     writer_futures.append(future)
 
                 # Wait for frame extraction to complete and handle any exceptions
-                try:
-                    extraction_future.result()  # This will raise any exceptions that occurred
-                except Exception as e:
-                    self.logger.error(f"Frame extraction failed: {str(e)}")
+                if self.video_path is not None:
+                    try:
+                        extraction_future.result()  # This will raise any exceptions that occurred
+                    except Exception as e:
+                        self.logger.error(f"Frame extraction failed: {str(e)}")
                 # Signal that frame extraction is complete
                 self.all_frames_extracted.set()
                 self.logger.info("All frames extracted")

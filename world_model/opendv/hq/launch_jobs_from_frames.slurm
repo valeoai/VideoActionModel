@@ -1,22 +1,21 @@
 #!/bin/bash
-#SBATCH --job-name=hq_worker
+#SBATCH --job-name=hq_jobs
 #SBATCH -A fzh@v100
 #SBATCH -C v100
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:0
 #SBATCH --cpus-per-task=10
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu-dev
 #SBATCH --time=01:00:00
-#SBATCH --output=hq_worker-%j.out
-#SBATCH --error=hq_worker-%j.out
-#SBATCH --array=0
+#SBATCH --output=hq_jobs-%j.out
+#SBATCH --error=hq_jobs-%j.out
 
 cd $WORK/NextTokenPredictor
 
 module purge
 module load pytorch-gpu/py3/2.4.0
-export PYTHONUSERBASE=$WORK/python_envs/webdataset
+export PYTHONUSERBASE=$WORK/python_envs/world_model
 export MPICH_GPU_SUPPORT_ENABLED=1
 export NCCL_DEBUG=INFO
 export CUDA_LAUNCH_BLOCKING=1
@@ -31,10 +30,12 @@ export TMPDIR=$JOBSCRATCH
 set -x
 
 # Execution du code
-srun hq worker start \
---cpus 10  \
---resource "gpus/nvidia=sum(1)" \
---no-detect-resources \
---idle-timeout 3000sec \
---manager slurm \
---on-server-lost finish-running
+srun python world_model/opendv/create_opendv_tokens.py \
+--frames_dir $ycy_ALL_CCFRSCRATCH/OpenDV/frames512 \
+--size_of_chunks 1000000 \
+--outdir $fzh_ALL_CCFRSCRATCH/OpenDV/tokens \
+--tokenizer_jit_path $WORK/VQ_ds16_16384_llamagen.jit \
+--num_writer_threads 5 \
+--frames_queue_size 10000 \
+--writer_queue_size 10000 \
+--batch_size 64

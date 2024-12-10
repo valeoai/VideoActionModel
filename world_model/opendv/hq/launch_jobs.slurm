@@ -1,17 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=hq_jobs         # nom du job
-#SBATCH -A ycyh100                      # pour cibler les noeuds H100
-#SBATCH -C h100                      # pour cibler les noeuds H100
-# Ici, reservation de 3x24=72 CPU (pour 3 taches) et de 3 GPU (1 GPU par tache) sur un seul noeud :
-#SBATCH --nodes=1                    # nombre de noeud
-#SBATCH --gres=gpu:0                 # nombre de GPU par noeud (max 4 pour les noeuds H100)
-# Sachant qu'ici on ne reserve qu'un seul GPU par tache (soit 1/4 des GPUs), l'ideal est de reserver 1/4 des CPU du noeud pour chaque tache:
-#SBATCH --cpus-per-task=8           # nombre de CPU par tache (1/4 des CPUs ici)
-# /!\ Attention, "multithread" fait reference a l'hyperthreading dans la terminologie Slurm
-#SBATCH --hint=nomultithread         # hyperthreading desactive
-#SBATCH --time=20:00:00              # temps d’execution maximum demande (HH:MM:SS)
-#SBATCH --output=hq-server-%j.out    # nom du fichier de sortie
-#SBATCH --error=hq-server-%j.out     # nom du fichier d'erreur (ici commun avec la sortie)
+#SBATCH --job-name=hq_jobs
+#SBATCH -A fzh@v100
+#SBATCH -C v100
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:0
+#SBATCH --cpus-per-task=10
+#SBATCH --hint=nomultithread
+#SBATCH --qos=qos_gpu-dev
+#SBATCH --time=01:00:00
+#SBATCH --output=hq_jobs-%j.out
+#SBATCH --error=hq_jobs-%j.out
 
 cd $WORK/NextTokenPredictor
 
@@ -34,10 +32,10 @@ set -x
 # Execution du code
 srun python world_model/opendv/create_opendv_tokens.py \
 --video_list world_model/opendv/opendv_video.json \
---metadata ~/iveco/datasets_iveco_raw/OpenDV_Youtube/videos_metadata.csv \
---outdir ~/data/OpenDV_Youtube/tokens \
---tmpdir ~/data/OpenDV_Youtube/tmp \
---tokenizer_jit_path ~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit \
+--metadata $fzh_ALL_CCFRSCRATCH/OpenDV/videos_metadata.csv \
+--outdir $fzh_ALL_CCFRSCRATCH/OpenDV/tokens \
+--tmpdir $fzh_ALL_CCFRSCRATCH/OpenDV/tmp \
+--tokenizer_jit_path $WORK/VQ_ds16_16384_llamagen.jit \
 --num_writer_threads 5 \
 --frames_queue_size 10000 \
 --writer_queue_size 10000 \

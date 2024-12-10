@@ -4,6 +4,8 @@ import logging
 import os
 import sys
 from functools import partial
+from glob import glob
+from itertools import islice
 from typing import Optional
 
 from colorlog import ColoredFormatter
@@ -56,10 +58,12 @@ def _path(path: str) -> str:
 
 
 parser = argparse.ArgumentParser(description="OpenDV Token Creator")
-parser.add_argument("--video_list", type=_path, help="Path to the video list (json)")
+parser.add_argument("--video_list", type=_path, default=None, help="Path to the video list (json)")
+parser.add_argument("--frames_dir", type=_path, default=None, help="Directory for already extracted frames")
+parser.add_argument("--size_of_chunks", type=int, help="Size of the chunks to create a hyperqueue task")
 parser.add_argument("--metadata", type=_path, help="Path to the metadata file")
 parser.add_argument("--outdir", type=_path, help="Output directory")
-parser.add_argument("--tmpdir", type=_path, help="Temporary directory")
+parser.add_argument("--tmpdir", type=_path, default="./tmp", help="Temporary directory")
 parser.add_argument("--tokenizer_jit_path", type=_path, help="Path to the tokenizer jit model")
 parser.add_argument("--num_writer_threads", type=int, help="Number of threads for writing to disk")
 parser.add_argument("--frames_queue_size", type=int, help="Size of the frames queue")
@@ -76,11 +80,23 @@ os.makedirs("./logs/jobs", exist_ok=True)
 
 setup_logger(logdir="./logs")
 
-# Load the video list
-with open(args.video_list, "r") as f:
-    video_list = json.load(f)
+assert args.video_list is not None or args.frames_dir is not None, "Either video_list or frames_dir must be provided"
+assert args.video_list is None or args.frames_dir is None, "Either video_list or frames_dir must be provided"
 
-logger.info(f"Number of videos: {len(video_list)}")
+if args.video_list is not None:
+    # Load the video list
+    with open(args.video_list, "r") as f:
+        video_list = json.load(f)
+    logger.info(f"Number of videos: {len(video_list)}")
+elif args.frames_dir is not None:
+    assert args.size_of_chunks is not None, "Size of the chunks must be provided"
+    frames = glob(os.path.join(args.frames_dir, "**", "*.jpg"), recursive=True)
+    logger.info(f"Number of frames: {len(frames)}")
+    num_chunks = len(frames) // args.size_of_chunks + 1
+    video_list = []
+    for chunk_id in range(num_chunks):
+        video_list.append(islice(frames, chunk_id, None, num_chunks))
+    logger.info(f"Number of tasks created: {len(video_list)}")
 
 partial_create_tokens = partial(
     create_tokens,
@@ -99,28 +115,24 @@ partial_create_tokens = partial(
     remove_temp_frames=not args.keep_temp_frames,
 )
 
-# for video in video_list:
-#     video_id = os.path.basename(video).split(".")[0]
-#     logger.info(f"Processing video: {video_id}")
-
-#     sucess = partial_create_tokens(video=video)
-#     if not sucess:
-#         logger.error(f"Failed to process video: {video_id}")
-#         sys.exit(1)
-
 server_dir = os.path.join(os.path.expanduser("~"), ".hq-server")
 client = Client(server_dir)
-
 job = Job()
 
 for idx, video in enumerate(video_list):
-    video_id = os.path.basename(video).split(".")[0]
+    if args.video_list is not None:
+        video_id = os.path.basename(video).split(".")[0]
+        kwargs = {"video": video}
+        logfile = f"{idx:06d}_{video_id}.log"
+    else:
+        logfile = f"{idx:06d}.log"  # in this case this is the worker id
+        kwargs = {"frames": video}
 
     job.function(
         partial_create_tokens,
-        kwargs=(dict(video=video)),
-        stdout=os.path.join("./logs", "jobs", f"{idx:06d}_{video_id}.log"),
-        stderr=os.path.join("./logs", "jobs", f"{idx:06d}_{video_id}.log"),
+        kwargs=kwargs,
+        stdout=os.path.join("./logs", "jobs", logfile),
+        stderr=os.path.join("./logs", "jobs", logfile),
     )
 
 submitted = client.submit(job)

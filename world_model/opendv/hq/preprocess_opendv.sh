@@ -1,9 +1,10 @@
+#!/bin/bash
 hq server start --idle-timeout=300sec &
 
 hq server info  # CAUTION: Ensure that the server is running before launching the workers!
 
 for gpu in {0..0}; do
-    CUDA_VISIBLE_DEVICES=$gpu hq worker start &
+    CUDA_VISIBLE_DEVICES=$gpu hq worker start --no-detect-resources --idle-timeout 300sec --on-server-lost finish-running --cpus 4 --resource "gpus/nvidia=sum(1)" &
 done
 
 
