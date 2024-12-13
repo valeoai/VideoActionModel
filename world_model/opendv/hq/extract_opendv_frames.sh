@@ -9,8 +9,8 @@ HEIGHT=288
 INPUT_DIR=$ycy_ALL_CCFRSTORE/OpenDV_Youtube/videos
 CSV_FILE=$ycy_ALL_CCFRSTORE/OpenDV_Youtube_meta/videos_metadata.csv
 BASE_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_release/
-OUTPUT_DIR=$BASE_DIR/frames512
-mkdir -p $OUTPUT_DIR
+OUTDIR=$BASE_DIR/frames512
+mkdir -p $OUTDIR
 
 bash $SCRIPT_DIR/hq/start_hq_archive_slurm.sh $NUM_WORKERS $CPUS_PER_WORKER
 
@@ -27,7 +27,7 @@ while read -r VIDEO_PATH; do
     $FPS \
     $WIDTH \
     $HEIGHT \
-    $OUTPUT_DIR
+    $OUTDIR
 done < $BASE_DIR/videos.txt
 
 

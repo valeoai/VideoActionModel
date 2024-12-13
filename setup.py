@@ -24,6 +24,7 @@ setup(
     ],
     python_requires=">=3.0",
     install_requires=install_requires,
+    dependency_links=["https://download.pytorch.org/whl/nightly/cpu"],
     extras_require={
         "dev": install_requires_dev,
         "torch": ["torch==2.4.0", "torchvision==0.19.0"],

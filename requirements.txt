@@ -7,3 +7,7 @@ pillow
 av
 colorlog
 hyperqueue
+# Install in the command line is this
+# torchdata --pre --extra-index-url https://download.pytorch.org/whl/nightly/cpu
+# Trying to make it work with setup.py
+torchdata==0.10.0.dev20241129+cpu
