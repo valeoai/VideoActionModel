@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=10
 #SBATCH --hint=nomultithread
-#SBATCH --qos=qos_gpu-dev
-#SBATCH --time=01:00:00
+#SBATCH --qos=qos_gpu-t3
+#SBATCH --time=10:00:00
 #SBATCH --output=hq_worker-%j.out
 #SBATCH --error=hq_worker-%j.out
 
@@ -27,15 +27,14 @@ export TMPDIR=$JOBSCRATCH
 set -x
 
 if [ -z "$1" ]; then
-    echo "Usage: $0 <NUM_WORKERS>"
+    echo "Usage: $0 <CPUS_PER_WORKER>"
     exit 1
 fi
-NUM_WORKERS=$1
+CPUS_PER_WORKER=$1
 
 # Execution du code
 srun hq worker start \
---cpus $NUM_WORKERS \
---server-dir $WORK/.hq_server \
+--cpus $CPUS_PER_WORKER \
 --resource "gpus/nvidia=sum(1)" \
 --no-detect-resources \
 --idle-timeout 3000sec \

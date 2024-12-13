@@ -3,10 +3,10 @@ from setuptools import find_packages, setup
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-with open('requirements.txt') as open_file:
+with open("requirements.txt") as open_file:
     install_requires = open_file.read()
 
-with open('dev_requirements.txt') as open_file:
+with open("dev_requirements.txt") as open_file:
     install_requires_dev = open_file.read()
 
 setup(
@@ -25,6 +25,7 @@ setup(
     python_requires=">=3.0",
     install_requires=install_requires,
     extras_require={
-        'dev': install_requires_dev,
+        "dev": install_requires_dev,
+        "torch": ["torch==2.4.0", "torchvision==0.19.0"],
     },
 )

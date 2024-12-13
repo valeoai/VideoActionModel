@@ -1,12 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=hq_server
 #SBATCH -A fzh@v100
-#SBATCH -C v100
-#SBATCH --nodes=1
-#SBATCH --gres=gpu:0
-#SBATCH --cpus-per-task=10
+#SBATCH --partition=archive
+#SBATCH --cpus-per-task=1
 #SBATCH --hint=nomultithread
-#SBATCH --qos=qos_gpu-t3
 #SBATCH --time=10:00:00
 #SBATCH --output=hq_server-%j.out
 #SBATCH --error=hq_server-%j.out

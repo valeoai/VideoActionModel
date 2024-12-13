@@ -2,12 +2,12 @@
 
 printf "\033[0;32m Launching isort \033[0m\n"
 isort world_model
-isort jeanzay_slurm_job_submit.py
+isort ./*.py
 
 printf "\033[0;32m Launching black \033[0m\n"
 black world_model
-black jeanzay_slurm_job_submit.py
+black ./*.py
 
 printf "\033[0;32m Launching flake8 \033[0m\n"
 flake8 world_model
-flake8 jeanzay_slurm_job_submit.py
+flake8 ./*.py
