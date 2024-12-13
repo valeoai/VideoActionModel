@@ -11,8 +11,6 @@
 #SBATCH --output=hq_server-%j.out
 #SBATCH --error=hq_server-%j.out
 
-cd $WORK/NextTokenPredictor
-
 # Configuration of modules
 module purge
 
@@ -20,4 +18,4 @@ module purge
 set -x
 
 # Execution du code
-srun hq server start --idle-timeout=3000sec
+srun hq server start --idle-timeout=3000sec --server-dir $WORK/.hq_server

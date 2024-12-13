@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Union
 
-import torch
+import torch.distributed as dist
 from torchdata.stateful_dataloader import StatefulDataLoader as _StatefulDataLoader
 
 Args = List[Any]
@@ -15,10 +15,10 @@ class StatefulDataLoader(_StatefulDataLoader):
         Gather the state_dict from all ranks to the master rank
         """
         # is distributed
-        self.is_distributed = torch.distributed.is_available() and torch.distributed.is_initialized()
+        self.is_distributed = dist.is_available() and dist.is_initialized()
         if self.is_distributed:
-            self.is_master = torch.distributed.get_rank() == 0
-            self.world_size = torch.distributed.get_world_size()
+            self.is_master = dist.get_rank() == 0
+            self.world_size = dist.get_world_size()
         else:
             self.is_master = True
             self.world_size = 1
@@ -31,7 +31,7 @@ class StatefulDataLoader(_StatefulDataLoader):
             object_gather_list = None
 
         # Gather the state_dict from all ranks
-        torch.distributed.gather_object(state_dict, object_gather_list)
+        dist.gather_object(state_dict, object_gather_list)
 
         # Return the state_dict from the master rank
         return object_gather_list
@@ -56,7 +56,7 @@ class StatefulDataLoader(_StatefulDataLoader):
             return
 
         # get the rank of the current process
-        rank = torch.distributed.get_rank()
+        rank = dist.get_rank()
 
         # get the state_dict for the current loader
         # contrarily to state_dict(), load_state_dict() is called on all ranks
