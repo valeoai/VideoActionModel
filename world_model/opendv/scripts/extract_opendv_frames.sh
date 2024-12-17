@@ -1,6 +1,6 @@
 SCRIPT_DIR=$(dirname $(dirname "$(realpath "$0")"))
-NUM_WORKERS=1
-CPUS_PER_WORKER=2
+NUM_WORKERS=10
+CPUS_PER_WORKER=1
 
 FPS=5
 WIDTH=512
@@ -12,6 +12,10 @@ BASE_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_release/
 OUTDIR=$BASE_DIR/frames512
 mkdir -p $OUTDIR
 
+mkdir -p .hq-server
+# Set the directory which hyperqueue will use
+export HQ_SERVER_DIR=${PWD}/.hq-server
+
 bash $SCRIPT_DIR/hq/start_hq_archive_slurm.sh $NUM_WORKERS $CPUS_PER_WORKER
 
 # find all mp4 and webm files in the input directory
@@ -21,7 +25,7 @@ find $INPUT_DIR -type f -name "*.mp4" -o -name "*.webm" > $BASE_DIR/videos.txt
 while read -r VIDEO_PATH; do
     echo "Extracting frames from $VIDEO_PATH"
     hq submit --cpus $CPUS_PER_WORKER \
-    bash $SCRIPT_DIR/hq/extract_frames.sh \
+    bash $SCRIPT_DIR/scripts/_extract_frames.sh \
     $CSV_FILE \
     $VIDEO_PATH \
     $FPS \
@@ -31,4 +35,4 @@ while read -r VIDEO_PATH; do
 done < $BASE_DIR/videos.txt
 
 
-# hq server stop --server-dir ~/.hq_server
+# hq server stop

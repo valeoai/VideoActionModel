@@ -239,7 +239,7 @@ class TokenCreator:
         return success
 
 
-def create_tokens(**kwargs) -> bool:
+def create_tokens(**kwargs: Kwargs) -> bool:
     token_creator = TokenCreator(**kwargs)
     success = token_creator.create_opendv_dataset()
     if success:

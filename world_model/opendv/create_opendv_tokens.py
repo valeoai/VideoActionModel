@@ -69,7 +69,7 @@ args = parser.parse_args()
 setup_logger(logdir="./logs")
 
 logger.info("Creating hyperqueue client")
-client = Client()
+client = Client(server_dir=args.server_dir)
 
 os.makedirs("./logs", exist_ok=True)
 os.makedirs("./logs/jobs", exist_ok=True)

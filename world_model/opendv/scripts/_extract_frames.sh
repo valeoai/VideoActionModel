@@ -66,4 +66,5 @@ ffmpeg -hide_banner -loglevel error  \
 -ss "${DISCARD_START}" -i "${VIDEO_PATH}" -to "${END_TIME}" \
 -vf "fps=${FPS},scale=${WIDTH}:${HEIGHT}" \
 -q:v 2 -vsync 0 -frame_pts 0 -movflags +faststart \
+-threads 0 \
 -y "${OUTDIR}/f_%06d.jpg"

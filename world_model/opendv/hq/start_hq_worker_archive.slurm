@@ -2,7 +2,7 @@
 #SBATCH --job-name=hq_worker
 #SBATCH -A fzh@v100
 #SBATCH --partition=archive
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=1
 #SBATCH --hint=nomultithread
 #SBATCH --time=10:00:00
 #SBATCH --output=hq_worker-%j.out
