@@ -90,6 +90,7 @@ class WMRunner:
             device=device
         )
         self.world_model = WorldModelTrajectoryInference(network=network, sequence_adapter=sequence_adapter)
+        self.nb_timesteps = network.nb_timesteps
 
         self.device = device
         self.top_crop = self.inference_config.top_crop
@@ -124,8 +125,9 @@ class WMRunner:
             # append the current frame to the previous frames
             self.prev_frame_info["prev_frames"] = torch.cat(
                 [self.prev_frame_info["prev_frames"], preproc_output.unsqueeze(0)], dim=0,
-            )
+            )[-self.nb_timesteps:]
             self.prev_frame_info["prev_command"].append(input.command)
+            self.prev_frame_info["prev_command"] = self.prev_frame_info["prev_command"][-self.nb_timesteps:]
 
         # This should (T, c, h, w)
         # So here the temporal frames play the role of batch size
@@ -150,7 +152,7 @@ class WMRunner:
         else:
             self.prev_frame_info["prev_actions"] = torch.cat(
                 [self.prev_frame_info["prev_actions"], predicted_trajectory_tokens], dim=0
-            )
+            )[-(self.nb_timesteps - 1):]
 
         # decode the trajectory tokens
         trajectory = self.trajectory_tokenizer(predicted_trajectory_tokens)
