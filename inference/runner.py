@@ -1,6 +1,6 @@
 import uuid
 import yaml
-from typing import List
+from typing import List, Dict, Any
 from dataclasses import dataclass
 
 import numpy as np
@@ -42,16 +42,16 @@ class UniADAuxOutputs:
 
     def to_json(self) -> dict:
         n_objects = len(self.object_classes)
-        return dict(
-            objects_in_bev=self.objects_in_bev.tolist() if n_objects > 0 else None,
-            object_classes=self.object_classes if n_objects > 0 else None,
-            object_scores=self.object_scores.tolist() if n_objects > 0 else None,
-            object_ids=self.object_ids.tolist() if n_objects > 0 else None,
-            future_trajs=self.future_trajs.tolist() if n_objects > 0 else None,
-        )
+        return {
+            "objects_in_bev": self.objects_in_bev.tolist() if n_objects > 0 else None,
+            "object_classes": self.object_classes if n_objects > 0 else None,
+            "object_scores": self.object_scores.tolist() if n_objects > 0 else None,
+            "object_ids": self.object_ids.tolist() if n_objects > 0 else None,
+            "future_trajs": self.future_trajs.tolist() if n_objects > 0 else None,
+        }
 
     @classmethod
-    def empty(cls) -> "UniADAuxOutputs":
+    def empty(cls: "UniADAuxOutputs") -> "UniADAuxOutputs":
         return cls(
             objects_in_bev=np.zeros((0, 5)),
             object_classes=[],
@@ -70,7 +70,7 @@ class WMInferenceOutput:
 
 class WMRunner:
 
-    def __init__(self, config_path: str, checkpoint_path: str, device: torch.device):
+    def __init__(self, config_path: str, checkpoint_path: str, device: torch.device) -> None:
         with open(config_path, 'r') as file:
             inference_config = yaml.safe_load(file)
         self.inference_config = OmegaConf.create(inference_config)
@@ -97,7 +97,7 @@ class WMRunner:
         self.preproc_pipeline = CropAndResizeTransform(self.top_crop, self.scale_factor)
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         # making a new scene token for each new scene. these are used in the model.
         self.scene_token = str(uuid.uuid4())
         self.prev_frame_info = {
@@ -142,7 +142,8 @@ class WMRunner:
             trajectory_tokens = self.prev_frame_info["prev_actions"].unsqueeze(0)
 
         # Get the predicted trajectory tokens
-        predicted_trajectory_tokens = self.world_model(visual_tokens, command_tokens, trajectory_tokens)
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+            predicted_trajectory_tokens = self.world_model(visual_tokens, command_tokens, trajectory_tokens)
 
         if self.prev_frame_info["prev_actions"] is None:
             self.prev_frame_info["prev_actions"] = predicted_trajectory_tokens
@@ -169,7 +170,10 @@ def _format_trajs(trajs: torch.Tensor) -> torch.Tensor:
 
 
 if __name__ == "__main__":
-    def _get_sample_input(nusc, sample) -> WMInferenceInput:
+    # only load this for testing
+    from nuscenes.nuscenes import NuScenes
+
+    def _get_sample_input(nusc: NuScenes, sample: Dict[str, Any]) -> WMInferenceInput:
         timestamp = sample["timestamp"]
 
         # get cameras
@@ -198,9 +202,6 @@ if __name__ == "__main__":
         checkpoint_path=None,
         device=torch.device(device),
     )
-
-    # only load this for testing
-    from nuscenes.nuscenes import NuScenes
 
     # load the first surround-cam in nusc mini
     # nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
