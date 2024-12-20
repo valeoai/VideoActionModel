@@ -9,12 +9,15 @@ from typing import Any, Dict, List
 
 import numpy as np
 import torch
+from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.v2.functional as TF
 from PIL import Image
 from torch import Tensor
 from tqdm import tqdm
 
 Kwargs = Dict[str, Any]
+Sample = Dict[str, Any]
+Batch = Dict[str, Any]
 
 logger = logging.getLogger("world_model/TokenCreator")
 
@@ -31,19 +34,22 @@ class FramesBatch:
     paths: List[str]
 
 
-def preprocess_batch_of_frames(frames: List[str], device: str) -> Tensor:
-    frames = [Image.open(frame).convert("RGB") for frame in frames]
+class FramesDataset(Dataset):
+    """Vanilla Dataset for loading frames from a list of file paths."""
 
-    def transform(frame: Image.Image) -> Tensor:
+    def __init__(self, frames_file_list: List[str]) -> None:
+        self.frames_file_list = frames_file_list
+
+    def __len__(self) -> int:
+        return len(self.frames_file_list)
+
+    def __getitem__(self, idx: int) -> Sample:
+        path = self.frames_file_list[idx]
+        frame = Image.open(path).convert("RGB")
         frame = TF.to_image(frame)
-        frame = TF.to_dtype(frame, torch.uint8, scale=True)
         frame = TF.to_dtype(frame, torch.float32, scale=True)
         frame = 2.0 * frame - 1.0
-        return frame
-
-    frames = [transform(frame) for frame in frames]
-    frames = torch.stack(frames)
-    return frames.to(device, non_blocking=True)
+        return {"image": frame, "path": path}
 
 
 class TokenCreator:
@@ -57,6 +63,8 @@ class TokenCreator:
         batch_size: int,
         writer_queue_size: int = 1000,
         num_writer_threads: int = 5,
+        num_workers: int = 8,
+        dtype: str = "bf16",
         device: str = "cuda",
     ) -> None:
         """
@@ -74,6 +82,7 @@ class TokenCreator:
         """
         self.outdir = Path(outdir)
         self.device = device
+        self.dtype = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}[dtype]
 
         self.num_writer_threads = num_writer_threads
         assert num_writer_threads > 0, "num_writer_threads must be positive"
@@ -86,6 +95,8 @@ class TokenCreator:
             self.frames = [x.strip().replace("\n", "") for x in f.readlines()]
         self.job_name = f"{len(self.frames)} frames"
         self.number_of_frames = len(self.frames)
+        dataset = FramesDataset(self.frames)
+        self.loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
 
         self.writer_queue = Queue(maxsize=writer_queue_size)
 
@@ -109,22 +120,20 @@ class TokenCreator:
         self.pbar_tokens = None
         self.pbar_write = None
 
-    def tokenize_frames(self, frames: FramesBatch) -> Tokens:
+    def tokenize_frames(self, frames: Batch) -> Tokens:
         """
         Tokenize a list of frames using a pre-trained tokenizer.
         """
         # Tokenize the frames
-        try:
-            tokens = self.tokenizer(frames.data)
-        except Exception as e:
-            raise Exception(str(e))
+        with torch.amp.autocast(self.device, dtype=self.dtype):
+            tokens = self.tokenizer(frames["image"].to(self.device, non_blocking=True))
 
         # frames have the following path
         # DISK_DIR / {CHANNEL} / {VIDEO_ID} / f_{frame_num}.jpg
         # Tokens should have the following path
         # self.outdir / {CHANNEL} / {VIDEO_ID} / t_{frame_num}.npy
         out_tokens = []
-        for path, token in zip(frames.paths, tokens):
+        for path, token in zip(frames["path"], tokens):
             token_path = (
                 self.outdir
                 / Path(path).parent.parent.stem
@@ -139,15 +148,13 @@ class TokenCreator:
         """Submit tokens to the writer thread pool."""
         success = True
         try:
-            for start_batch in range(0, len(self.frames), self.batch_size):
-                current_batch = self.frames[start_batch : start_batch + self.batch_size]
-                batch = preprocess_batch_of_frames(current_batch, self.device)
-                tokens = self.tokenize_frames(FramesBatch(data=batch, paths=current_batch))
+            for batch in self.loader:
+                tokens = self.tokenize_frames(batch)
 
                 # Update progress
                 with self.lock:
-                    self.frames_tokenized += len(current_batch)
-                    self.pbar_tokens.update(len(current_batch))
+                    self.frames_tokenized += len(batch["path"])
+                    self.pbar_tokens.update(len(batch["path"]))
 
                 for token in tokens:
                     self.writer_queue.put(token)
@@ -184,7 +191,6 @@ class TokenCreator:
             # Update progress
             with self.lock:
                 self.written_tokens += 1
-                self.pbar_write.total = self.frames_created
                 self.pbar_write.update(1)
 
     def create_opendv_dataset(self) -> bool:

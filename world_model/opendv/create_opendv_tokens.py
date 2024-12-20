@@ -35,7 +35,7 @@ def setup_logger(logdir: Optional[str] = None) -> None:
     logging.getLogger().addHandler(handler)
 
     if logdir is not None:
-        logfile = os.path.join(logdir, "log.txt")
+        logfile = os.path.join(logdir, "hq_python.log")
         file_handler = logging.FileHandler(logfile)
         file_handler.setFormatter(formatter)
         file_handler.setLevel(logging.INFO)
@@ -65,16 +65,14 @@ parser.add_argument("--num_writer_threads", type=int, help="Number of threads fo
 parser.add_argument("--writer_queue_size", type=int, help="Size of the writer queue")
 parser.add_argument("--num_cpus", type=int, required=True, help="Number of CPUs")
 parser.add_argument("--batch_size", type=int, help="Batch size for tokenization")
+parser.add_argument("--dtype", type=str, default="bf16", help="Data type for tokenization", choices=["bf16", "fp16", "fp32"])
 args = parser.parse_args()
-setup_logger(logdir="./logs")
+setup_logger(logdir="./hq_tokenize_opendv")
 
 logger.info("Creating hyperqueue client")
 client = Client(server_dir=args.server_dir)
 
-os.makedirs("./logs", exist_ok=True)
-os.makedirs("./logs/jobs", exist_ok=True)
-
-frames_file_list = glob(os.path.join(args.frames_dir, "*.txt"), recursive=True)
+frames_file_list = sorted(glob(os.path.join(args.frames_dir, "*.txt"), recursive=True))
 logger.info(f"Number of job to create: {len(frames_file_list)}")
 
 partial_create_tokens = partial(
@@ -85,24 +83,25 @@ partial_create_tokens = partial(
     num_writer_threads=args.num_writer_threads,
     writer_queue_size=args.writer_queue_size,
     batch_size=args.batch_size,
+    num_workers=args.num_cpus,
+    dtype=args.dtype,
 )
 
-all_jobs_submitted = []
+job = Job()
 for idx, frame_file in enumerate(frames_file_list):
-    job = Job()
+    logger.info(f"Creating task {idx:06d} for {frame_file}")
     job.function(
         partial_create_tokens,
         kwargs={"frames": frame_file},
-        stdout=os.path.join("./logs", "jobs", f"{idx:06d}.log"),
-        stderr=os.path.join("./logs", "jobs", f"{idx:06d}.log"),
+        stdout=os.path.join("./hq_tokenize_opendv", "tokens", f"{idx:06d}.out"),
+        stderr=os.path.join("./hq_tokenize_opendv", "tokens", f"{idx:06d}.out"),
         resources=ResourceRequest(  # We need to provide the resources to prevent the job from running on the same GPU
             cpus=args.num_cpus,
             resources={"gpus/nvidia": 1},
         ),
     )
-    submitted = client.submit(job)
-    logger.info(f"Job ID: {submitted}")
-    all_jobs_submitted.append(submitted)
 
+submitted = client.submit(job)
+logger.info(f"Job ID: {submitted}")
 logger.info("Waiting for jobs to finish")
-client.wait_for_jobs(all_jobs_submitted)
+client.wait_for_jobs([submitted])

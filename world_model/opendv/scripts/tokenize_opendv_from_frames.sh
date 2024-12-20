@@ -1,11 +1,11 @@
 SCRIPT_DIR=$(dirname $(dirname "$(realpath "$0")"))
-NUM_WORKERS=16
-CPUS_PER_WORKER=10
-MAX_NUM_FILES=10000
+NUM_WORKERS=8
+CPUS_PER_WORKER=24
+MAX_NUM_FILES=102400
 INPUT_FILE=frames_list.txt
 TOKENIZER_JIT_PATH=$WORK/VQ_ds16_16384_llamagen.jit
 
-INPUT_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV/frames512
+INPUT_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_release/frames512
 BASE_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_release
 FILES_LIST_DIR=$BASE_DIR/segments
 OUTPUT_DIR=$BASE_DIR/tokens
@@ -13,6 +13,7 @@ mkdir -p $FILES_LIST_DIR
 mkdir -p $OUTPUT_DIR
 
 module purge
+module load arch/h100
 module load pytorch-gpu/py3/2.4.0
 export PYTHONUSERBASE=$WORK/python_envs/world_model
 
@@ -22,12 +23,17 @@ export HQ_SERVER_DIR=${PWD}/.hq-server
 
 bash $SCRIPT_DIR/hq/start_hq_slurm.sh $NUM_WORKERS $CPUS_PER_WORKER
 
+mkdir -p hq_tokenize_opendv/tokens
+
+rm -f $BASE_DIR/$INPUT_FILE
+rm -f $FILES_LIST_DIR/*
+
 # Use find to get all frames
-hq submit --wait \
-bash $SCRIPT_DIR/hq/glob.sh $INPUT_DIR $BASE_DIR/$INPUT_FILE
+hq submit --name=GLOB --wait --stdout 'hq_tokenize_opendv/glob_%{JOB_ID}.stdout' --stderr 'hq_tokenize_opendv/glob_%{JOB_ID}.stdout' \
+bash $SCRIPT_DIR/scripts/glob.sh $INPUT_DIR $BASE_DIR/$INPUT_FILE
 
 # Split the file into segments
-hq submit --wait \
+hq submit --name=SPLIT --wait --stdout 'hq_tokenize_opendv/split_%{JOB_ID}.stdout' --stderr 'hq_tokenize_opendv/split_%{JOB_ID}.stdout'  \
 split -l "$MAX_NUM_FILES" "$BASE_DIR/$INPUT_FILE" "$FILES_LIST_DIR/segment_"
 
 # Rename files to have .txt extension and proper numbering
@@ -44,15 +50,16 @@ echo "Split $INPUT_FILE into $num_segments segments in $FILES_LIST_DIR/"
 echo "Each file contains up to $MAX_NUM_FILES lines"
 
 
-srun -A fzh@v100 -C v100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=5 --gres=gpu:0 --hint=nomultithread --qos=qos_gpu-t3 --time=20:00:00 \
+srun -A ycy@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=5 --gres=gpu:0 --hint=nomultithread --qos=qos_gpu_h100-gc --time=20:00:00 \
 python $SCRIPT_DIR/create_opendv_tokens.py \
 --server_dir $HQ_SERVER_DIR \
 --frames_dir $FILES_LIST_DIR \
 --outdir $OUTPUT_DIR \
 --tokenizer_jit_path $TOKENIZER_JIT_PATH \
 --num_cpus $CPUS_PER_WORKER \
---num_writer_threads 2 \
---writer_queue_size 10000 \
---batch_size 16
+--num_writer_threads 10 \
+--writer_queue_size 10240 \
+--batch_size 256 \
+--dtype bf16
 
 hq server stop

@@ -1,14 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=hq_worker
-#SBATCH -A fzh@v100
-#SBATCH --partition=archive
-#SBATCH --cpus-per-task=1
+#SBATCH -A ycy@h100
+#SBATCH -C h100
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:0
+#SBATCH --cpus-per-task=24
 #SBATCH --hint=nomultithread
-#SBATCH --time=10:00:00
+#SBATCH --qos=qos_gpu_h100-gc
+#SBATCH --time=20:00:00
 #SBATCH --output=hq_worker-%j.out
 #SBATCH --error=hq_worker-%j.out
 
 module purge
+module load arch/h100
 module load ffmpeg
 
 # Echo des commandes lancees

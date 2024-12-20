@@ -9,4 +9,8 @@ fi
 INPUT_DIR=$1
 OUTFILE=$2
 
-find $INPUT_DIR -type f -name "*.jpg" | sort > $OUTFILE
+echo "Finding all jpg files in $INPUT_DIR and writing to $OUTFILE"
+
+find $INPUT_DIR -type f -name "*.jpg" > $OUTFILE
+
+echo "Done"

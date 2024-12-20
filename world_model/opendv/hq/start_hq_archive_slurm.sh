@@ -39,7 +39,7 @@ SCRIPT_DIR=$(dirname "$(realpath "$0")")
 
 echo "Starting HQ server"
 
-job_id=$(sbatch --parsable $SCRIPT_DIR/start_hq_server_archive.slurm)
+job_id=$(sbatch --parsable $SCRIPT_DIR/start_hq_server.slurm)
 
 if [ $? -ne 0 ]; then
     echo "Error submitting HQ server"

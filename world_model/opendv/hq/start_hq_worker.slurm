@@ -1,17 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=hq_worker
-#SBATCH -A fzh@v100
-#SBATCH -C v100
+#SBATCH -A ycy@h100
+#SBATCH -C h100
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=10
+#SBATCH --cpus-per-task=24
 #SBATCH --hint=nomultithread
-#SBATCH --qos=qos_gpu-t3
+#SBATCH --qos=qos_gpu_h100-gc
 #SBATCH --time=20:00:00
 #SBATCH --output=hq_worker-%j.out
 #SBATCH --error=hq_worker-%j.out
 
 module purge
+module load arch/h100
 module load pytorch-gpu/py3/2.4.0
 export PYTHONUSERBASE=$WORK/python_envs/world_model
 export MPICH_GPU_SUPPORT_ENABLED=1

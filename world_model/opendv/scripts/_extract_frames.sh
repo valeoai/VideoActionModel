@@ -6,6 +6,13 @@ WIDTH=$4
 HEIGHT=$5
 OUTDIR=$6
 
+echo "CSV_FILE: $CSV_FILE"
+echo "VIDEO_PATH: $VIDEO_PATH"
+echo "FPS: $FPS"
+echo "WIDTH: $WIDTH"
+echo "HEIGHT: $HEIGHT"
+echo "OUTDIR: $OUTDIR"
+
 # Get video id
 VIDEO_ID=$(basename "${VIDEO_PATH%%.*}")
 # replace leading "-" with "@" as this is done in the metadata file
@@ -68,3 +75,5 @@ ffmpeg -hide_banner -loglevel error  \
 -q:v 2 -vsync 0 -frame_pts 0 -movflags +faststart \
 -threads 0 \
 -y "${OUTDIR}/f_%06d.jpg"
+
+echo "Extracted frames to ${OUTDIR}"
