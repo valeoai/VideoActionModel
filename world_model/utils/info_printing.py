@@ -14,7 +14,7 @@ log = RankedLogger(__name__, rank_zero_only=True)
 @rank_zero_only
 def print_config_tree(
     config: DictConfig,
-    print_order: Sequence[str] = [],
+    print_order: Sequence[str] = None,
     resolve: bool = False,
 ) -> None:
     """Prints the contents of a DictConfig as a tree structure using the Rich library.
@@ -29,6 +29,7 @@ def print_config_tree(
     tree = rich.tree.Tree("CONFIG", style=style, guide_style=style)
 
     queue = []
+    print_order = print_order or []
 
     # add fields from `print_order` to queue
     for field in print_order:
