@@ -1,6 +1,17 @@
+if [ -z "$1" ]; then
+    echo "Usage: $0 <NUM_WORKERS> <CPUS_PER_WORKER>"
+    exit 1
+fi
+NUM_WORKERS=$1
+
+# Number of CPUs per worker
+if [ -z "$2" ]; then
+    echo "Usage: $0 <NUM_WORKERS> <CPUS_PER_WORKER>"
+    exit 1
+fi
+CPUS_PER_WORKER=$2
+
 SCRIPT_DIR=$(dirname $(dirname "$(realpath "$0")"))
-NUM_WORKERS=8
-CPUS_PER_WORKER=24
 MAX_NUM_FILES=102400
 INPUT_FILE=frames_list.txt
 TOKENIZER_JIT_PATH=$WORK/VQ_ds16_16384_llamagen.jit

@@ -89,6 +89,8 @@ partial_create_tokens = partial(
 
 job = Job()
 for idx, frame_file in enumerate(frames_file_list):
+    # We create an independent job for each chunk of files.
+    # We use chunks of files so that if a job fails, we don't have to reprocess all the files.
     logger.info(f"Creating task {idx:06d} for {frame_file}")
     job.function(
         partial_create_tokens,

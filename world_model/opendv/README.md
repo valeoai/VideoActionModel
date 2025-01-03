@@ -2,13 +2,7 @@
 
 ## Download the dataset
 
-First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDriveLab/DriveAGI) repository to download the data.
-
-## Donwload the metadata
-
-```bash
-wget https://www.rocq.inria.fr/cluster-willow/amiech/OpenDV_Youtube_metadata.json
-```
+First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDriveLab/DriveAGI) repository to download the data. And the metadat as a csv file [Metadata](https://docs.google.com/spreadsheets/d/1bHWWP_VXeEe5UzIG-QgKFBdH7mNlSC4GFSJkEhFnt2I).
 
 ## Prepare the dataset
 
@@ -31,35 +25,52 @@ OpenDV_Youtube
 Then download the llamagen tokenizer jit file:
 
 ```bash
-wget https://www.rocq.inria.fr/cluster-willow/amiech/llamagen.jit
+wget https://XXX/llamagen.jit
 ```
 
-## Preparint the tokens
+## Preparing the tokens
 
-If you have jq installed, you can use the following command to create the video list
+### Install HQ
+
+Hyperqueue is a tool to scale the data extraction process on HPC clusters.
+
+Hyperqueue uses a servers and several workers to process the data. The server is responsible for managing the workers and the workers are responsible for processing queue of jobs. On SLURM cluster hyperqueue allow to remove the queue time required for each jobs.
+
+Check the [Hyperqueue documentation](https://it4innovations.github.io/hyperqueue/stable/)!
+
+To install the server and the workers, you need to install the hyperqueue package:
 
 ```bash
-find ~/iveco/datasets_iveco_raw/OpenDV_Youtube/videos \
--type f \( -name "*.mp4" -o -name "*.webm" \) -print0 | \
-jq -R -s 'split("\u0000")[:-1]' | \
-jq . > opendv/opendv_video.json
+wget https://github.com/It4innovations/hyperqueue/releases/download/v0.20.0/hq-v0.20.0-linux-x64.tar.gz
+mkdir -p ~/bin
+tar -C ~/bin -xvzf hq-v0.20.0-linux-x64.tar.gz
+rm hq-v0.20.0-linux-x64.tar.gz
+export PATH=$PATH:~/bin  # you can add this to your .bashrc
+pip install hyperqueue==0.20.0
 ```
 
-Then you can use the following command to create the tokens:
+### Configure SLURM file
+
+You should configure the HQ SLURM files in `./hq/*.slurm` to match your cluster configuration.
+
+### Extract frames from OpenDV dataset
+
+To extract the frames from the OpenDV dataset, you need to run the following command:
 
 ```bash
-python world_model/opendv/create_opendv_tokens.py \
---video_list world_model/opendv/opendv_video.json \
---metadata ~/iveco/datasets_iveco_raw/OpenDV_Youtube/videos_metadata.csv \
---outdir ~/data/OpenDV_Youtube/tokens \
---tmpdir ~/data/OpenDV_Youtube/tmp \
---tokenizer_jit_path ~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit \
---num_frames_threads 1 \
---num_writer_threads 1 \
---frames_queue_size 10000 \
---writer_queue_size 10000 \
---batch_size 64 \
---target_frame_rate 5 \
---target_width 512 \
---target_height 288
+bash ./scripts/extract_opendv_frames.sh 20 24
 ```
+
+The first parameter is the number of workers and the second parameter is the number of cpus per worker (this should match the config of your slurm files).
+
+### Tokenize the frames
+
+Once you have the frames extracted, you can tokenize the frames using the following command:
+
+```bash
+bash ./scripts/tokenize_opendv_from_frames.sh 20 24
+```
+
+It uses the same arguments as the previous command.
+
+You may need to change the batch size in the `./scripts/tokenize_opendv_from_frames.sh` script to match your GPU memory. Also if you use GPUs that are not A100 or H100 you may need to change the dtype (e.g., fp16 instead of bf16).
