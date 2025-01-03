@@ -9,10 +9,10 @@ from typing import Any, Dict, List
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms.v2.functional as TF
 from PIL import Image
 from torch import Tensor
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 Kwargs = Dict[str, Any]

@@ -33,6 +33,10 @@ export HQ_SERVER_DIR=${PWD}/.hq-server
 # Start the hyperqueue server & workers without GPUs
 bash $SCRIPT_DIR/hq/start_hq_archive_slurm.sh $NUM_WORKERS $CPUS_PER_WORKER
 
+# Create train/val split as json files
+hq submit --name=SET --wait --stdout 'opendv_sets_%{JOB_ID}.stdout' --stderr 'opendv_sets_%{JOB_ID}.stdout' \
+python $SCRIPT_DIR/scripts/create_train_val_split.py --file $CSV_FILE --outdir $BASE_DIR
+
 OUTPUT_FILE="${PWD}/tasks.toml"
 rm -f "$OUTPUT_FILE"
 

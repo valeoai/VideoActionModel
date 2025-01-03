@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -51,7 +52,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
     def setup(self, stage: Optional[str] = None) -> "TokenizedSequenceOpenDVDataModule":
         # Read train and validation video lists
         with open(self.video_list_path, "r") as f:
-            video_list = [line.strip() for line in f.readlines()]
+            video_list = json.load(f)
         self.video_list, missing_videos = self.check_video_existence(video_list)
         self.print_missing_videos(missing_videos)  # Print missing videos only on rank 0
 
