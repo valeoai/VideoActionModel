@@ -7,12 +7,12 @@
 #SBATCH --cpus-per-task=24
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-gc
-#SBATCH --time=20:00:00
+#SBATCH --time=05:00:00
 #SBATCH --output=remove_dir-%j.out
 #SBATCH --error=remove_dir-%j.out
 
 # Set the target directory
-TARGET_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_release
+TARGET_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_processed/frames512
 
 # Function to remove a directory
 remove_dir() {

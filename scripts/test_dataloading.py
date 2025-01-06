@@ -2,9 +2,9 @@ from world_model.opendv.tokenized_sequence_opendv import TokenizedSequenceOpenDV
 
 
 dm = TokenizedSequenceOpenDVDataModule(
-    data_root_dir="$ycy_ALL_CCFRSCRATCH/OpenDV_release/tokens",
-    video_list_path="$ycy_ALL_CCFRSCRATCH/OpenDV_release/video_list.txt",
-    val_video_list_path="$ycy_ALL_CCFRSCRATCH/OpenDV_release/val_video_list.txt",
+    data_root_dir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/tokens",
+    video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json",
+    val_video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json",
     batch_size=16,
     num_workers=8,
 ).setup()

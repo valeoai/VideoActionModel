@@ -96,7 +96,7 @@ for idx, frame_file in enumerate(frames_file_list):
         partial_create_tokens,
         kwargs={"frames": frame_file},
         stdout=os.path.join("./hq_tokenize_opendv", "tokens", f"{idx:06d}.out"),
-        stderr=os.path.join("./hq_tokenize_opendv", "tokens", f"{idx:06d}.out"),
+        stderr=os.path.join("./hq_tokenize_opendv", "tokens", f"{idx:06d}.err"),
         resources=ResourceRequest(  # We need to provide the resources to prevent the job from running on the same GPU
             cpus=args.num_cpus,
             resources={"gpus/nvidia": 1},

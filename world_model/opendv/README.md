@@ -68,7 +68,7 @@ The first parameter is the number of workers and the second parameter is the num
 Once you have the frames extracted, you can tokenize the frames using the following command:
 
 ```bash
-bash ./scripts/tokenize_opendv_from_frames.sh 20 24
+bash ./scripts/tokenize_opendv_from_frames.sh 10 24
 ```
 
 It uses the same arguments as the previous command.

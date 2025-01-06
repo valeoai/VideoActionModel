@@ -14,7 +14,7 @@ echo "HEIGHT: $HEIGHT"
 echo "OUTDIR: $OUTDIR"
 
 # Get video id
-VIDEO_ID=$(basename "${VIDEO_PATH%%.*}")
+VIDEO_ID=$(basename "${VIDEO_PATH}" | sed 's/\.[^.]*$//')
 # replace leading "-" with "@" as this is done in the metadata file
 VIDEO_ID="${VIDEO_ID/#-/@}"
 echo "VIDEO_ID: $VIDEO_ID"
@@ -27,7 +27,7 @@ mkdir -p ${OUTDIR}
 DISCARD_START=0
 DISCARD_END=0
 
-# Using awk to extract values and storing them in variables
+# Using awk to extract discard start and end values and storing them in variables
 eval $(awk '
     BEGIN { FS="\t" }  # Set field separator to tab
     NR==1 {

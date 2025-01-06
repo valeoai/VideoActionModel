@@ -18,9 +18,9 @@ FPS=10
 WIDTH=512
 HEIGHT=288
 
-INPUT_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_Youtube/videos
+INPUT_DIR="${fzh_ALL_CCFRSCRATCH}/OpenDV_Youtube/videos"
 CSV_FILE=$fzh_ALL_CCFRSCRATCH/OpenDV_Youtube_meta/videos_metadata.csv
-BASE_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_release
+BASE_DIR=$fzh_ALL_CCFRSCRATCH/OpenDV_processed
 OUTDIR=$BASE_DIR/frames512
 mkdir -p $OUTDIR
 chmod g+rwxs,o+rx $OUTDIR
@@ -29,6 +29,8 @@ setfacl -d -m g::rwx $OUTDIR
 mkdir -p .hq-server
 # Set the directory which hyperqueue will use
 export HQ_SERVER_DIR=${PWD}/.hq-server
+
+mkdir -p extract_opendv_frames
 
 # Start the hyperqueue server & workers without GPUs
 bash $SCRIPT_DIR/hq/start_hq_archive_slurm.sh $NUM_WORKERS $CPUS_PER_WORKER
@@ -47,8 +49,8 @@ echo "" >> "$OUTPUT_FILE"
 find "$INPUT_DIR" -type f -name "*.mp4" -o -name "*.webm" | sort | while read -r file; do
     cat >> "$OUTPUT_FILE" << EOF
 [[task]]
-stdout = "task_%{TASK_ID}.out"
-stderr = "task_%{TASK_ID}.err"
+stdout = "extract_opendv_frames/task_%{TASK_ID}.out"
+stderr = "extract_opendv_frames/task_%{TASK_ID}.err"
 command = ["bash", "${SCRIPT_DIR}/scripts/_extract_frames.sh", "${CSV_FILE}", "${file}", "${FPS}", "${WIDTH}", "${HEIGHT}", "${OUTDIR}"]
 
 [[task.request]]
@@ -66,13 +68,13 @@ hq job submit-file "$OUTPUT_FILE"
 # find $fzh_ALL_CCFRSCRATCH/OpenDV_Youtube/videos -type f -name "*.mp4" -o -name "*.webm" | wc -l
 
 # Number of extracted frames:
-# find $fzh_ALL_CCFRSCRATCH/OpenDV_release/frames512 -type f -name "*.jpg" | wc -l
+# find $fzh_ALL_CCFRSCRATCH/OpenDV_processed/frames512 -type f -name "*.jpg" | wc -l
 
 # Number of created directories:
-# find  $fzh_ALL_CCFRSCRATCH/OpenDV_release/frames512 -maxdepth 2 -type d  | wc -l
+# find  $fzh_ALL_CCFRSCRATCH/OpenDV_processed/frames512 -mindepth 2 -maxdepth 2 -type d  | wc -l
 
 # Find the log file of a specific job:
-# find . -name "0.stdout" -exec grep -H "6rwRHG_PG" {} \;
+# find extract_opendv_frames -name "task*.out" -exec grep -H "WwrKmU2TStY" {} \;
 
 # Find failed jobs:
-# find job* -name "0.stderr" -type f -not -empty
+# find extract_opendv_frames -name "task*.err" -type f -not -empty

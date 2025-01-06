@@ -1,4 +1,4 @@
 [flake8]
 max-line-length = 127
 exclude = .git,__pycache__,tmp,build,dist,*.egg-info,.tox,.venv,.vscode,.pytest_cache,.github
-ignore = E266,W503,E203,E741,ANN101,ANN002,ANN003
+ignore = E266,W503,E203,E741,ANN101,ANN002,ANN003,D100,D101,D102,D103,D104,D105,D106,D107,D200,D202,D205,D300,D400,D401

@@ -11,7 +11,6 @@ import numpy as np
 import torch
 import torchvision.transforms.v2.functional as TF
 from PIL import Image
-from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -26,12 +25,6 @@ logger = logging.getLogger("world_model/TokenCreator")
 class Tokens:
     data: np.ndarray
     path: Path
-
-
-@dataclass
-class FramesBatch:
-    data: Tensor
-    paths: List[str]
 
 
 class FramesDataset(Dataset):
@@ -120,7 +113,7 @@ class TokenCreator:
         self.pbar_tokens = None
         self.pbar_write = None
 
-    def tokenize_frames(self, frames: Batch) -> Tokens:
+    def tokenize_frames(self, frames: Batch) -> List[Tokens]:
         """
         Tokenize a list of frames using a pre-trained tokenizer.
         """
