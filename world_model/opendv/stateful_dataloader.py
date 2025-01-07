@@ -10,28 +10,24 @@ StateDict = Dict[str, Any]
 
 class StatefulDataLoader(_StatefulDataLoader):
 
+    def __init__(self, *args: Args, **kwargs: Kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # is distributed
+        self.is_distributed = dist.is_available() and dist.is_initialized()
+        if self.is_distributed:
+            self.world_size = dist.get_world_size()
+        else:
+            self.world_size = 1
+
     def _gather_state_dict(self, state_dict: StateDict) -> List[StateDict]:
         """
         Gather the state_dict from all ranks to the master rank
         """
-        # is distributed
-        self.is_distributed = dist.is_available() and dist.is_initialized()
-        if self.is_distributed:
-            self.is_master = dist.get_rank() == 0
-            self.world_size = dist.get_world_size()
-        else:
-            self.is_master = True
-            self.world_size = 1
-
         # Create a list to store the state_dicts from all ranks
-        if self.is_master():
-            world_size = self.get_world_size()
-            object_gather_list = [None for _ in range(world_size)]
-        else:
-            object_gather_list = None
+        object_gather_list = [None for _ in range(self.world_size)]
 
         # Gather the state_dict from all ranks
-        dist.gather_object(state_dict, object_gather_list)
+        dist.all_gather_object(object_gather_list, state_dict)
 
         # Return the state_dict from the master rank
         return object_gather_list
