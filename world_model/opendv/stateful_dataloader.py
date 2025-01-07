@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Union
 
 import torch.distributed as dist
 from torchdata.stateful_dataloader import StatefulDataLoader as _StatefulDataLoader
@@ -10,7 +10,7 @@ StateDict = Dict[str, Any]
 
 class StatefulDataLoader(_StatefulDataLoader):
 
-    def _gather_state_dict(self, state_dict: StateDict) -> Optional[List[StateDict]]:
+    def _gather_state_dict(self, state_dict: StateDict) -> List[StateDict]:
         """
         Gather the state_dict from all ranks to the master rank
         """

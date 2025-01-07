@@ -74,3 +74,11 @@ bash ./scripts/tokenize_opendv_from_frames.sh 10 24
 It uses the same arguments as the previous command.
 
 You may need to change the batch size in the `./scripts/tokenize_opendv_from_frames.sh` script to match your GPU memory. Also if you use GPUs that are not A100 or H100 you may need to change the dtype (e.g., fp16 instead of bf16).
+
+Finally use the following command to have a flat structure of the tokens:
+
+```bash
+python ./scripts/flatten_opendv_tokens.py \
+--rootdir $fzh_ALL_CCFRSCRATCH/OpenDV_processed/tokens \
+--outdir $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
+```

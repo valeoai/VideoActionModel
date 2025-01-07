@@ -21,7 +21,7 @@ def create_split_opendv(path: str) -> Dict[str, Dict[str, float]]:
     db = pd.read_csv(path, sep="\t")
     split_db = defaultdict(list)
     for _, row in db.iterrows():
-        video_id = row["video_id"].replace("@", "-") + "." + row["container"]
+        video_id = row["video_id"]
         split_db[row["split"]].append(video_id)
 
     return split_db
