@@ -1,6 +1,5 @@
 from world_model.opendv.tokenized_sequence_opendv import TokenizedSequenceOpenDVDataModule
 
-
 dm = TokenizedSequenceOpenDVDataModule(
     data_root_dir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
     video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json",
