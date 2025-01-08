@@ -2,7 +2,7 @@
 #SBATCH --job-name=debugging
 #SBATCH -A ycy@h100
 #SBATCH -C h100
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --gres=gpu:4
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=8

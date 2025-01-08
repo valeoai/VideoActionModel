@@ -53,16 +53,20 @@ train_dataloader = StatefulDataLoader(
     sampler=DistributedSampler(train_dataset),
 )
 
+save_stuff = []
 for idx, batch in enumerate(train_dataloader):
-    print(rank, batch["idx"][:3])
-    with open(f"rank_{rank}_output.txt", "w") as f:
-        f.write(f"rank: {rank}, world_size: {batch['idx'][:3]}\n")
-    if idx == 5:
+    if idx == 4:
         state_dict = train_dataloader.state_dict()
+        if rank == 0:
+            torch.save(state_dict, "state_dict.pth")
+    if idx >= 5:
+        save_stuff.append(batch["idx"])
     if idx == 10:
         break
 
-print("restoring state")
+
+torch.distributed.barrier()
+state_dict = torch.load("state_dict.pth")
 
 train_dataloader_2 = StatefulDataLoader(
     train_dataset,
@@ -74,9 +78,13 @@ train_dataloader_2 = StatefulDataLoader(
 )
 train_dataloader_2.load_state_dict(state_dict)
 
+save_stuff_2 = []
 for idx, batch in enumerate(train_dataloader_2):
-    print(rank, batch["idx"][:3])
-    with open(f"rank_{rank}_output.txt", "a") as f:
-        f.write(f"rank: {rank}, world_size: {batch['idx'][:3]}\n")
-    if idx == 4:
+    save_stuff_2.append(batch["idx"])
+    if idx == 5:
         break
+
+for idx, (s1, s2) in enumerate(zip(save_stuff, save_stuff_2)):
+    assert (s1 == s2).all(), f"rank {rank} failed at idx {idx}"
+
+print(f"rank {rank} passed")
