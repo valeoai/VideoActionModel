@@ -2,7 +2,7 @@
 
 ## Download the dataset
 
-First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDriveLab/DriveAGI) repository to download the data. And the metadat as a csv file [Metadata](https://docs.google.com/spreadsheets/d/1bHWWP_VXeEe5UzIG-QgKFBdH7mNlSC4GFSJkEhFnt2I).
+First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDriveLab/DriveAGI) repository to download the data. And the metadata as a csv file [Metadata](https://docs.google.com/spreadsheets/d/1bHWWP_VXeEe5UzIG-QgKFBdH7mNlSC4GFSJkEhFnt2I).
 
 ## Prepare the dataset
 
@@ -34,11 +34,11 @@ wget https://XXX/llamagen.jit
 
 Hyperqueue is a tool to scale the data extraction process on HPC clusters.
 
-Hyperqueue uses a servers and several workers to process the data. The server is responsible for managing the workers and the workers are responsible for processing queue of jobs. On SLURM cluster hyperqueue allow to remove the queue time required for each jobs.
+Hyperqueue uses a servers and several workers to process data. The server is responsible for managing the workers and dispatching jobs while the workers are responsible for the actual processing. On SLURM cluster hyperqueue allow to remove the SLURM queue time that would be required for individual jobs.
 
 Check the [Hyperqueue documentation](https://it4innovations.github.io/hyperqueue/stable/)!
 
-To install the server and the workers, you need to install the hyperqueue package:
+To install the hyperqueue binary and hyperqueue python library:
 
 ```bash
 wget https://github.com/It4innovations/hyperqueue/releases/download/v0.20.0/hq-v0.20.0-linux-x64.tar.gz
@@ -61,7 +61,7 @@ To extract the frames from the OpenDV dataset, you need to run the following com
 bash ./scripts/extract_opendv_frames.sh 20 24
 ```
 
-The first parameter is the number of workers and the second parameter is the number of cpus per worker (this should match the config of your slurm files).
+The first parameter is the number of workers and the second parameter is the number of cpus per worker (this should match the config of your slurm files). The more worker you have the faster the extraction will be.
 
 ### Tokenize the frames
 
@@ -73,9 +73,9 @@ bash ./scripts/tokenize_opendv_from_frames.sh 10 24
 
 It uses the same arguments as the previous command.
 
-You may need to change the batch size in the `./scripts/tokenize_opendv_from_frames.sh` script to match your GPU memory. Also if you use GPUs that are not A100 or H100 you may need to change the dtype (e.g., fp16 instead of bf16).
+You may need to change the batch size in the `./scripts/tokenize_opendv_from_frames.sh` script to match your GPU memory. Also, if you use GPUs that are not A100s or H100s you may need to change the dtype (e.g., fp16 instead of bf16).
 
-Finally use the following command to have a flat structure of the tokens:
+Finally use the following command to create a flat structure of the tokens:
 
 ```bash
 python ./scripts/flatten_opendv_tokens.py \
