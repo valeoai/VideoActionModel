@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=10
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-gc
-#SBATCH --time=20:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=hq_server-%j.out
 #SBATCH --error=hq_server-%j.out
 

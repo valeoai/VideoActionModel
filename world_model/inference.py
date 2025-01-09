@@ -322,7 +322,7 @@ class WorldModelInference(L.LightningModule):
 
 
 def remove_prefix(state_dict: StateDict, prefix: str) -> Dict:
-    result = dict()
+    result = {}
     for k, v in state_dict.items():
         tokens = k.split(".")
         if tokens[0] == prefix:

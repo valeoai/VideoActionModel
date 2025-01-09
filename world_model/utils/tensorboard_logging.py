@@ -33,7 +33,11 @@ denormalize_img = torchvision.transforms.Compose((Detach(), NormalizeInverse(), 
 
 
 def gridplot(
-    img_list: List[Image.Image], titles: List[str] = [], cmaps: List[str] = [], cols: int = 2, figsize: Tuple[int] = (12, 12)
+    img_list: List[Image.Image],
+    titles: List[str] = None,
+    cmaps: List[str] = None,
+    cols: int = 2,
+    figsize: Tuple[int] = (12, 12),
 ) -> plt.Figure:
     """
     Plot a list of images in a grid format
@@ -44,6 +48,8 @@ def gridplot(
         cols: number of column of the grid, the number of rows is determined accordingly
         figsize: matplotlib `figsize` figure param
     """
+    titles = titles or []
+    cmaps = cmaps or []
 
     rows = len(img_list) // cols + len(img_list) % cols
 

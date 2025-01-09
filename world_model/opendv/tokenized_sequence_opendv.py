@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -8,6 +9,11 @@ from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedS
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
 
 StateDict = Dict[str, Any]
+
+
+def _path(path: str) -> str:
+    path = os.path.expanduser(os.path.expandvars(path))
+    return path
 
 
 class TokenizedSequenceOpenDVDataModule(LightningDataModule):
@@ -21,9 +27,9 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         num_workers: int = 4,
     ) -> None:
         super().__init__()
-        self.data_root_dir = data_root_dir
-        self.video_list_path = video_list_path
-        self.val_video_list_path = val_video_list_path
+        self.data_root_dir = _path(data_root_dir)
+        self.video_list_path = _path(video_list_path)
+        self.val_video_list_path = _path(val_video_list_path)
         self.sequence_length = sequence_length
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -51,7 +57,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
     def setup(self, stage: Optional[str] = None) -> "TokenizedSequenceOpenDVDataModule":
         # Read train and validation video lists
         with open(self.video_list_path, "r") as f:
-            video_list = [line.strip() for line in f.readlines()]
+            video_list = json.load(f)
         self.video_list, missing_videos = self.check_video_existence(video_list)
         self.print_missing_videos(missing_videos)  # Print missing videos only on rank 0
 
@@ -63,7 +69,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
 
             if self.val_video_list_path:
                 with open(self.val_video_list_path, "r") as f:
-                    val_video_list = [line.strip() for line in f.readlines()]
+                    val_video_list = json.load(f)
                 self.val_video_list, missing_val_videos = self.check_video_existence(val_video_list)
                 self.print_missing_videos(missing_val_videos)
 

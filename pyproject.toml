@@ -1,3 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "world_model"
+version = "0.0.1"
+description = ""
+readme = "README.md"
+requires-python = ">=3.11.9"
+authors = [
+    { name = "", email = "florent.bartoccioni@valeo.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "lightning",
+    "hydra-core",
+    "mup @ git+https://github.com/microsoft/mup.git",
+    "tqdm",
+    "numpy",
+    "pillow",
+    "av",
+    "colorlog",
+    "hyperqueue==0.20.0",
+    "torchdata @ https://download.pytorch.org/whl/nightly/torchdata-0.11.0.dev20250103-py3-none-any.whl",
+]
+
+[project.optional-dependencies]
+dev = [
+    "flake8",
+    "flake8-annotations",
+    "flake8-bugbear",
+    "flake8-comprehensions",
+    "flake8-simplify",
+    "pytest",
+    "isort",
+    "black",
+]
+torch = [
+    "torch==2.4.0",
+    "torchvision==0.19.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/valeoai/NextTokenPredictor"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.black]
 line-length = 127
 target-version = ['py39']

@@ -196,12 +196,12 @@ class MuGPT2(nn.Module):
         self.block_size = nb_timesteps * nb_tokens_per_timestep
 
         self.transformer = nn.ModuleDict(
-            dict(
-                wie=nn.Embedding(vocabulary_size, embedding_dim),  # token embeddings
-                wse=nn.Embedding(nb_tokens_per_timestep, embedding_dim),  # spatial position embeddings
-                wte=nn.Embedding(nb_timesteps, embedding_dim),  # temporal position embeddings
-                drop=nn.Dropout(dropout_rate),
-                h=nn.ModuleList(
+            {
+                "wie": nn.Embedding(vocabulary_size, embedding_dim),  # token embeddings
+                "wse": nn.Embedding(nb_tokens_per_timestep, embedding_dim),  # spatial position embeddings
+                "wte": nn.Embedding(nb_timesteps, embedding_dim),  # temporal position embeddings
+                "drop": nn.Dropout(dropout_rate),
+                "h": nn.ModuleList(
                     [
                         Block(
                             embedding_dim,
@@ -216,8 +216,8 @@ class MuGPT2(nn.Module):
                         for _ in range(nb_layers)
                     ]
                 ),
-                ln_f=nn.LayerNorm(embedding_dim, elementwise_affine=learnable_gains),
-            )
+                "ln_f": nn.LayerNorm(embedding_dim, elementwise_affine=learnable_gains),
+            }
         )
 
         if output_tied:

@@ -12,7 +12,7 @@ log = RankedLogger(__name__, rank_zero_only=True)
 
 def extras(
     config: DictConfig,
-    print_order: Sequence[str] = [],
+    print_order: Sequence[str] = None,
 ) -> None:
     """Applies optional utilities before the task is started.
 
@@ -22,6 +22,7 @@ def extras(
 
     :param config: A DictConfig object containing the config tree.
     """
+    print_order = print_order or []
 
     # disable python warnings
     if config.get("ignore_warnings"):
