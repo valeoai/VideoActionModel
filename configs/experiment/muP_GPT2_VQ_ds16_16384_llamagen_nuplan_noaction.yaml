@@ -4,7 +4,6 @@ defaults:
   - override /model: next_token_predictor
   - override /model/network: mup_gpt2
   - override /model/sequence_adapter: gpt_adapter
-  - override /model/action_tokenizer: zero_speed_and_curvature
   - override /callbacks: callbacks_nuplan_training
   - override /trainer: deepspeed2
   - override /logger: many_loggers
@@ -63,5 +62,3 @@ model:
     attn_scale: 1.0
   sequence_adapter:
     visual_vocab_size: 16384
-    action_vocab_sizes:
-      - 1

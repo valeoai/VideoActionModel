@@ -59,9 +59,12 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     else:
         hparams["training_device"] = "cpu"  # or handle the situation appropriately
 
-    repo = git.Repo(search_parent_directories=True)
-    sha = repo.head.object.hexsha
-    hparams["git_sha"] = sha
+    try:
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha
+        hparams["git_sha"] = sha
+    except git.exc.InvalidGitRepositoryError:
+        hparams["git_sha"] = None
 
     # send hparams to all loggers
     for logger in trainer.loggers:

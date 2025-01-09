@@ -36,7 +36,7 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
         for i in range(self.sequence_length):
             frame_path = os.path.join(self.data_root_dir, video_id, self.video_frames[video_id][start_idx + i])
             frame_data = np.load(frame_path)
-            frame_tensor = torch.from_numpy(frame_data).long().view(-1)
+            frame_tensor = torch.from_numpy(frame_data).long()
             frame_sequence.append(frame_tensor)
 
         return {"visual_tokens": torch.stack(frame_sequence), "idx": idx, "video_id": video_id, "start_idx": start_idx}

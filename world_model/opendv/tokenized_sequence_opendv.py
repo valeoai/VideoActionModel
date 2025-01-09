@@ -5,8 +5,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from lightning import LightningDataModule
 from lightning_utilities.core.rank_zero import rank_zero_only
 
+from world_model.utils import RankedLogger
 from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
+
+logger = RankedLogger(__name__, rank_zero_only=False)
 
 StateDict = Dict[str, Any]
 
@@ -94,6 +97,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         return self.val_dataloader_
 
     def state_dict(self) -> StateDict:
+        logger.info(f"Dumping state dict from rank == {self.trainer.local_rank}")
         return {
             "data_root_dir": self.data_root_dir,
             "video_list_path": self.video_list_path,
@@ -105,17 +109,14 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         }
 
     def load_state_dict(self, state_dict: StateDict) -> None:
+        logger.info(f"Loading state dict from rank == {self.trainer.local_rank}")
         self.data_root_dir = state_dict["data_root_dir"]
         self.video_list_path = state_dict["video_list_path"]
         self.val_video_list_path = state_dict["val_video_list_path"]
         self.sequence_length = state_dict["sequence_length"]
         self.batch_size = state_dict["batch_size"]
         self.num_workers = state_dict["num_workers"]
-        self.setup()
-        self.train_dataloader_ = StatefulDataLoader(
-            self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers
-        )
+        _ = self.setup()
+        _ = self.train_dataloader()  # Initialize train dataloader
+        _ = self.val_dataloader()  # Initialize val dataloader
         self.train_dataloader_.load_state_dict(state_dict["train_loader_state_dict"])
-        self.val_dataloader_ = StatefulDataLoader(
-            self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers
-        )
