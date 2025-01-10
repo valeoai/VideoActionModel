@@ -9,7 +9,7 @@ from world_model.utils import RankedLogger
 from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
 
-logger = RankedLogger(__name__, rank_zero_only=False)
+logger = RankedLogger(__name__, rank_zero_only=True)
 
 StateDict = Dict[str, Any]
 
@@ -51,13 +51,16 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
     @rank_zero_only
     def print_missing_videos(self, missing_videos: List[str]) -> None:
         if missing_videos:
-            print("The following videos were not found:")
+            logger.warning("The following videos were not found:")
             for video in missing_videos:
-                print(f"- {video}")
+                logger.warning(f"- {video}")
         else:
-            print("All video folders exist.")
+            logger.info("All video folders exist.")
 
     def setup(self, stage: Optional[str] = None) -> "TokenizedSequenceOpenDVDataModule":
+        if hasattr(self, "train_dataset"):
+            return
+
         # Read train and validation video lists
         with open(self.video_list_path, "r") as f:
             video_list = json.load(f)
@@ -97,7 +100,6 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         return self.val_dataloader_
 
     def state_dict(self) -> StateDict:
-        logger.info(f"Dumping state dict from rank == {self.trainer.local_rank}")
         return {
             "data_root_dir": self.data_root_dir,
             "video_list_path": self.video_list_path,
@@ -109,7 +111,6 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         }
 
     def load_state_dict(self, state_dict: StateDict) -> None:
-        logger.info(f"Loading state dict from rank == {self.trainer.local_rank}")
         self.data_root_dir = state_dict["data_root_dir"]
         self.video_list_path = state_dict["video_list_path"]
         self.val_video_list_path = state_dict["val_video_list_path"]

@@ -1,0 +1,18 @@
+#!/bin/bash
+#SBATCH --job-name=hq_server
+#SBATCH -A ycy@h100
+#SBATCH --partition=prepost
+#SBATCH --cpus-per-task=1
+#SBATCH --hint=nomultithread
+#SBATCH --time=05:00:00
+#SBATCH --output=hq_server-%j.out
+#SBATCH --error=hq_server-%j.out
+
+# Configuration of modules
+module purge
+
+# Echo des commandes lancees
+set -x
+
+# Execution du code
+srun hq server start --idle-timeout=3000sec

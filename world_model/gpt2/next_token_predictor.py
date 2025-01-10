@@ -73,6 +73,10 @@ class NextTokenPredictor(LightningModule):
 
         visual_tokens = batch["visual_tokens"]
 
+        indexes = batch["idx"]
+        with open("indexes.txt", "a") as f:
+            f.write(f"{indexes}\n")
+
         sequence_data = self.sequence_adapter(visual_tokens)
 
         # Create input_tokens by taking all but the last token (shifting by one)
