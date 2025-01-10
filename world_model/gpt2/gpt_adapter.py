@@ -27,9 +27,7 @@ class GPTAdapter(nn.Module):
         self.visual_vocab_size = visual_vocab_size
 
     @staticmethod
-    def compute_position_indices(
-        batch_size: int, height: int, width: int, num_frames: int
-    ) -> Dict[str, torch.Tensor]:
+    def compute_position_indices(batch_size: int, height: int, width: int, num_frames: int) -> Dict[str, torch.Tensor]:
         """
         Compute spatial positions, temporal positions,
         and visual tokens mask for a given batch size, frame size, and number of frames.

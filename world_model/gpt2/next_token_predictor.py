@@ -4,12 +4,12 @@ import git
 import hydra
 import mup
 import torch
+from einops import rearrange
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from omegaconf import DictConfig
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
-from einops import rearrange
 
 Batch = Dict[str, torch.Tensor]
 mupShapes = Dict[str, Tuple[int, ...]]
@@ -74,7 +74,7 @@ class NextTokenPredictor(LightningModule):
         visual_tokens = batch["visual_tokens"]
 
         indexes = batch["idx"]
-        with open("indexes.txt", "a") as f:
+        with open(f"indexes_{self.trainer.global_rank}.txt", "a") as f:
             f.write(f"{indexes}\n")
 
         sequence_data = self.sequence_adapter(visual_tokens)

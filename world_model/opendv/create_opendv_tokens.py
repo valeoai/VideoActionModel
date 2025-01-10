@@ -57,6 +57,7 @@ def _path(path: str) -> str:
 
 
 parser = argparse.ArgumentParser(description="OpenDV Token Creator")
+parser.add_argument("--dataset", type=str, required=True, help="Dataset name")
 parser.add_argument("--server_dir", type=_path, help="Path HQ server directory")
 parser.add_argument("--frames_dir", type=_path, required=True, help="Directory for already extracted frames")
 parser.add_argument("--outdir", type=_path, help="Output directory")
@@ -67,7 +68,8 @@ parser.add_argument("--num_cpus", type=int, required=True, help="Number of CPUs"
 parser.add_argument("--batch_size", type=int, help="Batch size for tokenization")
 parser.add_argument("--dtype", type=str, default="bf16", help="Data type for tokenization", choices=["bf16", "fp16", "fp32"])
 args = parser.parse_args()
-setup_logger(logdir="./hq_tokenize_opendv")
+os.makedirs(f"./hq_tokenize_{args.dataset}", exist_ok=True)
+setup_logger(logdir=f"./hq_tokenize_{args.dataset}")
 
 logger.info("Creating hyperqueue client")
 client = Client(server_dir=args.server_dir)
@@ -77,6 +79,7 @@ logger.info(f"Number of job to create: {len(frames_file_list)}")
 
 partial_create_tokens = partial(
     create_tokens,
+    dataset=args.dataset,
     device="cuda",
     outdir=args.outdir,
     tokenizer_jit_path=args.tokenizer_jit_path,
@@ -95,8 +98,8 @@ for idx, frame_file in enumerate(frames_file_list):
     job.function(
         partial_create_tokens,
         kwargs={"frames": frame_file},
-        stdout=os.path.join("./hq_tokenize_opendv", "tokens", f"{idx:06d}.out"),
-        stderr=os.path.join("./hq_tokenize_opendv", "tokens", f"{idx:06d}.err"),
+        stdout=os.path.join(f"./hq_tokenize_{args.dataset}", "tokens", f"{idx:06d}.out"),
+        stderr=os.path.join(f"./hq_tokenize_{args.dataset}", "tokens", f"{idx:06d}.err"),
         resources=ResourceRequest(  # We need to provide the resources to prevent the job from running on the same GPU
             cpus=args.num_cpus,
             resources={"gpus/nvidia": 1},

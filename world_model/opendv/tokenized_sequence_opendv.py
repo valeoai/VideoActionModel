@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from lightning import LightningDataModule
 from lightning_utilities.core.rank_zero import rank_zero_only
 
-from world_model.utils import RankedLogger
 from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
+from world_model.utils import RankedLogger
 
 logger = RankedLogger(__name__, rank_zero_only=True)
 

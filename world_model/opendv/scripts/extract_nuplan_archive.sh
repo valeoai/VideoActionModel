@@ -9,7 +9,7 @@ NUM_WORKERS=$1
 SCRIPT_DIR=$(dirname $(dirname "$(realpath "$0")"))
 
 INPUT_DIR="${ycy_ALL_CCFRSTORE}/nuplan/archives/sensor_blobs"
-OUTDIR=$fzh_ALL_CCFRSCRATCH/nuplan_v2
+OUTDIR=$ycy_ALL_CCFRSCRATCH/nuplan_v2
 mkdir -p $OUTDIR
 chmod g+rwxs,o+rx $OUTDIR
 setfacl -d -m g::rwx $OUTDIR
@@ -23,7 +23,7 @@ mkdir -p extract_nuplan_archive
 # Start the hyperqueue server & workers without GPUs
 # bash $SCRIPT_DIR/hq/start_hq_prepost_slurm.sh $NUM_WORKERS
 
-OUTPUT_FILE="tasks.toml"
+OUTPUT_FILE="nuplan_tasks.toml"
 rm -f "$OUTPUT_FILE"
 
 echo 'name = "extract_nuplan_archive"' > "$OUTPUT_FILE"
@@ -44,3 +44,7 @@ EOF
 done
 
 hq job submit-file "$OUTPUT_FILE"
+
+
+# Find failed jobs:
+# find extract_nuplan_archive -name "*.err" -type f -not -empty
