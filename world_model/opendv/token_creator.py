@@ -154,11 +154,7 @@ class TokenCreator:
             # DISK_DIR / {CAMERA_NUM} / {DATES} / {CAMERA} / {id}.jpg
             # Tokens should have the following path
             # self.outdir / {CAMERA_NUM} / {DATES} / {CAMERA} / {id}.npy
-            return (
-                self.outdir
-                / Path("/".join(str(Path(path).parent).split("/")[-3:]))
-                / f"{Path(path).stem}.npy"
-            )
+            return self.outdir / Path("/".join(str(Path(path).parent).split("/")[-3:])) / f"{Path(path).stem}.npy"
         elif self.dataset == "nuscenes":
             # frames have the following path
             # DISK_DIR / {CAMERA} / {TIMESTAMP}.jpg
