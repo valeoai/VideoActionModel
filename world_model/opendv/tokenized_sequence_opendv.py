@@ -7,6 +7,9 @@ from lightning_utilities.core.rank_zero import rank_zero_only
 
 from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
+from world_model.utils import RankedLogger
+
+logger = RankedLogger(__name__, rank_zero_only=True)
 
 StateDict = Dict[str, Any]
 
@@ -48,13 +51,16 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
     @rank_zero_only
     def print_missing_videos(self, missing_videos: List[str]) -> None:
         if missing_videos:
-            print("The following videos were not found:")
+            logger.warning("The following videos were not found:")
             for video in missing_videos:
-                print(f"- {video}")
+                logger.warning(f"- {video}")
         else:
-            print("All video folders exist.")
+            logger.info("All video folders exist.")
 
     def setup(self, stage: Optional[str] = None) -> "TokenizedSequenceOpenDVDataModule":
+        if hasattr(self, "train_dataset"):
+            return
+
         # Read train and validation video lists
         with open(self.video_list_path, "r") as f:
             video_list = json.load(f)
@@ -111,11 +117,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         self.sequence_length = state_dict["sequence_length"]
         self.batch_size = state_dict["batch_size"]
         self.num_workers = state_dict["num_workers"]
-        self.setup()
-        self.train_dataloader_ = StatefulDataLoader(
-            self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers
-        )
+        _ = self.setup()
+        _ = self.train_dataloader()  # Initialize train dataloader
+        _ = self.val_dataloader()  # Initialize val dataloader
         self.train_dataloader_.load_state_dict(state_dict["train_loader_state_dict"])
-        self.val_dataloader_ = StatefulDataLoader(
-            self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers
-        )

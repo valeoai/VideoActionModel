@@ -20,6 +20,7 @@ classifiers = [
 dependencies = [
     "lightning",
     "hydra-core",
+    "hydra-colorlog",
     "mup @ git+https://github.com/microsoft/mup.git",
     "tqdm",
     "numpy",

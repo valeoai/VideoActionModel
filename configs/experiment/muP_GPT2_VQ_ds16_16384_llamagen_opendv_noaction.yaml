@@ -5,7 +5,6 @@ defaults:
   - override /model: next_token_predictor
   - override /model/network: mup_gpt2
   - override /model/sequence_adapter: gpt_adapter
-  - override /model/action_tokenizer: zero_speed_and_curvature
   - override /callbacks: callbacks_opendv_training
   - override /trainer: deepspeed2
   - override /logger: many_loggers
@@ -30,9 +29,9 @@ scheduler:
   drop_iter: 0 # 10% ~ end_iter * 0.1
 
 data:
-  data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/OpenDV_tokenized/frames512/VQ_ds16_16384_llamagen
-  video_list_path: /lustre/fsn1/projects/rech/ycy/commun/OpenDV_sharded/train_videos.txt
-  val_video_list_path: /lustre/fsn1/projects/rech/ycy/commun/OpenDV_sharded/val_videos.txt
+  data_root_dir: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
+  video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json
+  val_video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json
   sequence_length: 20
 
 # VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
@@ -54,5 +53,3 @@ model:
     attn_scale: 1.0
   sequence_adapter:
     visual_vocab_size: 16384
-    action_vocab_sizes:
-      - 1

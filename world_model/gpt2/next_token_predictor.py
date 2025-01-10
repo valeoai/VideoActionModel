@@ -4,6 +4,7 @@ import git
 import hydra
 import mup
 import torch
+from einops import rearrange
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from omegaconf import DictConfig
@@ -23,7 +24,6 @@ class NextTokenPredictor(LightningModule):
     def __init__(
         self,
         network: DictConfig,
-        action_tokenizer: DictConfig,
         sequence_adapter: DictConfig,
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
@@ -34,8 +34,6 @@ class NextTokenPredictor(LightningModule):
         """
         Args:
             network: The configuration of the model to train.
-            action_tokenizer: The configuration for a callable that takes as input the ego motion data
-            and produce discrete tokens.
             sequence_adapter: The configuration of an adapter the produce
             a unified sequence of tokens from visual and action tokens.
             optimizer_conf: The optimizer to use for training.
@@ -52,7 +50,6 @@ class NextTokenPredictor(LightningModule):
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
         self.network = hydra.utils.instantiate(network)
-        self.action_tokenizer = hydra.utils.instantiate(action_tokenizer)
         self.sequence_adapter = hydra.utils.instantiate(sequence_adapter)
 
         if mup_base_shapes is not None:
@@ -76,9 +73,11 @@ class NextTokenPredictor(LightningModule):
 
         visual_tokens = batch["visual_tokens"]
 
-        action_tokens = self.action_tokenizer(**batch)
+        indexes = batch["idx"]
+        with open(f"indexes_{self.trainer.global_rank}.txt", "a") as f:
+            f.write(f"{indexes}\n")
 
-        sequence_data = self.sequence_adapter(visual_tokens, action_tokens)
+        sequence_data = self.sequence_adapter(visual_tokens)
 
         # Create input_tokens by taking all but the last token (shifting by one)
         input_data = {
@@ -90,7 +89,6 @@ class NextTokenPredictor(LightningModule):
         # Create target_tokens by taking all but the first token (shifting by one)
         target_data = {
             "token_sequence": sequence_data["token_sequence"][:, 1:],
-            "visual_tokens_mask": sequence_data["visual_tokens_mask"][:, 1:],
         }
 
         return input_data, target_data
@@ -113,9 +111,9 @@ class NextTokenPredictor(LightningModule):
         input_data, target_data = self.create_inputs_and_target(batch)
 
         logits_sequence = self.network(**input_data)
-        visual_logits = logits_sequence[target_data["visual_tokens_mask"]]
+        visual_logits = rearrange(logits_sequence, "b t v -> (b t) v")
 
-        visual_target_tokens = target_data["token_sequence"][target_data["visual_tokens_mask"]]
+        visual_target_tokens = rearrange(target_data["token_sequence"], "b t -> (b t)")
 
         loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
 
@@ -143,9 +141,9 @@ class NextTokenPredictor(LightningModule):
         input_data, target_data = self.create_inputs_and_target(batch)
 
         logits_sequence = self.network(**input_data)
-        visual_logits = logits_sequence[target_data["visual_tokens_mask"]]
+        visual_logits = rearrange(logits_sequence, "b t v -> (b t) v")
 
-        visual_target_tokens = target_data["token_sequence"][target_data["visual_tokens_mask"]]
+        visual_target_tokens = rearrange(target_data["token_sequence"], "b t -> (b t)")
 
         loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
 
@@ -234,10 +232,13 @@ class NextTokenPredictor(LightningModule):
             scheduler.step(metric)
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        repo = git.Repo(search_parent_directories=True)
-        sha = repo.head.object.hexsha
+        try:
+            repo = git.Repo(search_parent_directories=True)
+            sha = repo.head.object.hexsha
 
-        checkpoint["git_sha"] = sha
+            checkpoint["git_sha"] = sha
+        except git.exc.InvalidGitRepositoryError:
+            checkpoint["git_sha"] = None
 
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__

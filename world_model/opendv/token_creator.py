@@ -21,16 +21,30 @@ Batch = Dict[str, Any]
 logger = logging.getLogger("world_model/TokenCreator")
 
 
+PARAMS = {
+    "opendv": {"resize_factor": 1.0},
+    "nuplan": {"resize_factor": 3.75},
+    "nuscenes": {"resize_factor": 3.125},
+}
+
+
 @dataclass
 class Tokens:
     data: np.ndarray
     path: Path
 
 
+def resize_by_factor(img: torch.Tensor, resize_factor: float) -> torch.Tensor:
+    new_width = int(img.shape[2] / resize_factor)
+    new_height = int(img.shape[1] / resize_factor)
+    return TF.resize(img, (new_height, new_width), antialias=True)
+
+
 class FramesDataset(Dataset):
     """Vanilla Dataset for loading frames from a list of file paths."""
 
-    def __init__(self, frames_file_list: List[str]) -> None:
+    def __init__(self, dataset: str, frames_file_list: List[str]) -> None:
+        self.dataset = dataset
         self.frames_file_list = frames_file_list
 
     def __len__(self) -> int:
@@ -40,6 +54,8 @@ class FramesDataset(Dataset):
         path = self.frames_file_list[idx]
         frame = Image.open(path).convert("RGB")
         frame = TF.to_image(frame)
+        frame = TF.to_dtype(frame, torch.uint8, scale=True)
+        frame = resize_by_factor(frame, PARAMS[self.dataset]["resize_factor"])
         frame = TF.to_dtype(frame, torch.float32, scale=True)
         frame = 2.0 * frame - 1.0
         return {"image": frame, "path": path}
@@ -50,6 +66,7 @@ class TokenCreator:
     def __init__(
         self,
         *,
+        dataset: str,
         frames: str,
         outdir: str,
         tokenizer_jit_path: str,
@@ -65,6 +82,7 @@ class TokenCreator:
 
         Parameters
         ----------
+        dataset: str; dataset to process
         frames: str; path to a file containing a list of frames to tokenize
         device: str; device to use for processing
         outdir: str; path to the output directory
@@ -73,6 +91,12 @@ class TokenCreator:
         batch_size: int; batch size for processing
         num_writer_threads: int; number of writer threads to use
         """
+        assert dataset in [
+            "opendv",
+            "nuplan",
+            "nuscenes",
+        ], f"Invalid dataset: {dataset}, must be one of 'opendv', 'nuplan', 'nuscenes'"
+        self.dataset = dataset
         self.outdir = Path(outdir)
         self.device = device
         self.dtype = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}[dtype]
@@ -113,6 +137,31 @@ class TokenCreator:
         self.pbar_tokens = None
         self.pbar_write = None
 
+    def token_path(self, path: str) -> Path:
+        if self.dataset == "opendv":
+            # frames have the following path
+            # DISK_DIR / {CHANNEL} / {VIDEO_ID} / f_{frame_num}.jpg
+            # Tokens should have the following path
+            # self.outdir / {CHANNEL} / {VIDEO_ID} / t_{frame_num}.npy
+            return (
+                self.outdir
+                / Path(path).parent.parent.stem
+                / Path(path).parent.stem
+                / f"{Path(path).stem}.npy".replace("f_", "t_")
+            )
+        elif self.dataset == "nuplan":
+            # frames have the following path
+            # DISK_DIR / {CAMERA_NUM} / {DATES} / {CAMERA} / {id}.jpg
+            # Tokens should have the following path
+            # self.outdir / {CAMERA_NUM} / {DATES} / {CAMERA} / {id}.npy
+            return self.outdir / Path("/".join(str(Path(path).parent).split("/")[-3:])) / f"{Path(path).stem}.npy"
+        elif self.dataset == "nuscenes":
+            # frames have the following path
+            # DISK_DIR / {CAMERA} / {TIMESTAMP}.jpg
+            # Tokens should have the following path
+            # self.outdir / {CAMERA} / {TIMESTAMP}.npy
+            return self.outdir / Path(path).parent.stem / f"{Path(path).stem}.npy"
+
     def tokenize_frames(self, frames: Batch) -> List[Tokens]:
         """
         Tokenize a list of frames using a pre-trained tokenizer.
@@ -121,18 +170,9 @@ class TokenCreator:
         with torch.amp.autocast(self.device, dtype=self.dtype):
             tokens = self.tokenizer(frames["image"].to(self.device, non_blocking=True))
 
-        # frames have the following path
-        # DISK_DIR / {CHANNEL} / {VIDEO_ID} / f_{frame_num}.jpg
-        # Tokens should have the following path
-        # self.outdir / {CHANNEL} / {VIDEO_ID} / t_{frame_num}.npy
         out_tokens = []
         for path, token in zip(frames["path"], tokens):
-            token_path = (
-                self.outdir
-                / Path(path).parent.parent.stem
-                / Path(path).parent.stem
-                / f"{Path(path).stem}.npy".replace("f_", "t_")
-            )
+            token_path = self.token_path(path)
             out_tokens.append(Tokens(data=token.cpu().numpy(), path=token_path))
 
         return out_tokens
