@@ -66,13 +66,11 @@ parser.add_argument("--num_writer_threads", type=int, help="Number of threads fo
 parser.add_argument("--writer_queue_size", type=int, help="Size of the writer queue")
 parser.add_argument("--num_cpus", type=int, required=True, help="Number of CPUs")
 parser.add_argument("--batch_size", type=int, help="Batch size for tokenization")
+parser.add_argument("--queue", type=str, default='hq', choices=["hq", "sequential"], help="Queue type")
 parser.add_argument("--dtype", type=str, default="bf16", help="Data type for tokenization", choices=["bf16", "fp16", "fp32"])
 args = parser.parse_args()
 os.makedirs(f"./hq_tokenize_{args.dataset}", exist_ok=True)
 setup_logger(logdir=f"./hq_tokenize_{args.dataset}")
-
-logger.info("Creating hyperqueue client")
-client = Client(server_dir=args.server_dir)
 
 frames_file_list = sorted(glob(os.path.join(args.frames_dir, "*.txt"), recursive=True))
 logger.info(f"Number of job to create: {len(frames_file_list)}")
@@ -90,23 +88,32 @@ partial_create_tokens = partial(
     dtype=args.dtype,
 )
 
-job = Job()
-for idx, frame_file in enumerate(frames_file_list):
-    # We create an independent job for each chunk of files.
-    # We use chunks of files so that if a job fails, we don't have to reprocess all the files.
-    logger.info(f"Creating task {idx:06d} for {frame_file}")
-    job.function(
-        partial_create_tokens,
-        kwargs={"frames": frame_file},
-        stdout=os.path.join(f"./hq_tokenize_{args.dataset}", "tokens", f"{idx:06d}.out"),
-        stderr=os.path.join(f"./hq_tokenize_{args.dataset}", "tokens", f"{idx:06d}.err"),
-        resources=ResourceRequest(  # We need to provide the resources to prevent the job from running on the same GPU
-            cpus=args.num_cpus,
-            resources={"gpus/nvidia": 1},
-        ),
-    )
+if args.queue == "hq":
+    logger.info("Creating hyperqueue client")
+    client = Client(server_dir=args.server_dir)
+    job = Job()
 
-submitted = client.submit(job)
-logger.info(f"Job ID: {submitted}")
-logger.info("Waiting for jobs to finish")
-client.wait_for_jobs([submitted])
+    for idx, frame_file in enumerate(frames_file_list):
+        # We create an independent job for each chunk of files.
+        # We use chunks of files so that if a job fails, we don't have to reprocess all the files.
+        logger.info(f"Creating task {idx:06d} for {frame_file}")
+        job.function(
+            partial_create_tokens,
+            kwargs={"frames": frame_file},
+            stdout=os.path.join(f"./hq_tokenize_{args.dataset}", "tokens", f"{idx:06d}.out"),
+            stderr=os.path.join(f"./hq_tokenize_{args.dataset}", "tokens", f"{idx:06d}.err"),
+            resources=ResourceRequest(  # We need to provide the resources to prevent the job from running on the same GPU
+                cpus=args.num_cpus,
+                resources={"gpus/nvidia": 1},
+            ),
+        )
+
+    submitted = client.submit(job)
+    logger.info(f"Job ID: {submitted}")
+    logger.info("Waiting for jobs to finish")
+    client.wait_for_jobs([submitted])
+
+elif args.queue == "sequential":
+    for idx, frame_file in enumerate(frames_file_list):
+        logger.info(f"Creating task {idx:06d} for {frame_file}")
+        partial_create_tokens(frames=frame_file)

@@ -129,6 +129,21 @@ class EgoTrajectoryDataset(Dataset):
     def __len__(self) -> int:
         return len(self.sequences_indices)
 
+    def create_shifted_window_tensor(self, input_tensor: Tensor) -> Tensor:
+        """
+        Creates a tensor with shifting windows from an input tensor.
+
+        Args:
+            input_tensor: Input tensor of shape (self.sequence_length+self.action_length, 2)
+            f: Size of the window
+
+        Returns:
+            Tensor of shape (self.sequence_length, self.action_length, 2)
+        """
+        tens = input_tensor.unsqueeze(0).repeat(self.sequence_length, 1, 1)
+        result = torch.stack([tens[i, i+1:(i+1)+self.action_length, :] for i in range(self.sequence_length)])
+        return result
+
     def __getitem__(self, index: int) -> dict:
         data = defaultdict(list)
         first_frame_timestamp = None
@@ -142,7 +157,7 @@ class EgoTrajectoryDataset(Dataset):
         initial_rotation = torch.tensor(initial_sample["ego_to_world_rot"])
         initial_rotation_inv = self.quaternion_inverse(initial_rotation)
 
-        for temporal_index in temporal_indices:
+        for idx, temporal_index in enumerate(temporal_indices):
             sample = self.pickle_data[temporal_index][self.camera]
 
             # Get ego vehicle pose
@@ -160,9 +175,9 @@ class EgoTrajectoryDataset(Dataset):
             data["positions"].append(relative_position)
             data["rotations"].append(relative_rotation)
 
-            if self.tokens_rootdir is not None:
+            if (self.tokens_rootdir is not None) and (idx < self.sequence_length):
                 # get visual tokens
-                file_path = os.path.join(self.tokens_rootdir, sample["file_path"])
+                file_path = os.path.join(self.tokens_rootdir, sample["file_path"].replace(".jpg", ".npy"))
                 tokens = torch.from_numpy(np.load(file_path))
                 data["visual_tokens"].append(tokens)
 
@@ -178,9 +193,9 @@ class EgoTrajectoryDataset(Dataset):
             data["timestamps"].append(torch.tensor(relative_timestamp))
 
         # Stack tensors
-        data["positions"] = torch.stack(data["positions"], dim=0)
-        data["rotations"] = torch.stack(data["rotations"], dim=0)
-        data["timestamps"] = torch.stack(data["timestamps"], dim=0)
+        data["positions"] = self.create_shifted_window_tensor(torch.stack(data["positions"], dim=0))
+        data["rotations"] = self.create_shifted_window_tensor(torch.stack(data["rotations"], dim=0))
+        data["timestamps"] = torch.stack(data["timestamps"], dim=0)[:self.sequence_length]
         data["camera"] = self.camera
         if self.tokens_rootdir is not None:
             data["visual_tokens"] = torch.stack(data["visual_tokens"], dim=0)
@@ -252,19 +267,19 @@ def combined_ego_trajectory_dataset(
 if __name__ == "__main__":
     import pickle
 
-    # with open("/lustre/fswork/projects/rech/ycy/commun/nuscenes_pickle/val_data.pkl", "rb") as f:
-    #     nuscenes_pickle_data = pickle.load(f)
+    with open("/lustre/fswork/projects/rech/ycy/commun/nuscenes_pickle/val_data.pkl", "rb") as f:
+        nuscenes_pickle_data = pickle.load(f)
 
-    with open("/lustre/fswork/projects/rech/ycy/commun/nuplan_pickling/generated_files/nuplan_val_data.pkl", "rb") as f:
-        nuplan_pickle_data = pickle.load(f)
+    # with open("/lustre/fswork/projects/rech/ycy/commun/nuplan_pickling/generated_files/nuplan_val_data.pkl", "rb") as f:
+    #     nuplan_pickle_data = pickle.load(f)
 
     dataset = combined_ego_trajectory_dataset(
-        nuplan_pickle_data=nuplan_pickle_data,
-        # nuscenes_pickle_data=nuscenes_pickle_data,
+        # nuplan_pickle_data=nuplan_pickle_data,
+        nuscenes_pickle_data=nuscenes_pickle_data,
+        nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
     )
-    import ipdb
 
-    ipdb.set_trace()
-
-    print(len(dataset))
-    print(dataset[0])
+    print("Length", len(dataset))
+    print("Positions", dataset[0]["positions"].shape)
+    print("Positions", dataset[0]["positions"])
+    print("Tokens", dataset[0]["visual_tokens"].shape)

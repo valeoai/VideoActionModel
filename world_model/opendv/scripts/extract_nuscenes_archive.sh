@@ -48,3 +48,6 @@ hq job submit-file "$OUTPUT_FILE"
 
 # Find failed jobs:
 # find extract_nuscenes_archive -name "*.err" -type f -not -empty
+
+# srun -A ycy@h100 --partition=prepost --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=1 --hint=nomultithread --time=02:30:00 \
+# tar -xvf /lustre/fsstor/projects/rech/ycy/commun/nuplan/archives/sensor_blobs/nuplan-v1.1_train_camera_24.zip -C /lustre/fsn1/projects/rech/ycy/commun/nuplan_v2

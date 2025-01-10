@@ -112,7 +112,7 @@ class TokenCreator:
             self.frames = [x.strip().replace("\n", "") for x in f.readlines()]
         self.job_name = f"{len(self.frames)} frames"
         self.number_of_frames = len(self.frames)
-        dataset = FramesDataset(self.frames)
+        dataset = FramesDataset(self.dataset, self.frames)
         self.loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
 
         self.writer_queue = Queue(maxsize=writer_queue_size)
