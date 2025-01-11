@@ -141,7 +141,7 @@ class EgoTrajectoryDataset(Dataset):
             Tensor of shape (self.sequence_length, self.action_length, 2)
         """
         tens = input_tensor.unsqueeze(0).repeat(self.sequence_length, 1, 1)
-        result = torch.stack([tens[i, i+1:(i+1)+self.action_length, :] for i in range(self.sequence_length)])
+        result = torch.stack([tens[i, i + 1 : (i + 1) + self.action_length, :] for i in range(self.sequence_length)])
         return result
 
     def __getitem__(self, index: int) -> dict:
@@ -195,7 +195,7 @@ class EgoTrajectoryDataset(Dataset):
         # Stack tensors
         data["positions"] = self.create_shifted_window_tensor(torch.stack(data["positions"], dim=0))
         data["rotations"] = self.create_shifted_window_tensor(torch.stack(data["rotations"], dim=0))
-        data["timestamps"] = torch.stack(data["timestamps"], dim=0)[:self.sequence_length]
+        data["timestamps"] = torch.stack(data["timestamps"], dim=0)[: self.sequence_length]
         data["camera"] = self.camera
         if self.tokens_rootdir is not None:
             data["visual_tokens"] = torch.stack(data["visual_tokens"], dim=0)
@@ -239,6 +239,13 @@ def combined_ego_trajectory_dataset(
     nuscenes_tokens_rootdir: Optional[str] = None,
     **kwargs,
 ) -> ConcatDataset:
+    if nuplan_pickle_data is not None and nuscenes_pickle_data is not None:
+        # If both datasets are provided, ensure that either both or none of the tokens rootdirs are provided
+        if (nuplan_tokens_rootdir is None or nuscenes_tokens_rootdir is not None) or (
+            nuplan_tokens_rootdir is not None or nuscenes_tokens_rootdir is None
+        ):
+            raise ValueError("Tokens rootdir must be provided for both datasets")
+
     datasets = []
     if nuplan_pickle_data is not None:
         datasets.append(
@@ -270,16 +277,16 @@ if __name__ == "__main__":
     with open("/lustre/fswork/projects/rech/ycy/commun/nuscenes_pickle/val_data.pkl", "rb") as f:
         nuscenes_pickle_data = pickle.load(f)
 
-    # with open("/lustre/fswork/projects/rech/ycy/commun/nuplan_pickling/generated_files/nuplan_val_data.pkl", "rb") as f:
-    #     nuplan_pickle_data = pickle.load(f)
+    with open("/lustre/fswork/projects/rech/ycy/commun/nuplan_pickling/generated_files/nuplan_val_data.pkl", "rb") as f:
+        nuplan_pickle_data = pickle.load(f)
 
     dataset = combined_ego_trajectory_dataset(
-        # nuplan_pickle_data=nuplan_pickle_data,
-        nuscenes_pickle_data=nuscenes_pickle_data,
-        nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
+        nuplan_pickle_data=nuplan_pickle_data,
+        # nuscenes_pickle_data=nuscenes_pickle_data,
+        # nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
     )
 
     print("Length", len(dataset))
     print("Positions", dataset[0]["positions"].shape)
     print("Positions", dataset[0]["positions"])
-    print("Tokens", dataset[0]["visual_tokens"].shape)
+    # print("Tokens", dataset[0]["visual_tokens"].shape)

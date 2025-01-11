@@ -10,9 +10,10 @@ from world_model.opendv.stateful_dataloader import StatefulDataLoader
 StateDict = Dict[str, Any]
 
 
-def _path(path: str) -> str:
+def _path(path: str) -> str | None:
     if path is None:
         return None
+
     path = os.path.expanduser(os.path.expandvars(path))
     return path
 

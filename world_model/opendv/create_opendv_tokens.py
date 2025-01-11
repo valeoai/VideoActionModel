@@ -66,7 +66,7 @@ parser.add_argument("--num_writer_threads", type=int, help="Number of threads fo
 parser.add_argument("--writer_queue_size", type=int, help="Size of the writer queue")
 parser.add_argument("--num_cpus", type=int, required=True, help="Number of CPUs")
 parser.add_argument("--batch_size", type=int, help="Batch size for tokenization")
-parser.add_argument("--queue", type=str, default='hq', choices=["hq", "sequential"], help="Queue type")
+parser.add_argument("--queue", type=str, default="hq", choices=["hq", "sequential"], help="Queue type")
 parser.add_argument("--dtype", type=str, default="bf16", help="Data type for tokenization", choices=["bf16", "fp16", "fp32"])
 args = parser.parse_args()
 os.makedirs(f"./hq_tokenize_{args.dataset}", exist_ok=True)
