@@ -164,6 +164,7 @@ class MupDiT(nn.Module):
         action_horizon: int = 6,
         context_length: int = 8,
         number_high_level_command: int = 3,
+        max_period: float = 10000.0,
         init_std: float = 0.02,
         output_tied: bool = True,
         output_scale: float = 1.0,
@@ -188,6 +189,7 @@ class MupDiT(nn.Module):
                     context_length,
                     action_horizon,
                     number_high_level_command,
+                    max_period=max_period,
                 ),
                 "h": nn.ModuleList(
                     [
@@ -413,6 +415,7 @@ class ActionEncoder(nn.Module):
         context_length: int,
         action_horizon: int,
         number_high_level_command: int,
+        max_period: float = 10000.0,
         bias: bool = False,
     ) -> None:
         super().__init__()
@@ -425,7 +428,7 @@ class ActionEncoder(nn.Module):
         self.action_positional_embedding = nn.Embedding(action_horizon, width)
         self.context_positional_embedding = nn.Embedding(context_length, width)
 
-        self.diffusion_step_embedding = SinusoidalPosEmb(width)
+        self.diffusion_step_embedding = SinusoidalPosEmb(width, max_period=max_period)
 
     def forward(
         self,
