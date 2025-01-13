@@ -71,30 +71,6 @@ class NextTokenPredictor(LightningModule):
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
 
-    def create_inputs_and_target(self, batch: Batch) -> Tuple[Batch, Batch]:
-
-        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
-
-        indexes = batch["idx"]
-        with open(f"indexes_{self.trainer.global_rank}.txt", "a") as f:
-            f.write(f"{indexes}\n")
-
-        sequence_data = self.sequence_adapter(visual_tokens)
-
-        # Create input_tokens by taking all but the last token (shifting by one)
-        input_data = {
-            "token_sequence": sequence_data["token_sequence"][:, :-1],
-            "spatial_positions": sequence_data["spatial_positions"][:, :-1],
-            "temporal_positions": sequence_data["temporal_positions"][:, :-1],
-        }
-
-        # Create target_tokens by taking all but the first token (shifting by one)
-        target_data = {
-            "token_sequence": sequence_data["token_sequence"][:, 1:],
-        }
-
-        return input_data, target_data
-
     def on_train_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
         pass
