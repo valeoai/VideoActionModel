@@ -137,7 +137,7 @@ class Block(nn.Module):
         return x
 
 
-class MuDiT(nn.Module):
+class MupDiT(nn.Module):
     """
     GPT2 implementation following the original formulation to be able to load existing pre-trained weights
 
