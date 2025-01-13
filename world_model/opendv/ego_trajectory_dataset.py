@@ -153,16 +153,16 @@ class EgoTrajectoryDataset(Dataset):
 
         # Get initial pose
         initial_sample = self.pickle_data[temporal_indices[0]][self.camera]
-        initial_position = torch.tensor(initial_sample["ego_to_world_tran"][:2])
-        initial_rotation = torch.tensor(initial_sample["ego_to_world_rot"])
+        initial_position = torch.tensor(initial_sample["ego_to_world_tran"][:2], dtype=torch.float64)
+        initial_rotation = torch.tensor(initial_sample["ego_to_world_rot"], dtype=torch.float64)
         initial_rotation_inv = self.quaternion_inverse(initial_rotation)
 
         for idx, temporal_index in enumerate(temporal_indices):
             sample = self.pickle_data[temporal_index][self.camera]
 
             # Get ego vehicle pose
-            position = torch.tensor(sample["ego_to_world_tran"][:2])
-            rotation = torch.tensor(sample["ego_to_world_rot"])
+            position = torch.tensor(sample["ego_to_world_tran"][:2], dtype=torch.float64)
+            rotation = torch.tensor(sample["ego_to_world_rot"], dtype=torch.float64)
 
             # Transform to ego frame
             relative_position = position - initial_position
@@ -193,8 +193,8 @@ class EgoTrajectoryDataset(Dataset):
             data["timestamps"].append(torch.tensor(relative_timestamp))
 
         # Stack tensors
-        data["positions"] = self.create_shifted_window_tensor(torch.stack(data["positions"], dim=0))
-        data["rotations"] = self.create_shifted_window_tensor(torch.stack(data["rotations"], dim=0))
+        data["positions"] = self.create_shifted_window_tensor(torch.stack(data["positions"], dim=0)).to(dtype=torch.float32)
+        data["rotations"] = self.create_shifted_window_tensor(torch.stack(data["rotations"], dim=0)).to(dtype=torch.float32)
         data["timestamps"] = torch.stack(data["timestamps"], dim=0)[: self.sequence_length]
         data["camera"] = self.camera
         if self.tokens_rootdir is not None:
@@ -241,8 +241,8 @@ def combined_ego_trajectory_dataset(
 ) -> ConcatDataset:
     if nuplan_pickle_data is not None and nuscenes_pickle_data is not None:
         # If both datasets are provided, ensure that either both or none of the tokens rootdirs are provided
-        if (nuplan_tokens_rootdir is None or nuscenes_tokens_rootdir is not None) or (
-            nuplan_tokens_rootdir is not None or nuscenes_tokens_rootdir is None
+        if (nuplan_tokens_rootdir is None and nuscenes_tokens_rootdir is not None) or (
+            nuplan_tokens_rootdir is not None and nuscenes_tokens_rootdir is None
         ):
             raise ValueError("Tokens rootdir must be provided for both datasets")
 
@@ -253,6 +253,7 @@ def combined_ego_trajectory_dataset(
                 nuplan_pickle_data,
                 tokens_rootdir=nuplan_tokens_rootdir,
                 camera="CAM_F0",
+                subsampling_factor=5,
                 **kwargs,
             )
         )
@@ -285,6 +286,7 @@ if __name__ == "__main__":
         # nuscenes_pickle_data=nuscenes_pickle_data,
         # nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
     )
+    # import ipdb; ipdb.set_trace()
 
     print("Length", len(dataset))
     print("Positions", dataset[0]["positions"].shape)
