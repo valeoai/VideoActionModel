@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import torchvision.transforms.v2.functional as TF
 from PIL import Image
+from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -34,7 +35,7 @@ class Tokens:
     path: Path
 
 
-def resize_by_factor(img: torch.Tensor, resize_factor: float) -> torch.Tensor:
+def resize_by_factor(img: Tensor, resize_factor: float) -> Tensor:
     new_width = int(img.shape[2] / resize_factor)
     new_height = int(img.shape[1] / resize_factor)
     return TF.resize(img, (new_height, new_width), antialias=True)

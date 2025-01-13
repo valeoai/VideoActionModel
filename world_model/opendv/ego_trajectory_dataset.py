@@ -73,12 +73,12 @@ class EgoTrajectoryDataset(Dataset):
         return torch.tensor([w, x, y, z])
 
     @staticmethod
-    def quaternion_inverse(q: torch.Tensor) -> torch.Tensor:
+    def quaternion_inverse(q: Tensor) -> Tensor:
         """Compute the inverse of a quaternion."""
         return torch.tensor([q[0], -q[1], -q[2], -q[3]])
 
     @staticmethod
-    def rotate_point(point: torch.Tensor, quaternion: torch.Tensor) -> torch.Tensor:
+    def rotate_point(point: Tensor, quaternion: Tensor) -> Tensor:
         """Rotate a point using a quaternion."""
         # Convert point to quaternion format
         point_quat = torch.tensor([0.0, point[0], point[1], 0.0])

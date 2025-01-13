@@ -3,6 +3,7 @@ from typing import Dict, List
 
 import numpy as np
 import torch
+from torch import Tensor
 from torch.utils.data import Dataset
 
 
@@ -29,7 +30,7 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
     def __len__(self) -> int:
         return self.total_windows
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int) -> Dict[str, Tensor]:
         video_id, start_idx = self.video_windows[idx]
         frame_sequence = []
 

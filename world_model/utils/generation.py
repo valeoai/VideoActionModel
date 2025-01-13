@@ -32,7 +32,7 @@ from tqdm.auto import tqdm
 class Sampler:
     """Base class for sampling strategies."""
 
-    def sample(self, probabilities: torch.Tensor) -> torch.Tensor:
+    def sample(self, probabilities: Tensor) -> Tensor:
         """Samples from the probabilities according to a specific strategy.
 
         Args:
@@ -62,7 +62,7 @@ class ArgmaxSampler(Sampler):
     def __repr__(self) -> str:
         return "argmax"
 
-    def sample(self, next_token_probabilities: torch.Tensor) -> torch.Tensor:
+    def sample(self, next_token_probabilities: Tensor) -> Tensor:
         """Samples by selecting the token with the highest probability.
 
         Args:
@@ -89,7 +89,7 @@ class TopKSampler(Sampler):
     def __repr__(self) -> str:
         return f"top_{self.k}"
 
-    def sample(self, next_token_probabilities: torch.Tensor) -> torch.Tensor:
+    def sample(self, next_token_probabilities: Tensor) -> Tensor:
         """Samples from the top K probabilities.
 
         Args:
@@ -146,9 +146,9 @@ class ContextState(NamedTuple):
         temporal_pos: Temporal position encodings for tokens [B, T]
     """
 
-    tokens: torch.Tensor
-    spatial_pos: torch.Tensor
-    temporal_pos: torch.Tensor
+    tokens: Tensor
+    spatial_pos: Tensor
+    temporal_pos: Tensor
 
 
 class GenerationDims(NamedTuple):
@@ -195,7 +195,7 @@ class ImageGenerator:
         self.sequence_adapter = sequence_adapter
         self.max_context_frames = max_rolling_context_frames
 
-    def _extract_dimensions(self, visual_tokens: torch.Tensor, action_tokens: torch.Tensor) -> GenerationDims:
+    def _extract_dimensions(self, visual_tokens: Tensor, action_tokens: Tensor) -> GenerationDims:
         """
         Extracts all relevant dimensions for the generation process.
 
@@ -248,8 +248,8 @@ class ImageGenerator:
     def _prepare_initial_context(
         self,
         dims: GenerationDims,
-        burnin_visual: torch.Tensor,
-        burnin_actions: torch.Tensor,
+        burnin_visual: Tensor,
+        burnin_actions: Tensor,
     ) -> Tuple[ContextState, Dict]:
         """Prepares initial context by interleaving burnin tokens and computing positions."""
         # Interleave visual and action tokens from burnin sequence
@@ -272,7 +272,7 @@ class ImageGenerator:
 
         return ContextState(context, spatial_pos, temporal_pos), position_data, sequence_data
 
-    def _get_model_output(self, state: ContextState, prev_pos: int, cur_pos: int, use_cache: bool) -> torch.Tensor:
+    def _get_model_output(self, state: ContextState, prev_pos: int, cur_pos: int, use_cache: bool) -> Tensor:
         """
         Gets model predictions using either full context or cached computations.
 
@@ -303,7 +303,7 @@ class ImageGenerator:
             start_pos=-1,
         )
 
-    def _sample_next_token(self, logits: torch.Tensor, temperature: float) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _sample_next_token(self, logits: Tensor, temperature: float) -> Tuple[Tensor, Tensor]:
         """Sample the next token from model logits."""
         token_logits = logits[:, -1, :] / temperature
         token_probs = F.softmax(token_logits, dim=-1)
@@ -311,7 +311,7 @@ class ImageGenerator:
         return next_token, token_logits
 
     def _update_context_state(
-        self, state: ContextState, next_token: torch.Tensor, dims: GenerationDims, use_cache: bool
+        self, state: ContextState, next_token: Tensor, dims: GenerationDims, use_cache: bool
     ) -> ContextState:
         """
         Updates rolling context with new token and handles context window sliding.
@@ -396,8 +396,8 @@ class ImageGenerator:
         return ContextState(tokens, spatial_pos, temporal_pos)
 
     def _process_generated_frame(
-        self, context: torch.Tensor, dims: GenerationDims, frame_logits: Optional[List[torch.Tensor]] = None
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        self, context: Tensor, dims: GenerationDims, frame_logits: Optional[List[Tensor]] = None
+    ) -> Tuple[Tensor, Optional[Tensor]]:
         """Extract and process the latest generated frame."""
         frame = context[:, -dims.n_visual_tokens :]
         frame = rearrange(frame, "b (h w) -> b h w", h=dims.height)
@@ -410,7 +410,7 @@ class ImageGenerator:
         return frame, logits
 
     def _add_action_tokens(
-        self, state: ContextState, future_actions: torch.Tensor, frame_idx: int, dims: GenerationDims, use_cache: bool
+        self, state: ContextState, future_actions: Tensor, frame_idx: int, dims: GenerationDims, use_cache: bool
     ) -> ContextState:
         """
         Adds conditioning action tokens between generated frames.
@@ -443,11 +443,11 @@ class ImageGenerator:
     @torch.no_grad()
     def generate(
         self,
-        burnin_visual_tokens: torch.Tensor,
-        burnin_action_tokens: torch.Tensor,
-        future_action_tokens: torch.Tensor,
+        burnin_visual_tokens: Tensor,
+        burnin_action_tokens: Tensor,
+        future_action_tokens: Tensor,
         config: Optional[GenerationConfig] = None,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Dict[str, Tensor]:
         """
         Generate image sequences autoregressively.
 
