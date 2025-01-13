@@ -9,6 +9,7 @@ git clone https://www.github.com/valeoai/NextTokenPredictor
 cd NextTokenPredictor
 pip install -e .
 # to install torch at the same time: pip install -e ".[torch]"
+# to code: pip install -e ".[dev]"
 ```
 
 ## DATA

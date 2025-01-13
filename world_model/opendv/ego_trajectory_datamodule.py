@@ -31,8 +31,8 @@ class EgoTrajectoryDataModule(LightningDataModule):
     def __init__(
         self,
         *,
-        nuplan_token_rootdir: Optional[str] = None,
-        nuscenes_token_rootdir: Optional[str] = None,
+        nuplan_tokens_rootdir: Optional[str] = None,
+        nuscenes_tokens_rootdir: Optional[str] = None,
         nuplan_train_pickle_path: Optional[str] = None,
         nuscenes_train_pickle_path: Optional[str] = None,
         nuplan_val_pickle_path: Optional[str] = None,
@@ -43,8 +43,8 @@ class EgoTrajectoryDataModule(LightningDataModule):
         num_workers: int = 4,
     ) -> None:
         super().__init__()
-        self.nuplan_token_rootdir = _path(nuplan_token_rootdir)
-        self.nuscenes_token_rootdir = _path(nuscenes_token_rootdir)
+        self.nuplan_tokens_rootdir = _path(nuplan_tokens_rootdir)
+        self.nuscenes_tokens_rootdir = _path(nuscenes_tokens_rootdir)
         self.nuplan_train_pickle_path = _path(nuplan_train_pickle_path)
         self.nuscenes_train_pickle_path = _path(nuscenes_train_pickle_path)
         self.nuplan_val_pickle_path = _path(nuplan_val_pickle_path)
@@ -66,8 +66,8 @@ class EgoTrajectoryDataModule(LightningDataModule):
         # Create datasets
         if stage == "fit" or stage is None:
             kwargs = {
-                "nuplan_token_rootdir": self.nuplan_token_rootdir,
-                "nuscenes_token_rootdir": self.nuscenes_token_rootdir,
+                "nuplan_tokens_rootdir": self.nuplan_tokens_rootdir,
+                "nuscenes_tokens_rootdir": self.nuscenes_tokens_rootdir,
                 "sequence_length": self.sequence_length,
                 "action_length": self.action_length,
             }
@@ -106,8 +106,8 @@ class EgoTrajectoryDataModule(LightningDataModule):
 
     def state_dict(self) -> StateDict:
         return {
-            "nuplan_token_rootdir": self.nuplan_token_rootdir,
-            "nuscenes_token_rootdir": self.nuscenes_token_rootdir,
+            "nuplan_tokens_rootdir": self.nuplan_tokens_rootdir,
+            "nuscenes_tokens_rootdir": self.nuscenes_tokens_rootdir,
             "nuplan_train_pickle_path": self.nuplan_train_pickle_path,
             "nuscenes_train_pickle_path": self.nuscenes_train_pickle_path,
             "nuplan_val_pickle_path": self.nuplan_val_pickle_path,
@@ -120,8 +120,8 @@ class EgoTrajectoryDataModule(LightningDataModule):
         }
 
     def load_state_dict(self, state_dict: StateDict) -> None:
-        self.nuplan_token_rootdir = state_dict["nuplan_token_rootdir"]
-        self.nuscenes_token_rootdir = state_dict["nuscenes_token_rootdir"]
+        self.nuplan_tokens_rootdir = state_dict["nuplan_tokens_rootdir"]
+        self.nuscenes_tokens_rootdir = state_dict["nuscenes_tokens_rootdir"]
         self.nuplan_train_pickle_path = state_dict["nuplan_train_pickle_path"]
         self.nuscenes_train_pickle_path = state_dict["nuscenes_train_pickle_path"]
         self.nuplan_val_pickle_path = state_dict["nuplan_val_pickle_path"]
@@ -138,12 +138,12 @@ class EgoTrajectoryDataModule(LightningDataModule):
 
 if __name__ == "__main__":
     dm = EgoTrajectoryDataModule(
-        nuplan_token_rootdir="$ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens",
-        nuscenes_token_rootdir="$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens",
-        nuplan_train_pickle_path="$ycy_ALL_CCFRWORK/nuplan_pickling/generated_files/nuplan_train_data.pkl",
-        nuscenes_train_pickle_path="$ycy_ALL_CCFRWORK/nuscenes_pickle/train_data.pkl",
-        nuplan_val_pickle_path="$ycy_ALL_CCFRWORK/nuplan_pickling/generated_files/nuplan_val_data.pkl",
-        nuscenes_val_pickle_path="$ycy_ALL_CCFRWORK/nuscenes_pickle/val_data.pkl",
+        nuplan_tokens_rootdir="$ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens",
+        nuscenes_tokens_rootdir="$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens",
+        nuplan_train_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_train_data_cleaned.pkl",
+        nuscenes_train_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl",
+        nuplan_val_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl",
+        nuscenes_val_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl",
     ).setup()
 
     train_loader = dm.train_dataloader()

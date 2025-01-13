@@ -1,6 +1,6 @@
 import os
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -44,7 +44,6 @@ class EgoTrajectoryDataset(Dataset):
         action_length: int = 6,
         subsampling_factor: int = 1,
         with_yaw_rate: bool = False,
-        transforms: Callable[[Sample], Sample] = None,
     ) -> None:
         self.tokens_rootdir = tokens_rootdir
         self.sequence_length = sequence_length
@@ -52,7 +51,6 @@ class EgoTrajectoryDataset(Dataset):
         self.subsampling_factor = subsampling_factor
         self.with_yaw_rate = with_yaw_rate
         self.camera = camera
-        self.transforms = transforms
 
         # Sort by scene and timestamp
         pickle_data.sort(key=lambda x: (x["scene"]["name"], x[self.camera]["timestamp"]))
@@ -202,7 +200,7 @@ class EgoTrajectoryDataset(Dataset):
             if self.with_yaw_rate:
                 data["yaw_rate"].append(self.quaternion_to_euler_rates(relative_rotation))
 
-            if (self.tokens_rootdir is not None) and (idx < self.sequence_length):
+            if self.tokens_rootdir is not None:
                 # get visual tokens
                 file_path = os.path.join(self.tokens_rootdir, sample["file_path"].replace(".jpg", ".npy"))
                 tokens = torch.from_numpy(np.load(file_path))
@@ -230,10 +228,6 @@ class EgoTrajectoryDataset(Dataset):
             data["yaw_rate"] = torch.stack(data["yaw_rate"], dim=0)
 
         data = dict(data)
-
-        if self.transforms is not None:
-            data = self.transforms(data)
-
         return data
 
     def get_sequence_info(self, index: int) -> str:
@@ -309,6 +303,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from matplotlib.cm import ScalarMappable
     from matplotlib.colors import Normalize
+    from torch.utils.data import Subset
     from tqdm import tqdm
 
     def plot_trajectories(
@@ -332,8 +327,7 @@ if __name__ == "__main__":
         if max_trajectories is not None and max_trajectories < len(dataset):
             indexes = random.sample(range(len(dataset)), max_trajectories)
             print(f"Randomly sampled {max_trajectories} trajectories from {len(dataset)} total")
-        else:
-            indexes = range(len(dataset))
+            dataset = Subset(dataset, indexes)
 
         # Create figure
         fig, ax = plt.subplots(figsize=figsize)
@@ -404,15 +398,15 @@ if __name__ == "__main__":
         print(f"Saving plot to {save_path}...")
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
 
-    # with open("/lustre/fswork/projects/rech/ycy/commun/nuscenes_pickle/train_data.pkl", "rb") as f:
-    #     nuscenes_pickle_data = pickle.load(f)
+    with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl", "rb") as f:
+        nuscenes_pickle_data = pickle.load(f)
 
-    with open("/lustre/fswork/projects/rech/ycy/commun/nuplan_pickling/generated_files/nuplan_val_data.pkl", "rb") as f:
+    with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl", "rb") as f:
         nuplan_pickle_data = pickle.load(f)
 
     dataset = combined_ego_trajectory_dataset(
         nuplan_pickle_data=nuplan_pickle_data,
-        nuplan_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuplan_v2_tokens/tokens",
+        # nuplan_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuplan_v2_tokens/tokens",
         # nuscenes_pickle_data=nuscenes_pickle_data,
         with_yaw_rate=True,
         # nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
@@ -420,7 +414,7 @@ if __name__ == "__main__":
 
     print("Length", len(dataset))
     print("Positions", dataset[0]["positions"].shape)
-    print("Positions", dataset[0]["positions"])
+    # print("Positions", dataset[0]["positions"])
     # print("Tokens", dataset[0]["visual_tokens"].shape)
 
-    # plot_trajectories(dataset, max_trajectories=20000, save_path="trajectory_plot.pdf")
+    plot_trajectories(dataset, max_trajectories=20000, save_path="trajectory_plot.pdf")
