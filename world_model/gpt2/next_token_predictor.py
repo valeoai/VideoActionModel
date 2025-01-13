@@ -71,7 +71,6 @@ class NextTokenPredictor(LightningModule):
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
 
-
     def on_train_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
         pass
