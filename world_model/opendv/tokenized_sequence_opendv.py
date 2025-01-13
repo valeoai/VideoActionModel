@@ -125,3 +125,35 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         _ = self.train_dataloader()  # Initialize train dataloader
         _ = self.val_dataloader()  # Initialize val dataloader
         self.train_dataloader_.load_state_dict(state_dict["train_loader_state_dict"])
+
+
+# if __name__ == '__main__':
+#     import sys
+
+#     import torch
+#     from einops import rearrange
+
+#     sys.path.append(_path("$WORK/VisualQuantization/scripts/pretrained_tokenizers"))
+
+#     from load_vq_model import VQModel
+
+#     dm = TokenizedSequenceOpenDVDataModule(
+#         data_root_dir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
+#         video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json",
+#         val_video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json",
+#         sequence_length=20,
+#         batch_size=4,
+#         num_workers=4
+#     ).setup()
+
+#     train_loader = dm.train_dataloader()
+#     batch = next(iter(train_loader))
+
+#     tokenizer = VQModel("VQ_ds16_16384_llamagen", _path("$ycy_ALL_CCFRWORK/tokenizers_checkpoints/vq_ds16_c2i.pt"))
+#     tokenizer.to('cuda', non_blocking=True)
+#     tokenizer.eval()
+
+#     tokens = rearrange(batch['visual_tokens'], 'b t h w -> (b t) h w').to('cuda', non_blocking=True)
+#     img = tokenizer.decode_tokens(tokens)
+#     print(img.shape)
+#     torch.save(img, 'img.pt')
