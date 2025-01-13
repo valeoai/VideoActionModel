@@ -29,6 +29,7 @@ data:
   video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json
   val_video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json
   sequence_length: 20
+  subsampling_factor: 5
 
 # VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
 model:
