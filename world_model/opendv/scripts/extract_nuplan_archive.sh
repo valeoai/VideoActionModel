@@ -48,3 +48,6 @@ hq job submit-file "$OUTPUT_FILE"
 
 # Find failed jobs:
 # find extract_nuplan_archive -name "*.err" -type f -not -empty
+
+# Extracted frames:
+# find $ycy_ALL_CCFRSCRATCH/nuplan_v2 -type f -name "*.jpg" | wc -l

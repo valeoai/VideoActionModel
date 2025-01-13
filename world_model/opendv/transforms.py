@@ -30,7 +30,7 @@ class Normalize:
     Expect image input to be in [0;1] rescale in [-1;1]
     """
 
-    def __call__(self, img: torch.Tensor) -> torch.Tensor:
+    def __call__(self, img: Tensor) -> Tensor:
         return 2 * img - 1
 
 

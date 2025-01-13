@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import torchvision.transforms.v2.functional as TF
 from PIL import Image
+from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -34,7 +35,7 @@ class Tokens:
     path: Path
 
 
-def resize_by_factor(img: torch.Tensor, resize_factor: float) -> torch.Tensor:
+def resize_by_factor(img: Tensor, resize_factor: float) -> Tensor:
     new_width = int(img.shape[2] / resize_factor)
     new_height = int(img.shape[1] / resize_factor)
     return TF.resize(img, (new_height, new_width), antialias=True)
@@ -112,7 +113,7 @@ class TokenCreator:
             self.frames = [x.strip().replace("\n", "") for x in f.readlines()]
         self.job_name = f"{len(self.frames)} frames"
         self.number_of_frames = len(self.frames)
-        dataset = FramesDataset(self.frames)
+        dataset = FramesDataset(self.dataset, self.frames)
         self.loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
 
         self.writer_queue = Queue(maxsize=writer_queue_size)
@@ -153,8 +154,8 @@ class TokenCreator:
             # frames have the following path
             # DISK_DIR / {CAMERA_NUM} / {DATES} / {CAMERA} / {id}.jpg
             # Tokens should have the following path
-            # self.outdir / {CAMERA_NUM} / {DATES} / {CAMERA} / {id}.npy
-            return self.outdir / Path("/".join(str(Path(path).parent).split("/")[-3:])) / f"{Path(path).stem}.npy"
+            # self.outdir / {DATES} / {CAMERA} / {id}.npy
+            return self.outdir / Path("/".join(str(Path(path).parent).split("/")[-2:])) / f"{Path(path).stem}.npy"
         elif self.dataset == "nuscenes":
             # frames have the following path
             # DISK_DIR / {CAMERA} / {TIMESTAMP}.jpg

@@ -173,7 +173,7 @@ class WorldModelPredictionWriter(BasePredictionWriter):
             output_subdir = self.output_dir / data_type
             self.queue_data(output_subdir, image_paths, context_end_index, data)
 
-    def queue_data(self, output_dir: str, image_paths: List[str], context_end_index: int, data: torch.Tensor) -> None:
+    def queue_data(self, output_dir: str, image_paths: List[str], context_end_index: int, data: Tensor) -> None:
         if data.device != "cpu":
             data = data.cpu()
 

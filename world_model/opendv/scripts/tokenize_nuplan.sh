@@ -16,8 +16,11 @@ MAX_NUM_FILES=102400
 INPUT_FILE=frames_list.txt
 TOKENIZER_JIT_PATH=$WORK/VQ_ds16_16384_llamagen.jit
 
-INPUT_DIR=$fzh_ALL_CCFRSCRATCH/nuplan_v2
-BASE_DIR=$fzh_ALL_CCFRSCRATCH/nuplan_v2_tokens
+INPUT_DIR=$ycy_ALL_CCFRSCRATCH/nuplan_v2
+BASE_DIR=$ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens
+mkdir -p $BASE_DIR
+chmod g+rwxs,o+rx $BASE_DIR
+setfacl -d -m g::rwx $BASE_DIR
 FILES_LIST_DIR=$BASE_DIR/segments
 OUTPUT_DIR=$BASE_DIR/tokens
 mkdir -p $FILES_LIST_DIR
@@ -79,8 +82,5 @@ hq server stop
 # Find failed jobs:
 # find hq_tokenize_opendv/tokens -name "*.err" -type f -not -empty
 
-# Number of created directories:
-# find  $fzh_ALL_CCFRSCRATCH/OpenDV_processed/tokens -mindepth 2 -maxdepth 2 -type d  | wc -l
-
 # Number of tokenized frames:
-# find $fzh_ALL_CCFRSCRATCH/OpenDV_processed/tokens -type f -name "*.npy" | wc -l
+# find $ycy_ALL_CCFRSCRATCH/OpenDV_processed/tokens -type f -name "*.npy" | wc -l

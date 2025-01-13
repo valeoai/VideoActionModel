@@ -3,6 +3,7 @@ from typing import Dict
 import torch
 import torch.nn as nn
 from einops import rearrange, repeat
+from torch import Tensor
 
 
 class GPTAdapter(nn.Module):
@@ -27,7 +28,7 @@ class GPTAdapter(nn.Module):
         self.visual_vocab_size = visual_vocab_size
 
     @staticmethod
-    def compute_position_indices(batch_size: int, height: int, width: int, num_frames: int) -> Dict[str, torch.Tensor]:
+    def compute_position_indices(batch_size: int, height: int, width: int, num_frames: int) -> Dict[str, Tensor]:
         """
         Compute spatial positions, temporal positions,
         and visual tokens mask for a given batch size, frame size, and number of frames.
@@ -60,7 +61,7 @@ class GPTAdapter(nn.Module):
             "temporal_positions": temporal_positions,
         }
 
-    def forward(self, visual_tokens: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, visual_tokens: Tensor) -> Dict[str, Tensor]:
         """
         Args:
             visual_tokens: Tensor of visual tokens with shape [B, T, H, W].

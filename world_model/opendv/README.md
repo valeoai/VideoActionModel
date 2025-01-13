@@ -41,12 +41,12 @@ Check the [Hyperqueue documentation](https://it4innovations.github.io/hyperqueue
 To install the hyperqueue binary and hyperqueue python library:
 
 ```bash
-wget https://github.com/It4innovations/hyperqueue/releases/download/v0.20.0/hq-v0.20.0-linux-x64.tar.gz
+wget https://github.com/It4innovations/hyperqueue/releases/download/v0.19.0/hq-v0.19.0-linux-x64.tar.gz
 mkdir -p ~/bin
-tar -C ~/bin -xvzf hq-v0.20.0-linux-x64.tar.gz
-rm hq-v0.20.0-linux-x64.tar.gz
+tar -C ~/bin -xvzf hq-v0.19.0-linux-x64.tar.gz
+rm hq-v0.19.0-linux-x64.tar.gz
 export PATH=$PATH:~/bin  # you can add this to your .bashrc
-pip install hyperqueue==0.20.0
+pip install hyperqueue==0.19.0
 ```
 
 ### Configure SLURM file
