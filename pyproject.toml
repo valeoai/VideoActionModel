@@ -7,7 +7,7 @@ name = "world_model"
 version = "0.0.1"
 description = ""
 readme = "README.md"
-requires-python = ">=3.11.9"
+requires-python = ">=3.10.0"
 authors = [
     { name = "", email = "florent.bartoccioni@valeo.com" }
 ]
@@ -44,7 +44,7 @@ dev = [
 ]
 torch = [
     "torch==2.4.0",
-    "torchvision==0.19.0",
+    "torchvision>=0.19.0",
 ]
 
 [project.urls]

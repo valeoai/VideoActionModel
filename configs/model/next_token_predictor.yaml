@@ -1,7 +1,0 @@
-defaults:
-  - network: dummy_gpt
-  - sequence_adapter: gpt_adapter
-
-_target_: world_model.gpt2.NextTokenPredictor
-compile: False # compile model for faster training with pytorch 2.0
-log_norm: False # For debuging purposes, log gradients norm to loggers

@@ -18,7 +18,7 @@ if __name__ == "__main__":
     parser.add_argument("--nodes", type=int, default=1)
     parser.add_argument("--account", type=str, default="ycy@h100")
     parser.add_argument("--file_to_run", "-f", type=str, default="train")
-    parser.add_argument("--wall_time", "-wt", type=int, default=20)  # jean zay has max time of 20h
+    parser.add_argument("--wall_time", "-wt", type=str, default="20:00:00")  # jean zay has max time of 20h
     parser.add_argument("--dev_qos", action="store_true")
     parser.add_argument("--allow_hyper_threading", action="store_true")
     # parse params
@@ -50,12 +50,13 @@ if __name__ == "__main__":
         # nomultithred to get more RAM per GPU
         # see https://github.com/valeoai/VisualQuantization/blob/dev/scripts/SLURM_PREPOST.md
         "#SBATCH --hint=nomultithread" if not args.allow_hyper_threading else "",
-        f"#SBATCH --time={args.wall_time}:00:00",
+        f"#SBATCH --time={args.wall_time}",
         # name of output and error files
         f"#SBATCH --output={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         "#SBATCH --qos=qos_gpu_h100-dev" if args.dev_qos else "",
         f"#SBATCH -A {args.account}",
+        "#SBATCH --signal=SIGUSR1@60",  # Send signal 30 seconds before time limit
         "module purge",  # cleans out the modules loaded in interactive and inherited by default
         "module load arch/h100",
         "module load pytorch-gpu/py3/2.4.0",

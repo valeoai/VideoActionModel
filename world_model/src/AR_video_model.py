@@ -7,18 +7,16 @@ import torch
 from einops import rearrange
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
-from mup.optim import MuAdamW
 from omegaconf import DictConfig
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 
-from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
-
 Batch = Dict[str, torch.Tensor]
-mupShapes = Dict[str, Tuple[int, ...]]
+
+from world_model.src.prepare_token_sequence import prepare_AR_token_sequences
 
 
-class NextTokenPredictor(LightningModule):
+class ARVideoModel(LightningModule):
     """
     LightningModule docs:
         https://lightning.ai/docs/pytorch/latest/common/lightning_module.html
@@ -31,13 +29,10 @@ class NextTokenPredictor(LightningModule):
         scheduler_conf: Optional[DictConfig] = None,
         compile: bool = False,
         log_norm: bool = False,
-        mup_base_shapes: mupShapes = None,
     ) -> None:
         """
         Args:
             network: The configuration of the model to train.
-            sequence_adapter: The configuration of an adapter the produce
-            a unified sequence of tokens from visual and action tokens.
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
             compile: Compile model for faster training with pytorch 2.0, registered with save_hyperparameters
@@ -52,15 +47,6 @@ class NextTokenPredictor(LightningModule):
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
         self.network = hydra.utils.instantiate(network)
-        self.mup_base_shapes = mup_base_shapes
-
-        if mup_base_shapes is not None:
-            print("mup_base_shapes configured")
-            mup.set_base_shapes(self.network, mup_base_shapes)
-            # re-initialize after set_base_shapes
-            self.network.apply(self.network._init_weights)
-        else:
-            print("Network NOT mu-Parametrized")
 
         self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
 
@@ -70,7 +56,6 @@ class NextTokenPredictor(LightningModule):
             # If using mixed precision, the gradients are already unscaled here
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
-
 
     def on_train_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
@@ -90,11 +75,10 @@ class NextTokenPredictor(LightningModule):
         input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
 
         logits_sequence = self.network(**input_data)
-        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
 
+        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
         loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
 
-        # log losses
         self.log("train/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
 
         # return loss to apply backpropagation
@@ -118,8 +102,8 @@ class NextTokenPredictor(LightningModule):
         input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
 
         logits_sequence = self.network(**input_data)
-        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
 
+        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
         loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
 
         # log losses at the end of epoch, rest is automatic
@@ -164,7 +148,7 @@ class NextTokenPredictor(LightningModule):
         if not self.optimizer_conf:
             return None
 
-        optimizer = MuAdamW(params=self.parameters(), **self.optimizer_conf)
+        optimizer = self.network.configure_optimizers(**self.optimizer_conf)
 
         if not self.scheduler_conf:
             return {"optimizer": optimizer}
@@ -217,5 +201,3 @@ class NextTokenPredictor(LightningModule):
 
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
-
-        checkpoint["mup_base_shapes"] = self.mup_base_shapes
