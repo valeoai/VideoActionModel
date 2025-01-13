@@ -41,9 +41,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     datamodule: LightningDataModule = hydra.utils.instantiate(config.data)
 
     log.info(f"Instantiating model <{config.model._target_}>")
-    model: LightningModule = hydra.utils.instantiate(
-        config.model, optimizer_conf=config.optimizer, scheduler_conf=config.scheduler, _recursive_=False
-    )
+    model: LightningModule = hydra.utils.instantiate(config.model, scheduler_conf=config.scheduler, _recursive_=False)
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(config.get("callbacks"))

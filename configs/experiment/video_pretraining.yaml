@@ -1,0 +1,54 @@
+# @package _global_
+
+defaults:
+  - override /data: tokenized_sequence_opendv
+  - override /callbacks: callbacks_opendv_training
+  - override /trainer: deepspeed2
+  - override /logger: many_loggers
+  - override /paths: jeanzay_nuplan
+  - override /scheduler: warmup_stable_drop
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+
+trainer:
+  max_epochs: 5
+  # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  log_every_n_steps: 5
+
+scheduler:
+  warmup_iter: 15529 # 1% ~ end_iter * 0.01
+  end_iter: 155293 # (len_dataset - 1) // BATCH_SIZE * nb_epochs = (59632706 - 1) // 384 * 1 = 155293
+  drop_iter: 0 # pretrain stage no annealing 
+
+data:
+  data_root_dir: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
+  video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json
+  val_video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json
+  sequence_length: 20
+
+# VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
+model:
+  _target_: world_model.src.AR_video_model.ARVideoModel
+  log_norm: False # For debuging purposes, log gradients norm to loggers
+  compile: False # compile model for faster training with pytorch 2.0
+  network:
+    _target_: world_model.src.AR_video_network.ARVideoNetwork
+    width: 256
+    head_dim: 128
+    depth: 24
+    vocab_size: 16384 # 16384 + 1 | visual_vocab_size
+    ffn_expansion: 4
+    nb_timesteps: ${data.sequence_length}
+    nb_tokens_per_timestep: 576 # 18*32 = 576 | h*w of visual tokens
+    rope_theta: 100 # theta for temporal pos embedding
+    init_std: 0.02
+    weight_tying: True
+  optimizer_conf:
+    lr: 0.0001
+    weight_decay: 1e-8
+    betas: [0.9, 0.95]
+    eps: 1e-08

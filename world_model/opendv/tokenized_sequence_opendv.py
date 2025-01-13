@@ -25,6 +25,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         data_root_dir: str,
         video_list_path: str,
         sequence_length: int,
+        subsampling_factor: int = 1,
         val_video_list_path: str = None,
         batch_size: int = 32,
         num_workers: int = 4,
@@ -34,6 +35,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         self.video_list_path = _path(video_list_path)
         self.val_video_list_path = _path(val_video_list_path)
         self.sequence_length = sequence_length
+        self.subsampling_factor = subsampling_factor
         self.batch_size = batch_size
         self.num_workers = num_workers
 
@@ -70,7 +72,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         # Create datasets
         if stage == "fit" or stage is None:
             self.train_dataset = RandomTokenizedSequenceOpenDVDataset(
-                self.data_root_dir, self.video_list, self.sequence_length
+                self.data_root_dir, self.video_list, self.sequence_length, self.subsampling_factor
             )
 
             if self.val_video_list_path:
@@ -80,7 +82,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
                 self.print_missing_videos(missing_val_videos)
 
                 self.val_dataset = RandomTokenizedSequenceOpenDVDataset(
-                    self.data_root_dir, self.val_video_list, self.sequence_length
+                    self.data_root_dir, self.val_video_list, self.sequence_length, self.subsampling_factor
                 )
 
         return self
@@ -105,6 +107,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
             "video_list_path": self.video_list_path,
             "val_video_list_path": self.val_video_list_path,
             "sequence_length": self.sequence_length,
+            "subsampling_factor": self.subsampling_factor,
             "batch_size": self.batch_size,
             "num_workers": self.num_workers,
             "train_loader_state_dict": self.train_dataloader_.state_dict(),
@@ -115,6 +118,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         self.video_list_path = state_dict["video_list_path"]
         self.val_video_list_path = state_dict["val_video_list_path"]
         self.sequence_length = state_dict["sequence_length"]
+        self.subsampling_factor = state_dict["subsampling_factor"]
         self.batch_size = state_dict["batch_size"]
         self.num_workers = state_dict["num_workers"]
         _ = self.setup()

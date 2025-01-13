@@ -7,9 +7,12 @@ import torch
 from einops import rearrange
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
+from mup.optim import MuAdamW
 from omegaconf import DictConfig
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
+
+from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
 
 Batch = Dict[str, torch.Tensor]
 mupShapes = Dict[str, Tuple[int, ...]]
@@ -24,7 +27,6 @@ class NextTokenPredictor(LightningModule):
     def __init__(
         self,
         network: DictConfig,
-        sequence_adapter: DictConfig,
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
         compile: bool = False,
@@ -50,7 +52,7 @@ class NextTokenPredictor(LightningModule):
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
         self.network = hydra.utils.instantiate(network)
-        self.sequence_adapter = hydra.utils.instantiate(sequence_adapter)
+        self.mup_base_shapes = mup_base_shapes
 
         if mup_base_shapes is not None:
             print("mup_base_shapes configured")
@@ -71,7 +73,7 @@ class NextTokenPredictor(LightningModule):
 
     def create_inputs_and_target(self, batch: Batch) -> Tuple[Batch, Batch]:
 
-        visual_tokens = batch["visual_tokens"]
+        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
 
         indexes = batch["idx"]
         with open(f"indexes_{self.trainer.global_rank}.txt", "a") as f:
@@ -108,14 +110,12 @@ class NextTokenPredictor(LightningModule):
          A tensor of losses between model predictions and targets.
         """
 
-        input_data, target_data = self.create_inputs_and_target(batch)
+        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
 
         logits_sequence = self.network(**input_data)
-        visual_logits = rearrange(logits_sequence, "b t v -> (b t) v")
+        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
 
-        visual_target_tokens = rearrange(target_data["token_sequence"], "b t -> (b t)")
-
-        loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
+        loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
 
         # log losses
         self.log("train/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
@@ -138,14 +138,12 @@ class NextTokenPredictor(LightningModule):
             batch: A batch of data.
             batch_idx: The index of the current batch.
         """
-        input_data, target_data = self.create_inputs_and_target(batch)
+        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
 
         logits_sequence = self.network(**input_data)
-        visual_logits = rearrange(logits_sequence, "b t v -> (b t) v")
+        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
 
-        visual_target_tokens = rearrange(target_data["token_sequence"], "b t -> (b t)")
-
-        loss = self.cross_entropy_loss(visual_logits, visual_target_tokens)
+        loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
 
         # log losses at the end of epoch, rest is automatic
         self.log("val/loss", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
@@ -189,7 +187,7 @@ class NextTokenPredictor(LightningModule):
         if not self.optimizer_conf:
             return None
 
-        optimizer = hydra.utils.instantiate(self.optimizer_conf, params=self.parameters())
+        optimizer = MuAdamW(params=self.parameters(), **self.optimizer_conf)
 
         if not self.scheduler_conf:
             return {"optimizer": optimizer}
@@ -242,3 +240,5 @@ class NextTokenPredictor(LightningModule):
 
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
+
+        checkpoint["mup_base_shapes"] = self.mup_base_shapes

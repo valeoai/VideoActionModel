@@ -76,8 +76,7 @@ class EgoTrajectoryDataset(Dataset):
         # Apply rotation: q * p * q^(-1)
         q_inv = EgoTrajectoryDataset.quaternion_inverse(quaternion)
         rotated = EgoTrajectoryDataset.quaternion_multiply(
-            EgoTrajectoryDataset.quaternion_multiply(quaternion, point_quat),
-            q_inv
+            EgoTrajectoryDataset.quaternion_multiply(quaternion, point_quat), q_inv
         )
 
         # Return rotated point

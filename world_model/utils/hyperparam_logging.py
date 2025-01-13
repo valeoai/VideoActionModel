@@ -46,7 +46,6 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     hparams["data"] = config["data"]
     hparams["trainer"] = config["trainer"]
 
-    hparams["optimizer"] = config.get("optimizer")
     hparams["scheduler"] = config.get("scheduler")
 
     hparams["callbacks"] = config.get("callbacks")

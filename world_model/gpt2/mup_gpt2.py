@@ -25,28 +25,26 @@ from torch import Tensor
 
 class MLP(nn.Module):
 
-    def __init__(self, dim_model: int, bias: bool, dropout: float, hidden_dim_mult: int = 4) -> None:
+    def __init__(self, dim_model: int, hidden_dim_mult: int = 4) -> None:
         super().__init__()
-        self.c_fc = nn.Linear(dim_model, hidden_dim_mult * dim_model, bias=bias)
+        self.c_fc = nn.Linear(dim_model, hidden_dim_mult * dim_model, bias=False)
         self.gelu = nn.GELU()
-        self.c_proj = nn.Linear(hidden_dim_mult * dim_model, dim_model, bias=bias)
-        self.dropout = nn.Dropout(dropout)
+        self.c_proj = nn.Linear(hidden_dim_mult * dim_model, dim_model, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.c_fc(x)
         x = self.gelu(x)
         x = self.c_proj(x)
-        x = self.dropout(x)
         return x
 
 
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, dim_model: int, nb_heads: int, bias: bool, dropout: float, block_size: int, attn_scale: float) -> None:
+    def __init__(self, dim_model: int, dim_heads: int, block_size: int, attn_scale: float) -> None:
         super().__init__()
-        assert dim_model % nb_heads == 0, "dim_model must be divisible by nb_heads"
+        assert dim_model % dim_heads == 0, "dim_model must be divisible by dim_heads"
 
-        self.nb_heads = nb_heads
+        self.dim_heads = dim_heads
         self.dim_model = dim_model
 
         ########### muP ###########
@@ -57,16 +55,11 @@ class CausalSelfAttention(nn.Module):
         self.value = nn.Identity()  # just for coordcheck
 
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(dim_model, 3 * dim_model, bias=bias)
+        self.c_attn = nn.Linear(dim_model, 3 * dim_model, bias=False)
 
         # output projection
-        self.c_proj = nn.Linear(dim_model, dim_model, bias=bias)
+        self.c_proj = nn.Linear(dim_model, dim_model, bias=False)
 
-        # regularization
-        self.attn_dropout = nn.Dropout(dropout)
-        self.resid_dropout = nn.Dropout(dropout)
-
-        self.dropout = dropout
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
         if not self.flash:
@@ -78,13 +71,12 @@ class CausalSelfAttention(nn.Module):
         self.cache = None
 
     def forward(self, x: Tensor, attn_mask: Tensor, start_pos: int = -1) -> Tensor:
-        B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (dim_model)
 
         # calculate query, key, values for all heads in batch
         x = self.c_attn(x)
 
         # split into qkv and heads
-        q, k, v = rearrange(x, "b seq (n nb_heads dim_head) -> n b nb_heads seq dim_head", n=3, nb_heads=self.nb_heads)
+        q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
 
         # KV cache update
         if self.cache is not None:
@@ -97,7 +89,7 @@ class CausalSelfAttention(nn.Module):
         k = self.key(k)
         v = self.value(v)
 
-        ### muP: attention scaling 1/dim_head instead of 1/sqrt(dim_head)
+        ### muP: attention scaling 1/dim_heads instead of 1/sqrt(dim_heads)
         attn_scaling = self.attn_scale / v.size(-1)
 
         # efficient attention using Flash Attention CUDA kernels
@@ -106,7 +98,6 @@ class CausalSelfAttention(nn.Module):
             k,
             v,
             attn_mask=attn_mask,
-            dropout_p=self.dropout if self.training else 0,
             is_causal=False,
             scale=attn_scaling,  # muP: attention scaling
         )
@@ -114,7 +105,7 @@ class CausalSelfAttention(nn.Module):
         y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")  # re-assemble all head outputs side by side
 
         # output projection
-        y = self.resid_dropout(self.c_proj(y))
+        y = self.c_proj(y)
 
         return y
 
@@ -124,19 +115,16 @@ class Block(nn.Module):
     def __init__(
         self,
         dim_model: int,
-        nb_heads: int,
-        bias: bool,
-        dropout: float,
+        dim_heads: int,
         block_size: int,
         attn_scale: float,
-        learnable_gains: bool = False,
         mlp_dim_mult: int = 4,
     ) -> None:
         super().__init__()
-        self.ln_1 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
-        self.attn = CausalSelfAttention(dim_model, nb_heads, bias, dropout, block_size, attn_scale)
-        self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=learnable_gains)
-        self.mlp = MLP(dim_model, bias, dropout, mlp_dim_mult)
+        self.ln_1 = nn.LayerNorm(dim_model, elementwise_affine=False)
+        self.attn = CausalSelfAttention(dim_model, dim_heads, block_size, attn_scale)
+        self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=False)
+        self.mlp = MLP(dim_model, mlp_dim_mult)
 
     def forward(self, x: Tensor, attn_mask: Tensor, start_pos: int = -1) -> Tensor:
         x = x + self.attn(self.ln_1(x), attn_mask, start_pos=start_pos)
@@ -144,37 +132,32 @@ class Block(nn.Module):
         return x
 
 
-class MuGPT2(nn.Module):
+class MupGPT2(nn.Module):
     """
     GPT2 implementation following the original formulation to be able to load existing pre-trained weights
 
     Args:
         embedding_dim: embedding dimension for the world model
         nb_layers: number of transformer blocks
-        nb_heads: number of attention heads
+        dim_heads: dimension of attention heads
         vocabulary_size: total number of vector embeddings in GPT's codebook
         nb_timesteps: maximum number of timesteps found in one sequence
         nb_tokens_per_timestep: number of tokens ithi each timestep
-        dropout_rate: dropout rate
-        bias: True: bias in Linears. False: a bit better and faster
     """
 
     def __init__(
         self,
         embedding_dim: int = 256,
         nb_layers: int = 12,
-        nb_heads: int = 16,
+        dim_heads: int = 2,
         mlp_dim_mult: int = 4,
         vocabulary_size: int = 1104,
         nb_timesteps: int = 8,
         nb_tokens_per_timestep: int = 352,
-        dropout_rate: float = 0.0,
         init_std: float = 0.02,
-        bias: bool = True,
         output_tied: bool = True,
         output_scale: float = 1.0,
         attn_scale: float = 1.0,
-        learnable_gains: bool = False,
     ) -> None:
 
         super().__init__()
@@ -183,7 +166,6 @@ class MuGPT2(nn.Module):
         assert nb_timesteps is not None, "nb_timesteps must be provided"
 
         self.embedding_dim = embedding_dim
-        self.bias = bias
         self.init_std = init_std
         self.attn_scale = attn_scale
         self.output_scale = output_scale
@@ -200,23 +182,19 @@ class MuGPT2(nn.Module):
                 "wie": nn.Embedding(vocabulary_size, embedding_dim),  # token embeddings
                 "wse": nn.Embedding(nb_tokens_per_timestep, embedding_dim),  # spatial position embeddings
                 "wte": nn.Embedding(nb_timesteps, embedding_dim),  # temporal position embeddings
-                "drop": nn.Dropout(dropout_rate),
                 "h": nn.ModuleList(
                     [
                         Block(
                             embedding_dim,
-                            nb_heads,
-                            bias,
-                            dropout_rate,
+                            dim_heads,
                             self.block_size,
                             attn_scale,
-                            learnable_gains,
                             mlp_dim_mult,
                         )
                         for _ in range(nb_layers)
                     ]
                 ),
-                "ln_f": nn.LayerNorm(embedding_dim, elementwise_affine=learnable_gains),
+                "ln_f": nn.LayerNorm(embedding_dim, elementwise_affine=False),
             }
         )
 
@@ -295,13 +273,10 @@ class MuGPT2(nn.Module):
             ------------------------------
             Linear(in_features=512, out_features=128, bias=False)
             ------------------------------
-            Dropout(p=0.0, inplace=False)
-            ------------------------------
             MLP(
             (c_fc): Linear(in_features=128, out_features=512, bias=False)
             (gelu): GELU(approximate='none')
             (c_proj): Linear(in_features=512, out_features=128, bias=False)
-            (dropout): Dropout(p=0.0, inplace=False)
             )
 
         This means that specific initialization to MLP using isinstance(module, MLP)
@@ -389,7 +364,7 @@ class MuGPT2(nn.Module):
 
         tok_emb = self.transformer.wie(token_sequence)
 
-        emb_in = tok_emb + temporal_pos_emb + spatial_pos_emb
+        x = tok_emb + temporal_pos_emb + spatial_pos_emb
 
         seqlen = token_sequence.size(1)
         if inference and start_pos != -1:
@@ -402,13 +377,12 @@ class MuGPT2(nn.Module):
                 # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
                 # j > cache_len + i, since row i corresponds to token cache_len + i.
                 attn_mask = torch.hstack([torch.zeros((seqlen, start_pos), device=token_sequence.device), attn_mask]).type_as(
-                    emb_in
+                    x
                 )
         else:
             attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
 
         # forward world embeddings to the transformer
-        x = self.transformer.drop(emb_in)
         for block in self.transformer.h:
             x = block(x, attn_mask, start_pos=start_pos)
         emb_out = self.transformer.ln_f(x)
