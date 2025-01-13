@@ -1,13 +1,14 @@
 from typing import List, Tuple
+
 import torch
 
+
 class KVCache:
-    def __init__(self, max_size:int) -> None:
-        """
-        """
-        
+    def __init__(self, max_size: int) -> None:
+        """ """
+
         self.max_size = max_size
-        
+
         self.key_cache: List[torch.Tensor] = []
         self.value_cache: List[torch.Tensor] = []
 
@@ -38,12 +39,8 @@ class KVCache:
             # ... otherwise we concatenate the new keys with the existing ones.
             # each tensor has shape: [Batch_Size, Seq_Len, Num_Heads_KV, Head_Dim]
             # slicing with [-self.max_size:] to constrain growth of cache
-            self.key_cache[layer_idx] = torch.cat(
-                [self.key_cache[layer_idx][-self.max_size:], key_states], dim=1
-            )
-            self.value_cache[layer_idx] = torch.cat(
-                [self.value_cache[layer_idx][-self.max_size:], value_states], dim=1
-            )
+            self.key_cache[layer_idx] = torch.cat([self.key_cache[layer_idx][-self.max_size :], key_states], dim=1)
+            self.value_cache[layer_idx] = torch.cat([self.value_cache[layer_idx][-self.max_size :], value_states], dim=1)
 
         # ... and then we return all the existing keys + the new ones.
         return self.key_cache[layer_idx], self.value_cache[layer_idx]

@@ -13,10 +13,10 @@ from torch.optim.optimizer import Optimizer
 
 Batch = Dict[str, torch.Tensor]
 
-from prepare_token_sequence import prepare_AR_token_sequences
+from world_model.src.prepare_token_sequence import prepare_AR_token_sequences
 
 
-class AR_model(LightningModule):
+class ARVideoModel(LightningModule):
     """
     LightningModule docs:
         https://lightning.ai/docs/pytorch/latest/common/lightning_module.html
@@ -72,13 +72,13 @@ class AR_model(LightningModule):
          A tensor of losses between model predictions and targets.
         """
 
-        input_data, target_data = prepare_AR_token_sequences(batch['visual_tokens'])
-    
+        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
+
         logits_sequence = self.network(**input_data)
-        
-        logits_sequence = rearrange(logits_sequence, 'b ... d -> b d ...')
-        loss = self.cross_entropy_loss(logits_sequence, target_data['token_sequence'])
-        
+
+        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
+        loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
+
         self.log("train/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
 
         # return loss to apply backpropagation
@@ -99,12 +99,12 @@ class AR_model(LightningModule):
             batch: A batch of data.
             batch_idx: The index of the current batch.
         """
-        input_data, target_data = prepare_AR_token_sequences(batch['visual_tokens'])
-    
+        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
+
         logits_sequence = self.network(**input_data)
-        
-        logits_sequence = rearrange(logits_sequence, 'b ... d -> b d ...')
-        loss = self.cross_entropy_loss(logits_sequence, target_data['token_sequence'])
+
+        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
+        loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
 
         # log losses at the end of epoch, rest is automatic
         self.log("val/loss", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
@@ -147,7 +147,7 @@ class AR_model(LightningModule):
 
         if not self.optimizer_conf:
             return None
-        
+
         optimizer = self.network.configure_optimizers(**self.optimizer_conf)
 
         if not self.scheduler_conf:
