@@ -134,3 +134,27 @@ class EgoTrajectoryDataModule(LightningDataModule):
         _ = self.train_dataloader()  # Initialize train dataloader
         _ = self.val_dataloader()  # Initialize val dataloader
         self.train_dataloader_.load_state_dict(state_dict["train_loader_state_dict"])
+
+
+if __name__ == "__main__":
+    dm = EgoTrajectoryDataModule(
+        nuplan_token_rootdir="$ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens",
+        nuscenes_token_rootdir="$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens",
+        nuplan_train_pickle_path="$ycy_ALL_CCFRWORK/nuplan_pickling/generated_files/nuplan_train_data.pkl",
+        nuscenes_train_pickle_path="$ycy_ALL_CCFRWORK/nuscenes_pickle/train_data.pkl",
+        nuplan_val_pickle_path="$ycy_ALL_CCFRWORK/nuplan_pickling/generated_files/nuplan_val_data.pkl",
+        nuscenes_val_pickle_path="$ycy_ALL_CCFRWORK/nuscenes_pickle/val_data.pkl",
+    ).setup()
+
+    train_loader = dm.train_dataloader()
+    val_loader = dm.val_dataloader()
+
+    for i, batch in enumerate(train_loader):
+        if i > 10:
+            break
+        print(i, batch["visual_tokens"].shape, batch["positions"].shape)
+
+    for i, batch in enumerate(val_loader):
+        if i > 10:
+            break
+        print(i, batch["visual_tokens"].shape, batch["positions"].shape)
