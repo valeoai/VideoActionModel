@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 from torch import FloatTensor, LongTensor
 
 from world_model.gpt2.joint_model import JointModel
-from world_model.gpt2.mup_dit import MupActionExpert
+from world_model.gpt2.mup_action_expert import MupActionExpert
 from world_model.gpt2.mup_gpt2 import MupGPT2
 
 mupShapes = Dict[str, Tuple[int, ...]]

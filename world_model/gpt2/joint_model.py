@@ -5,9 +5,9 @@ import torch.nn as nn
 from einops import rearrange
 from torch import BoolTensor, FloatTensor, LongTensor
 
-from world_model.gpt2.mup_dit import Block as ActionBlock
-from world_model.gpt2.mup_dit import MupActionExpert
-from world_model.gpt2.mup_dit import SelfAttention as ActionAttention
+from world_model.gpt2.mup_action_expert import Block as ActionBlock
+from world_model.gpt2.mup_action_expert import MupActionExpert
+from world_model.gpt2.mup_action_expert import SelfAttention as ActionAttention
 from world_model.gpt2.mup_gpt2 import Block as GPTBlock
 from world_model.gpt2.mup_gpt2 import CausalSelfAttention as GPTAttention
 from world_model.gpt2.mup_gpt2 import MupGPT2
