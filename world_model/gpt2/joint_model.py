@@ -39,6 +39,14 @@ class JointModel(nn.Module):
         visual_embeds = tok_emb + temporal_pos_emb + spatial_pos_emb
         return visual_embeds
 
+    def _noisy_action_to_embeds(self, noisy_action: FloatTensor, high_level_command: LongTensor, t: FloatTensor) -> FloatTensor:
+        # noisy_action: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
+        action_embeds = self.action_expert.action_encoder(
+            actions=noisy_action, high_level_command=high_level_command, diffusion_step=t
+        )
+        action_embeds = rearrange(action_embeds, "b t h d -> b (t h) d")
+        return action_embeds
+
     def _forward_mutual_attention(
         self,
         attn_mask: BoolTensor,
@@ -120,14 +128,24 @@ class JointModel(nn.Module):
         attention_mask: BoolTensor,
         inputs_all: InputsDict,
     ) -> FloatTensor:
+        # Get visual embeddings
         visual_embeds = self._visual_tokens_to_embeds(inputs_all["visual_tokens"])
 
-        embeds_all = {"visual_embeds": visual_embeds, "action_embeds": inputs_all["action_embeds"]}
+        # Get action embeddings
+        action_embeds = self._noisy_action_to_embeds(
+            inputs_all["noisy_actions"], inputs_all["high_level_command"], inputs_all["diffusion_step"]
+        )
+
+        embeds_all = {"visual_embeds": visual_embeds, "action_embeds": action_embeds}
         for layer_idx in range(self.num_hidden_layers):
             embeds_all = self._forward_single_layer(attention_mask, embeds_all, layer_idx)
 
         action_embeds = self.action_expert.transformer.ln_f(embeds_all["action_embeds"])
-        return action_embeds
+
+        # [Batch_Size, Horizon_Steps, Action_Dim]
+        denoised_actions = self.action_expert.action_decoder(action_embeds)
+
+        return {"actions": denoised_actions, "actions_embeds": action_embeds}
 
 
 if __name__ == "__main__":
