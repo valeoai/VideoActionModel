@@ -20,7 +20,7 @@ import math
 
 import torch
 import torch.nn as nn
-from einops import rearrange
+from einops import rearrange, repeat
 from mup import MuReadout, normal_
 from torch import Tensor
 
@@ -60,6 +60,7 @@ class ActionEncoder(nn.Module):
         self.action_horizon = action_horizon
         self.action_hidden_dim = action_hidden_dim
 
+        # TODO: fix linear_1 this for mup type: input
         self.linear_1 = nn.Linear(action_dim, action_hidden_dim, bias=bias)
         self.linear_2 = nn.Linear(2 * action_hidden_dim, action_hidden_dim, bias=bias)
         self.nonlinearity = nn.SiLU()  # swish
@@ -77,21 +78,28 @@ class ActionEncoder(nn.Module):
         high_level_command: Tensor,
         diffusion_step: Tensor,
     ) -> Tensor:
-        # [Batch_Size, action_horizon, Width]
-        actions_emb = self.linear_1(actions)
-        command_emb = self.command_embedding(high_level_command)
-        command_emb = command_emb.unsqueeze(1).expand(-1, actions.size(1), -1)
-        action_emb = self.action_positional_embedding(torch.arange(actions.size(1), device=actions.device))
-        action_emb = action_emb.unsqueeze(0).expand(actions.size(0), -1, -1)
-        actions_emb = actions_emb + command_emb + action_emb
+        # actions: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
+        bs, context_length, horizon, _ = actions.size()
+        action_emb = self.linear_1(actions)  # [Batch_Size, timesteps, Horizon_Steps, Action_Hidden_Dim]
+        # embedd high level command
+        command_emb = self.command_embedding(high_level_command)  # [Batch_Size, Action_Hidden_Dim]
+        command_emb = repeat(command_emb, "b d -> b t h d", t=context_length, h=horizon)
+        # Pos embedding for actions
+        action_pos_emb = self.action_positional_embedding(
+            torch.arange(horizon, device=actions.device)
+        )  # [Horizon_Steps, Action_Hidden_Dim]
+        action_pos_emb = repeat(action_pos_emb, "h d -> b t h d", b=bs, t=context_length)
+        # Final timstep action embedding
+        action_emb = action_emb + command_emb + action_emb
+
         # repeat time embedding for action_horizon
-        # [Batch_Size, action_horizon, Width]
-        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step, self.max_period)
-        diffusion_step_emb_full = diffusion_step_emb.unsqueeze(1).expand(-1, actions.size(1), -1)
-        actions_emb = torch.cat([diffusion_step_emb_full, actions_emb], dim=-1)
-        actions_emb = self.nonlinearity(self.linear_2(actions_emb))
-        actions_emb = self.linear_3(actions_emb)
-        return actions_emb
+        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step, self.max_period)  # [Batch_Size, Action_Hidden_Dim]
+        diffusion_step_emb = repeat(diffusion_step_emb, "b d -> b t h d", t=context_length, h=horizon)
+
+        action_emb = torch.cat([diffusion_step_emb, action_emb], dim=-1)
+        action_emb = self.nonlinearity(self.linear_2(action_emb))
+        action_emb = self.linear_3(action_emb)
+        return action_emb  # [Batch_Size, timesteps, Horizon_Steps, Action_Hidden_Dim]
 
 
 class MLP(nn.Module):

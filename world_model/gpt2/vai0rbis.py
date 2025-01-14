@@ -159,9 +159,7 @@ if __name__ == "__main__":
 
     batch_size = 3
 
-    visual_tokens = torch.randint(
-        0, gpt_config.vocabulary_size, (batch_size, gpt_config.nb_timesteps, height, width)
-    )
+    visual_tokens = torch.randint(0, gpt_config.vocabulary_size, (batch_size, gpt_config.nb_timesteps, height, width))
     high_level_command = torch.randint(0, action_expert_config.number_high_level_command, (batch_size,))
     actions = torch.randn(
         batch_size, gpt_config.nb_timesteps, action_expert_config.action_horizon, action_expert_config.action_dim

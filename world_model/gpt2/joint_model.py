@@ -39,7 +39,9 @@ class JointModel(nn.Module):
         visual_embeds = tok_emb + temporal_pos_emb + spatial_pos_emb
         return visual_embeds
 
-    def _noisy_action_to_embeds(self, noisy_action: FloatTensor, high_level_command: LongTensor, t: FloatTensor) -> FloatTensor:
+    def _noisy_action_to_embeds(
+        self, noisy_action: FloatTensor, high_level_command: LongTensor, t: FloatTensor
+    ) -> FloatTensor:
         # noisy_action: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
         action_embeds = self.action_expert.action_encoder(
             actions=noisy_action, high_level_command=high_level_command, diffusion_step=t
@@ -150,6 +152,8 @@ class JointModel(nn.Module):
 
 if __name__ == "__main__":
 
+    import mup
+
     height, width = 8, 16
 
     gpt_config = {
@@ -172,6 +176,8 @@ if __name__ == "__main__":
 
     gpt = MupGPT2(**gpt_config)
     action_expert = MupActionExpert(**action_expert_config)
+    mup.set_base_shapes(gpt, None)
+    mup.set_base_shapes(action_expert, None)
 
     joint_model = JointModel(gpt, action_expert)
 
@@ -182,13 +188,16 @@ if __name__ == "__main__":
         "visual_tokens": torch.randint(
             0, gpt_config["vocabulary_size"], (batch_size, gpt_config["nb_timesteps"], height, width)
         ),
-        "action_embeds": torch.randn(
+        "noisy_actions": torch.randn(
             batch_size,
-            gpt_config["nb_timesteps"] * action_expert_config["action_horizon"],
-            action_expert_config["embedding_dim"],
+            gpt_config["nb_timesteps"],
+            action_expert_config["action_horizon"],
+            action_expert_config["action_dim"],
         ),
+        "high_level_command": torch.randint(0, action_expert_config["number_high_level_command"], (batch_size,)),
+        "diffusion_step": torch.rand(batch_size),
     }
 
-    action_embeds = joint_model(attn_mask, inputs_all)
+    outputs = joint_model(attn_mask, inputs_all)
 
-    print("Output shape:", action_embeds.shape)
+    print("Output shape:", outputs["actions"].shape, outputs["actions_embeds"].shape)
