@@ -7,5 +7,5 @@ nuplan_val_pickle_path: null
 nuscenes_val_pickle_path: null
 sequence_length: 8
 action_length: 6
-batch_size: 1
+batch_size: 4
 num_workers: 4

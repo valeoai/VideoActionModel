@@ -38,10 +38,12 @@ class Vai0rbis(nn.Module):
         # Load the models
         ## Video generation model
         self.gpt: MupGPT2 = instantiate(gpt_config)
+        self.gpt_mup_base_shapes = gpt_mup_base_shapes
         mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
         self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
         ## Action model
         self.action_expert: MupActionExpert = instantiate(action_config)
+        self.action_mup_base_shapes = action_mup_base_shapes
         mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
         self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
         ## Joint model
@@ -187,6 +189,18 @@ class Vai0rbis(nn.Module):
                 self.final_action_clip_value,
             )
         return action
+
+
+class Vai0rbisInference(Vai0rbis):
+
+    def forward(
+        self,
+        visual_tokens: LongTensor,
+        high_level_command: LongTensor,
+        dtype: torch.dtype,
+        verbose: bool = False,
+    ) -> torch.FloatTensor:
+        return super().forward_inference(visual_tokens, high_level_command, dtype, verbose)
 
 
 if __name__ == "__main__":

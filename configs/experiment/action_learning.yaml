@@ -30,36 +30,39 @@ data:
   nuscenes_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
 
 model:
-  _target_: world_model.gpt2.Vai0rbis
-  finetuning_timesteps: ${data.sequence_length}
-  num_inference_steps: 10
-  flow_sig_min: 0.001
-  final_action_clip_value: null
-  gpt_mup_base_shapes: null
-  gpt_config:
-    _target_: world_model.gpt2.MupGPT2
-    embedding_dim: 256
-    dim_heads: 128
-    nb_layers: 24
-    mlp_dim_mult: 4
-    vocabulary_size: 16385
-    nb_timesteps: 20  # this should be the one from pretraining != to the action learning one
-    nb_tokens_per_timestep: 576 # 18*32 = 576 | h*w of visual tokens
-    init_std: 0.02
-    output_tied: True
-  action_mup_base_shapes: null
-  action_config:
-    _target_: world_model.gpt2.MupActionExpert
-    embedding_dim: 64
-    attention_dim: ${model.gpt_config.embedding_dim}
-    action_dim: 2
-    action_horizon: ${data.action_length}
-    number_high_level_command: 3
-    dim_heads: ${model.gpt_config.dim_heads}
-    nb_layers: ${model.gpt_config.nb_layers}
+  _target_: world_model.gpt2.ActionLearning
+  vai0rbis_conf:
+    _target_: world_model.gpt2.Vai0rbis
+    finetuning_timesteps: ${data.sequence_length}
+    num_inference_steps: 10
+    flow_sig_min: 0.001
+    final_action_clip_value: null
+    gpt_mup_base_shapes: null
+    gpt_config:
+      _target_: world_model.gpt2.MupGPT2
+      embedding_dim: 256
+      dim_heads: 128
+      nb_layers: 24
+      mlp_dim_mult: 4
+      vocabulary_size: 16385
+      nb_timesteps: 20  # this should be the one from pretraining != to the action learning one
+      nb_tokens_per_timestep: 576 # 18*32 = 576 | h*w of visual tokens
+      init_std: 0.02
+      output_tied: True
+    action_mup_base_shapes: null
+    action_config:
+      _target_: world_model.gpt2.MupActionExpert
+      embedding_dim: 64
+      attention_dim: ${model.gpt_config.embedding_dim}
+      action_dim: 2
+      action_horizon: ${data.action_length}
+      number_high_level_command: 3
+      dim_heads: ${model.gpt_config.dim_heads}
+      nb_layers: ${model.gpt_config.nb_layers}
   optimizer_conf:
     lr: 0.0001
     weight_decay: 1e-8
     betas: [0.9, 0.95]
     eps: 1e-08
     decoupled_wd: True
+  scheduler_conf: null
