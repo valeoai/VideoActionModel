@@ -135,14 +135,16 @@ class JointModel(nn.Module):
 
 
 if __name__ == "__main__":
+    height, width = 8, 16
+
     gpt_config = {
         "_target_": "world_model.gpt2.mup_gpt2.MupGPT2",
         "embedding_dim": 128,
         "nb_layers": 12,
         "dim_heads": 16,
-        "vocabulary_size": 1024,
+        "vocabulary_size": 1500,
         "nb_timesteps": 8,
-        "nb_tokens_per_timestep": 256,
+        "nb_tokens_per_timestep": height * width,
     }
     dit_config = {
         "_target_": "world_model.gpt2.mup_dit.MupDiT",
@@ -154,3 +156,20 @@ if __name__ == "__main__":
 
     gpt_config = OmegaConf.create(gpt_config)
     dit_config = OmegaConf.create(dit_config)
+
+    joint_model = JointModel(gpt_config, dit_config)
+
+    batch_size = 3
+    action_horizon = 6
+
+    attn_mask = None
+    inputs_all = {
+        "visual_tokens": torch.randint(
+            0, gpt_config.vocabulary_size, (batch_size, gpt_config.nb_timesteps, height, width)
+        ),
+        "action_embeds": torch.randn(batch_size, gpt_config.nb_timesteps * action_horizon, dit_config.embedding_dim),
+    }
+
+    output = joint_model(attn_mask, inputs_all)
+
+    print("Output shape:", output["visual_embeds"].shape, output["action_embeds"].shape)

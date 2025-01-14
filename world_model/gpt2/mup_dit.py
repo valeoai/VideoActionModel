@@ -262,12 +262,6 @@ class MupDiT(nn.Module):
         params are actually used as weights in the final layer, so we include them.
         """
         n_params = sum(p.numel() for p in self.parameters())
-        if non_embedding:
-            n_params -= self.ae.command_embedding.weight.numel()
-            n_params -= self.ae.action_positional_embedding.weight.numel()
-            n_params -= self.ae.context_positional_embedding.weight.numel()
-        if not self.output_tied:
-            n_params -= self.transformer.ae.linear_1.weight.numel()
         return n_params
 
     def _init_c_proj_residual(self, module: nn.Module, is_mlp: bool) -> None:
