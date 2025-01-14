@@ -21,8 +21,71 @@ import math
 import torch
 import torch.nn as nn
 from einops import rearrange
-from mup import MuReadout, MuSharedReadout, normal_
+from mup import MuReadout, normal_
 from torch import Tensor
+
+
+class SinusoidalPosEmb(nn.Module):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.dim = dim
+
+    def forward(
+        self,
+        t: Tensor,
+        max_period: float = 10000.0,
+    ) -> Tensor:
+        half_dim = self.dim // 2
+        emb = math.log(max_period) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, device=t.device, dtype=t.dtype) * -emb)
+        emb = t[:, None] * emb[None, :]
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        return emb
+
+
+class ActionEncoder(nn.Module):
+    """Matching pi0 appendix"""
+
+    def __init__(
+        self,
+        action_dim: int,
+        width: int,
+        action_horizon: int,
+        number_high_level_command: int,
+        max_period: float = 10000.0,
+        bias: bool = False,
+    ) -> None:
+        super().__init__()
+        self.linear_1 = nn.Linear(action_dim, width, bias=bias)
+        self.linear_2 = nn.Linear(2 * width, width, bias=bias)
+        self.nonlinearity = nn.SiLU()  # swish
+        self.linear_3 = nn.Linear(width, width, bias=bias)
+
+        self.command_embedding = nn.Embedding(number_high_level_command, width)
+        self.action_positional_embedding = nn.Embedding(action_horizon, width)
+
+        self.diffusion_step_embedding = SinusoidalPosEmb(width, max_period=max_period)
+
+    def forward(
+        self,
+        actions: Tensor,
+        diffusion_step: Tensor,
+        high_level_command: int,
+    ) -> Tensor:
+        # [Batch_Size, action_horizon, Width]
+        actions_emb = self.linear_1(actions)
+        command_emb = self.command_embedding(high_level_command)
+        action_emb = self.action_positional_embedding(torch.arange(actions.size(1), device=actions.device))
+        action_emb = action_emb.unsqueeze(0).expand(actions.size(0), -1, -1)
+        actions_emb = actions_emb + command_emb + action_emb
+        # repeat time embedding for action_horizon
+        # [Batch_Size, action_horizon, Width]
+        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step)
+        diffusion_step_emb_full = diffusion_step_emb.unsqueeze(1).expand(-1, actions.size(1), -1)
+        actions_emb = torch.cat([diffusion_step_emb_full, actions_emb], dim=-1)
+        actions_emb = self.nonlinearity(self.linear_2(actions_emb))
+        actions_emb = self.linear_3(actions_emb)
+        return actions_emb
 
 
 class MLP(nn.Module):
@@ -43,7 +106,7 @@ class MLP(nn.Module):
 class SelfAttention(nn.Module):
 
     def __init__(
-        self, dim_model: int, attn_dim: int, dim_heads: int, bias: bool, dropout: float, block_size: int, attn_scale: float
+        self, dim_model: int, attn_dim: int, dim_heads: int, attn_scale: float
     ) -> None:
         super().__init__()
         assert dim_model % dim_heads == 0, "dim_model must be divisible by dim_heads"
@@ -64,13 +127,6 @@ class SelfAttention(nn.Module):
 
         # output projection
         self.c_proj = nn.Linear(self.attn_dim, dim_model, bias=False)
-
-        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
-        if not self.flash:
-            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size))
 
     def forward(self, x: Tensor) -> Tensor:
         # calculate query, key, values for all heads in batch
@@ -111,13 +167,12 @@ class Block(nn.Module):
         dim_model: int,
         attn_dim: int,
         dim_heads: int,
-        block_size: int,
         attn_scale: float,
         mlp_dim_mult: int = 4,
     ) -> None:
         super().__init__()
         self.ln_1 = nn.LayerNorm(dim_model, elementwise_affine=False)
-        self.attn = SelfAttention(dim_model, attn_dim, dim_heads, block_size, attn_scale)
+        self.attn = SelfAttention(dim_model, attn_dim, dim_heads, attn_scale)
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=False)
         self.mlp = MLP(dim_model, mlp_dim_mult)
 
@@ -125,73 +180,6 @@ class Block(nn.Module):
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
-
-
-class SinusoidalPosEmb(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.dim = dim
-
-    def forward(
-        self,
-        t: Tensor,
-        max_period: float = 10000.0,
-    ) -> Tensor:
-        half_dim = self.dim // 2
-        emb = math.log(max_period) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=t.device, dtype=t.dtype) * -emb)
-        emb = t[:, None] * emb[None, :]
-        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
-        return emb
-
-
-class ActionEncoder(nn.Module):
-    """Matching pi0 appendix"""
-
-    def __init__(
-        self,
-        action_dim: int,
-        width: int,
-        context_length: int,
-        action_horizon: int,
-        number_high_level_command: int,
-        max_period: float = 10000.0,
-        bias: bool = False,
-    ) -> None:
-        super().__init__()
-        self.linear_1 = nn.Linear(action_dim, width, bias=bias)
-        self.linear_2 = nn.Linear(2 * width, width, bias=bias)
-        self.nonlinearity = nn.SiLU()  # swish
-        self.linear_3 = nn.Linear(width, width, bias=bias)
-
-        self.command_embedding = nn.Embedding(number_high_level_command, width)
-        self.action_positional_embedding = nn.Embedding(action_horizon, width)
-        self.context_positional_embedding = nn.Embedding(context_length, width)
-
-        self.diffusion_step_embedding = SinusoidalPosEmb(width, max_period=max_period)
-
-    def forward(
-        self,
-        action: Tensor,
-        diffusion_step: Tensor,
-        high_level_command: int,
-        action_positions: Tensor,
-        context_positions: Tensor,
-    ) -> Tensor:
-        # [Batch_Size, Seq_Len, Width]
-        emb = self.linear_1(action)
-        command_emb = self.command_embedding(high_level_command)
-        action_emb = self.action_positional_embedding(action_positions)
-        context_emb = self.context_positional_embedding(context_positions)
-        emb = emb + command_emb + action_emb + context_emb
-        # repeat time embedding for seq_len
-        # [Batch_Size, Seq_Len, Width]
-        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step)
-        diffusion_step_emb_full = diffusion_step_emb.unsqueeze(1).expand(-1, action.size(1), -1)
-        emb = torch.cat([diffusion_step_emb_full, emb], dim=-1)
-        emb = self.nonlinearity(self.linear_2(emb))
-        emb = self.linear_3(emb)
-        return emb
 
 
 class MupDiT(nn.Module):
@@ -213,21 +201,14 @@ class MupDiT(nn.Module):
         self,
         *,
         embedding_dim: int = 256,
-        attention_dim: int = 256,
+        attention_dim: int = 384,
         nb_layers: int = 12,
-        dim_heads: int = 2,
+        dim_heads: int = 64,
         mlp_dim_mult: int = 4,
-        action_dim: int = 2,
-        action_horizon: int = 6,
-        context_length: int = 8,
-        number_high_level_command: int = 3,
-        max_period: float = 10000.0,
         init_std: float = 0.02,
-        output_tied: bool = True,
         output_scale: float = 1.0,
         attn_scale: float = 1.0,
     ) -> None:
-
         super().__init__()
 
         self.embedding_dim = embedding_dim
@@ -236,25 +217,15 @@ class MupDiT(nn.Module):
         self.output_scale = output_scale
         self.mlp_dim_mult = mlp_dim_mult
         self.nb_layers = nb_layers
-        self.output_tied = output_tied
 
         self.transformer = nn.ModuleDict(
             {
-                "ae": ActionEncoder(
-                    action_dim,
-                    embedding_dim,
-                    context_length,
-                    action_horizon,
-                    number_high_level_command,
-                    max_period=max_period,
-                ),
                 "h": nn.ModuleList(
                     [
                         Block(
                             embedding_dim,
                             attention_dim,
                             dim_heads,
-                            self.block_size,
                             attn_scale,
                             mlp_dim_mult,
                         )
@@ -264,11 +235,6 @@ class MupDiT(nn.Module):
                 "ln_f": nn.LayerNorm(embedding_dim, elementwise_affine=False),
             }
         )
-
-        if output_tied:
-            self.lm_head = MuSharedReadout(self.transformer.ae.linear_1.weight, bias=False, output_mult=output_scale)
-        else:
-            self.lm_head = MuReadout(embedding_dim, action_dim, bias=False, output_mult=output_scale)
 
         # init all weights
         ################## /!\ IMPORTANT READ ##################
@@ -405,17 +371,20 @@ class MupDiT(nn.Module):
 
     def forward(
         self,
-        action_sequence: Tensor,
-        diffusion_step: Tensor,
-        high_level_command: Tensor,
-        action_positions: Tensor,
-        context_positions: Tensor,
+        hidden_states: Tensor,
     ) -> Tensor:
-        x = self.transformer.ae(action_sequence, diffusion_step, high_level_command, action_positions, context_positions)
-        # forward embeddings to the transformer
-        for block in self.transformer.h:
-            x = block(x)
-        emb_out = self.transformer.ln_f(x)
+        raise NotImplementedError("forward not implemented")
 
-        actions_out = self.lm_head(emb_out)
-        return actions_out
+
+if __name__ == "__main__":
+    import mup
+
+    dit = MupDiT()
+
+    # set base shapes
+    base = mup.set_base_shapes(dit)
+
+    bs = 3
+    tens = torch.randn(bs, 6, 2)
+    diffusion_step = torch.randint(0, 100, (bs,))
+    high_level_command = torch.randint(0, 3, (bs,))
