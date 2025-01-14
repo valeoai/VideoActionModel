@@ -147,6 +147,8 @@ class JointModel(nn.Module):
         # [Batch_Size, Horizon_Steps, Action_Dim]
         denoised_actions = self.action_expert.action_decoder(action_embeds)
 
+        denoised_actions = rearrange(denoised_actions, "b (t h) d -> b t h d", t=inputs_all["noisy_actions"].size(1))
+        action_embeds = rearrange(action_embeds, "b (t h) d -> b t h d", t=inputs_all["noisy_actions"].size(1))
         return {"actions": denoised_actions, "actions_embeds": action_embeds}
 
 
@@ -194,8 +196,10 @@ if __name__ == "__main__":
             action_expert_config["action_horizon"],
             action_expert_config["action_dim"],
         ),
-        "high_level_command": torch.randint(0, action_expert_config["number_high_level_command"], (batch_size,)),
-        "diffusion_step": torch.rand(batch_size),
+        "high_level_command": torch.randint(
+            0, action_expert_config["number_high_level_command"], (batch_size, gpt_config["nb_timesteps"])
+        ),
+        "diffusion_step": torch.rand(batch_size, gpt_config["nb_timesteps"]),
     }
 
     outputs = joint_model(attn_mask, inputs_all)

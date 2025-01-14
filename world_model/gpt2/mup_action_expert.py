@@ -79,11 +79,13 @@ class ActionEncoder(nn.Module):
         diffusion_step: Tensor,
     ) -> Tensor:
         # actions: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
+        # high_level_command: [Batch_Size, context_length]
+        # diffusion_step: [Batch_Size, context_length]
         bs, context_length, horizon, _ = actions.size()
         action_emb = self.linear_1(actions)  # [Batch_Size, timesteps, Horizon_Steps, Action_Hidden_Dim]
         # embedd high level command
-        command_emb = self.command_embedding(high_level_command)  # [Batch_Size, Action_Hidden_Dim]
-        command_emb = repeat(command_emb, "b d -> b t h d", t=context_length, h=horizon)
+        command_emb = self.command_embedding(high_level_command)  # [Batch_Size, context_length, Action_Hidden_Dim]
+        command_emb = repeat(command_emb, "b t d -> b t h d", h=horizon)
         # Pos embedding for actions
         action_pos_emb = self.action_positional_embedding(
             torch.arange(horizon, device=actions.device)
@@ -92,9 +94,13 @@ class ActionEncoder(nn.Module):
         # Final timstep action embedding
         action_emb = action_emb + command_emb + action_emb
 
-        # repeat time embedding for action_horizon
-        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step, self.max_period)  # [Batch_Size, Action_Hidden_Dim]
-        diffusion_step_emb = repeat(diffusion_step_emb, "b d -> b t h d", t=context_length, h=horizon)
+        # Pos embedding for diffusion step
+        diffusion_step = rearrange(diffusion_step, "b t -> (b t)")
+        diffusion_step_emb = self.diffusion_step_embedding(
+            diffusion_step, self.max_period
+        )  # [Batch_Size, context_length, Action_Hidden_Dim]
+        diffusion_step_emb = rearrange(diffusion_step_emb, "(b t) d -> b t d", b=bs)
+        diffusion_step_emb = repeat(diffusion_step_emb, "b t d -> b t h d", h=horizon)
 
         action_emb = torch.cat([diffusion_step_emb, action_emb], dim=-1)
         action_emb = self.nonlinearity(self.linear_2(action_emb))

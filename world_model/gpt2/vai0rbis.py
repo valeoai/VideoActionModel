@@ -94,7 +94,7 @@ class Vai0rbis(nn.Module):
         t: FloatTensor,
     ) -> FloatTensor:
         """Conditional Flow"""
-        t = t[:, None, None]  # (B, 1, 1)
+        t = t[:, :, None, None]  # (B, finetuning_timesteps, 1, 1)
         return (1 - (1 - self.flow_sig_min) * t) * x + t * x1
 
     def forward(
@@ -106,7 +106,7 @@ class Vai0rbis(nn.Module):
     ) -> FloatTensor:
         """flow matching loss for action prediction, no use of kv cache"""
         # noisy action
-        # [Batch_Size, Horizon_Steps, Action_Dim]
+        # [Batch_Size, finetuning_timesteps, Horizon_Steps, Action_Dim]
         x0 = torch.randn_like(actions, device=t.device, dtype=t.dtype)
         x1 = actions
         psi_t = self.psi_t(x0, x1, t)
@@ -130,6 +130,7 @@ if __name__ == "__main__":
     height, width = 8, 16
 
     gpt_config = {
+        "_target_": "world_model.gpt2.mup_gpt2.MupGPT2",
         "embedding_dim": 128,
         "nb_layers": 12,
         "dim_heads": 16,
@@ -138,6 +139,7 @@ if __name__ == "__main__":
         "nb_tokens_per_timestep": height * width,
     }
     action_expert_config = {
+        "_target_": "world_model.gpt2.mup_action_expert.MupActionExpert",
         "embedding_dim": 64,
         "attention_dim": 128,
         "action_dim": 2,
@@ -160,10 +162,12 @@ if __name__ == "__main__":
     batch_size = 3
 
     visual_tokens = torch.randint(0, gpt_config.vocabulary_size, (batch_size, gpt_config.nb_timesteps, height, width))
-    high_level_command = torch.randint(0, action_expert_config.number_high_level_command, (batch_size,))
+    high_level_command = torch.randint(
+        0, action_expert_config.number_high_level_command, (batch_size, gpt_config.nb_timesteps)
+    )
     actions = torch.randn(
         batch_size, gpt_config.nb_timesteps, action_expert_config.action_horizon, action_expert_config.action_dim
     )
-    t = torch.rand(batch_size)
+    t = torch.rand(batch_size, gpt_config.nb_timesteps)
 
     loss = vai0rbis(visual_tokens, high_level_command, actions, t)
