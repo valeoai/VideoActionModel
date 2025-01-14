@@ -88,8 +88,6 @@ class Vai0rbis(nn.Module):
         self,
         visual_tokens: LongTensor,
         high_level_command: LongTensor,
-        visual_tokens_position_ids: LongTensor,
-        action_position_ids: LongTensor,
         actions: FloatTensor,
         t: FloatTensor,
     ) -> FloatTensor:
@@ -106,13 +104,9 @@ class Vai0rbis(nn.Module):
 
         action_embeds = self.joint_model(
             attention_mask=self.attn_mask,
-            position_ids_all={
-                "visual_tokens": visual_tokens_position_ids,
-                "action": action_position_ids,
-            },
             inputs_all={
                 "visual_tokens": visual_tokens,
-                "action": action_embeds,
+                "action_embeds": action_embeds,
             },
         )["action"]
 
