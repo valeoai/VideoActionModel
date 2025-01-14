@@ -56,6 +56,10 @@ class ActionEncoder(nn.Module):
         bias: bool = False,
     ) -> None:
         super().__init__()
+        self.action_dim = action_dim
+        self.action_horizon = action_horizon
+        self.action_hidden_dim = width
+
         self.linear_1 = nn.Linear(action_dim, width, bias=bias)
         self.linear_2 = nn.Linear(2 * width, width, bias=bias)
         self.nonlinearity = nn.SiLU()  # swish
@@ -69,8 +73,8 @@ class ActionEncoder(nn.Module):
     def forward(
         self,
         actions: Tensor,
+        high_level_command: Tensor,
         diffusion_step: Tensor,
-        high_level_command: int,
     ) -> Tensor:
         # [Batch_Size, action_horizon, Width]
         actions_emb = self.linear_1(actions)
@@ -105,9 +109,7 @@ class MLP(nn.Module):
 
 class SelfAttention(nn.Module):
 
-    def __init__(
-        self, dim_model: int, attn_dim: int, dim_heads: int, attn_scale: float
-    ) -> None:
+    def __init__(self, dim_model: int, attn_dim: int, dim_heads: int, attn_scale: float) -> None:
         super().__init__()
         assert dim_model % dim_heads == 0, "dim_model must be divisible by dim_heads"
 
