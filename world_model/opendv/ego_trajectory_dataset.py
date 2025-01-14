@@ -183,7 +183,7 @@ class EgoTrajectoryDataset(Dataset):
         temporal_indices = self.sequences_indices[index][: self.sequence_length]
 
         # Get initial pose
-        for idx, temporal_index in enumerate(temporal_indices):
+        for temporal_index in temporal_indices:
             sample = self.pickle_data[temporal_index][self.camera]
 
             positions, rotations = [], []
@@ -262,12 +262,12 @@ def combined_ego_trajectory_dataset(
     nuscenes_tokens_rootdir: Optional[str] = None,
     **kwargs,
 ) -> ConcatDataset:
-    if nuplan_pickle_data is not None and nuscenes_pickle_data is not None:
-        # If both datasets are provided, ensure that either both or none of the tokens rootdirs are provided
-        if (nuplan_tokens_rootdir is None and nuscenes_tokens_rootdir is not None) or (
-            nuplan_tokens_rootdir is not None and nuscenes_tokens_rootdir is None
-        ):
-            raise ValueError("Tokens rootdir must be provided for both datasets")
+    # If both datasets are provided, ensure that either both or none of the tokens rootdirs are provided
+    if (nuplan_pickle_data is not None and nuscenes_pickle_data is not None) and (
+        (nuplan_tokens_rootdir is None and nuscenes_tokens_rootdir is not None)
+        or (nuplan_tokens_rootdir is not None and nuscenes_tokens_rootdir is None)
+    ):
+        raise ValueError("Tokens rootdir must be provided for both datasets")
 
     datasets = []
     if nuplan_pickle_data is not None:
@@ -339,7 +339,7 @@ if __name__ == "__main__":
 
         # First pass: calculate all yaw rates and bounds
         all_positions, all_yaw_rates = [], []
-        for i, idx in enumerate(tqdm(indexes, desc="Computing yaw rates", leave=True)):
+        for idx in tqdm(indexes, desc="Computing yaw rates", leave=True):
             positions = dataset[idx]["positions"]
             yaw_rate = dataset[idx]["yaw_rate"]
             all_positions.append(positions)
@@ -355,7 +355,7 @@ if __name__ == "__main__":
         norm = Normalize(vmin=np.min(all_yaw_rates), vmax=np.max(all_yaw_rates))
 
         # Second pass: plot trajectories
-        for i, idx in enumerate(tqdm(indexes, desc="Plotting trajectories", leave=True)):
+        for i, _ in enumerate(tqdm(indexes, desc="Plotting trajectories", leave=True)):
             positions = all_positions[i]
             yaw_rate = all_yaw_rates[i]
 

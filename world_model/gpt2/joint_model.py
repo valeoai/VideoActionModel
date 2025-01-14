@@ -132,3 +132,25 @@ class JointModel(nn.Module):
         embeds_all["action_embeds"] = self.dit.transformer.ln_f(embeds_all["action_embeds"])
 
         return embeds_all
+
+
+if __name__ == "__main__":
+    gpt_config = {
+        "_target_": "world_model.gpt2.mup_gpt2.MupGPT2",
+        "embedding_dim": 128,
+        "nb_layers": 12,
+        "dim_heads": 16,
+        "vocabulary_size": 1024,
+        "nb_timesteps": 8,
+        "nb_tokens_per_timestep": 256,
+    }
+    dit_config = {
+        "_target_": "world_model.gpt2.mup_dit.MupDiT",
+        "embedding_dim": 64,
+        "attention_dim": 128,
+        "dim_heads": 16,
+        "nb_layers": 12,
+    }
+
+    gpt_config = OmegaConf.create(gpt_config)
+    dit_config = OmegaConf.create(dit_config)
