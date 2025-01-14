@@ -1,3 +1,6 @@
+from typing import Dict, Tuple
+
+import mup
 import torch
 import torch.nn as nn
 from hydra.utils import instantiate
@@ -5,15 +8,20 @@ from omegaconf import OmegaConf
 from torch import FloatTensor, LongTensor
 
 from world_model.gpt2.joint_model import JointModel
-from world_model.gpt2.mup_dit import ActionEncoder
+from world_model.gpt2.mup_dit import MupActionExpert
+from world_model.gpt2.mup_gpt2 import MupGPT2
+
+mupShapes = Dict[str, Tuple[int, ...]]
 
 
 class Vai0rbis(nn.Module):
 
     def __init__(
         self,
+        gpt_config: OmegaConf,
+        gpt_mup_base_shapes: mupShapes | None,
         action_config: OmegaConf,
-        joint_config: OmegaConf,
+        action_mup_base_shapes: mupShapes | None,
         finetuning_timesteps: int = 8,
         flow_sig_min: float = 0.001,
     ) -> None:
@@ -22,20 +30,25 @@ class Vai0rbis(nn.Module):
         self.flow_sig_min = flow_sig_min
 
         # Load the models
-        self.action_encoder: ActionEncoder = instantiate(action_config)
-        self.joint_model: JointModel = instantiate(joint_config)
+        ## Video generation model
+        self.gpt: MupGPT2 = instantiate(gpt_config)
+        mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
+        self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
+        ## Action model
+        self.action_expert: MupActionExpert = instantiate(action_config)
+        mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
+        self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
+        ## Joint model
+        self.joint_model = JointModel(self.gpt, self.action_expert)
 
         # Video generation parameters
-        self.nb_tokens_per_timestep = self.joint_model.gpt.nb_tokens_per_timestep
+        self.nb_tokens_per_timestep = self.gpt.nb_tokens_per_timestep
         self.context_length = finetuning_timesteps
 
         # Action parameters
-        self.action_dim = self.action_encoder.action_dim
-        self.action_horizon = self.action_encoder.action_horizon
-        self.action_hidden_dim = self.action_encoder.action_hidden_dim
-
-        # TODO: should this be setup with mup?
-        self.action_decoder = nn.Linear(self.action_hidden_dim, self.action_dim)
+        self.action_dim = self.action_expert.action_dim
+        self.action_horizon = self.action_expert.action_horizon
+        self.action_hidden_dim = self.action_expert.embedding_dim
 
         self.build_attention_mask()
 
@@ -100,7 +113,12 @@ class Vai0rbis(nn.Module):
 
         # inference with noisy action
         # [Batch_Size, Embed_Dim]
-        action_embeds = self.action_encoder(actions=psi_t, high_level_command=high_level_command, diffusion_step=t)
+        action_embeds = self.action_expert.action_encoder(
+            actions=psi_t, high_level_command=high_level_command, diffusion_step=t
+        )
+        import ipdb
+
+        ipdb.set_trace()
 
         action_embeds = self.joint_model(
             attention_mask=self.attn_mask,
@@ -108,11 +126,71 @@ class Vai0rbis(nn.Module):
                 "visual_tokens": visual_tokens,
                 "action_embeds": action_embeds,
             },
-        )["action"]
+        )
 
         # [Batch_Size, Horizon_Steps, Action_Dim]
-        v_psi = self.action_decoder(action_embeds)
+        v_psi = self.action_expert.action_decoder(action_embeds)
 
         # compare to true velocity
         d_psi = x1 - (1 - self.flow_sig_min) * x0
         return torch.mean((v_psi - d_psi) ** 2)
+
+
+if __name__ == "__main__":
+    from omegaconf import DictConfig
+
+    height, width = 8, 16
+
+    joint_config = {
+        "_target_": "world_model.gpt2.joint_model.JointModel",
+        "_recursive_": False,
+        "finetuning_timesteps": 8,
+        "gpt_config": DictConfig(
+            {
+                "_target_": "world_model.gpt2.mup_gpt2.MupGPT2",
+                "embedding_dim": 128,
+                "nb_layers": 12,
+                "dim_heads": 16,
+                "vocabulary_size": 1500,
+                "nb_timesteps": 8,
+                "nb_tokens_per_timestep": height * width,
+            }
+        ),
+        "dit_config": DictConfig(
+            {
+                "_target_": "world_model.gpt2.mup_dit.MupDiT",
+                "embedding_dim": 64,
+                "attention_dim": 128,
+                "dim_heads": 16,
+                "nb_layers": 12,
+            }
+        ),
+    }
+    joint_config = OmegaConf.create(joint_config)
+
+    action_config = {
+        "_target_": "world_model.gpt2.mup_dit.ActionEncoder",
+        "action_dim": 2,
+        "action_horizon": 6,
+        "action_hidden_dim": joint_config.dit_config.embedding_dim,
+        "number_high_level_command": 3,
+    }
+    action_config = OmegaConf.create(action_config)
+
+    vai0rbis = Vai0rbis(
+        action_config,
+        joint_config,
+    )
+
+    batch_size = 3
+
+    visual_tokens = torch.randint(
+        0, joint_config.gpt_config.vocabulary_size, (batch_size, joint_config.finetuning_timesteps, height, width)
+    )
+    high_level_command = torch.randint(0, action_config.number_high_level_command, (batch_size,))
+    actions = torch.randn(
+        batch_size, joint_config.finetuning_timesteps, action_config.action_horizon, action_config.action_dim
+    )
+    t = torch.rand(batch_size)
+
+    loss = vai0rbis(visual_tokens, high_level_command, actions, t)

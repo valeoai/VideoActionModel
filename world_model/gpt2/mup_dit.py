@@ -49,7 +49,7 @@ class ActionEncoder(nn.Module):
     def __init__(
         self,
         action_dim: int,
-        width: int,
+        action_hidden_dim: int,
         action_horizon: int,
         number_high_level_command: int,
         max_period: float = 10000.0,
@@ -58,17 +58,18 @@ class ActionEncoder(nn.Module):
         super().__init__()
         self.action_dim = action_dim
         self.action_horizon = action_horizon
-        self.action_hidden_dim = width
+        self.action_hidden_dim = action_hidden_dim
 
-        self.linear_1 = nn.Linear(action_dim, width, bias=bias)
-        self.linear_2 = nn.Linear(2 * width, width, bias=bias)
+        self.linear_1 = nn.Linear(action_dim, action_hidden_dim, bias=bias)
+        self.linear_2 = nn.Linear(2 * action_hidden_dim, action_hidden_dim, bias=bias)
         self.nonlinearity = nn.SiLU()  # swish
-        self.linear_3 = nn.Linear(width, width, bias=bias)
+        self.linear_3 = nn.Linear(action_hidden_dim, action_hidden_dim, bias=bias)
 
-        self.command_embedding = nn.Embedding(number_high_level_command, width)
-        self.action_positional_embedding = nn.Embedding(action_horizon, width)
+        self.command_embedding = nn.Embedding(number_high_level_command, action_hidden_dim)
+        self.action_positional_embedding = nn.Embedding(action_horizon, action_hidden_dim)
 
-        self.diffusion_step_embedding = SinusoidalPosEmb(width, max_period=max_period)
+        self.max_period = max_period
+        self.diffusion_step_embedding = SinusoidalPosEmb(action_hidden_dim)
 
     def forward(
         self,
@@ -79,12 +80,13 @@ class ActionEncoder(nn.Module):
         # [Batch_Size, action_horizon, Width]
         actions_emb = self.linear_1(actions)
         command_emb = self.command_embedding(high_level_command)
+        command_emb = command_emb.unsqueeze(1).expand(-1, actions.size(1), -1)
         action_emb = self.action_positional_embedding(torch.arange(actions.size(1), device=actions.device))
         action_emb = action_emb.unsqueeze(0).expand(actions.size(0), -1, -1)
         actions_emb = actions_emb + command_emb + action_emb
         # repeat time embedding for action_horizon
         # [Batch_Size, action_horizon, Width]
-        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step)
+        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step, self.max_period)
         diffusion_step_emb_full = diffusion_step_emb.unsqueeze(1).expand(-1, actions.size(1), -1)
         actions_emb = torch.cat([diffusion_step_emb_full, actions_emb], dim=-1)
         actions_emb = self.nonlinearity(self.linear_2(actions_emb))
@@ -184,7 +186,7 @@ class Block(nn.Module):
         return x
 
 
-class MupDiT(nn.Module):
+class MupActionExpert(nn.Module):
     """
     GPT2 implementation following the original formulation to be able to load existing pre-trained weights
 
@@ -204,6 +206,10 @@ class MupDiT(nn.Module):
         *,
         embedding_dim: int = 256,
         attention_dim: int = 384,
+        action_dim: int = 2,
+        action_horizon: int = 6,
+        number_high_level_command: int = 3,
+        max_period: float = 10000.0,
         nb_layers: int = 12,
         dim_heads: int = 64,
         mlp_dim_mult: int = 4,
@@ -214,11 +220,23 @@ class MupDiT(nn.Module):
         super().__init__()
 
         self.embedding_dim = embedding_dim
+        self.attention_dim = attention_dim
+        self.action_dim = action_dim
+        self.action_horizon = action_horizon
+        self.number_high_level_command = number_high_level_command
         self.init_std = init_std
         self.attn_scale = attn_scale
         self.output_scale = output_scale
         self.mlp_dim_mult = mlp_dim_mult
         self.nb_layers = nb_layers
+
+        self.action_encoder = ActionEncoder(
+            action_dim=action_dim,
+            action_hidden_dim=embedding_dim,
+            action_horizon=action_horizon,
+            number_high_level_command=number_high_level_command,
+            max_period=max_period,
+        )
 
         self.transformer = nn.ModuleDict(
             {
@@ -237,6 +255,8 @@ class MupDiT(nn.Module):
                 "ln_f": nn.LayerNorm(embedding_dim, elementwise_affine=False),
             }
         )
+
+        self.action_decoder = MuReadout(embedding_dim, action_dim, bias=False, output_mult=output_scale)
 
         # init all weights
         ################## /!\ IMPORTANT READ ##################
@@ -318,7 +338,7 @@ class MupDiT(nn.Module):
         """
 
         # MuReadout zero init
-        if isinstance(module, MuReadout) and not self.output_tied:
+        if isinstance(module, MuReadout):
             # https://arxiv.org/abs/2404.05728 | 4.2.6 SP Unembedding Initialization
             # A simple alternative to either initialization is a zeroinitialized unembedding projection [15],
             # which we found to perform similarly to the µP initialization and to also facilitate transfer
@@ -375,7 +395,7 @@ class MupDiT(nn.Module):
 if __name__ == "__main__":
     import mup
 
-    dit = MupDiT()
+    dit = MupActionExpert()
 
     # set base shapes
     base = mup.set_base_shapes(dit)
