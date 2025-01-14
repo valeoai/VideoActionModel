@@ -144,7 +144,7 @@ class JointModel(nn.Module):
 
         action_embeds = self.action_expert.transformer.ln_f(embeds_all["action_embeds"])
 
-        # [Batch_Size, Horizon_Steps, Action_Dim]
+        # [Batch_Size, context_length, Horizon_Steps, Action_Dim]
         denoised_actions = self.action_expert.action_decoder(action_embeds)
 
         denoised_actions = rearrange(denoised_actions, "b (t h) d -> b t h d", t=inputs_all["noisy_actions"].size(1))

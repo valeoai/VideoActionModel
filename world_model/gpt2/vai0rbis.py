@@ -6,6 +6,7 @@ import torch.nn as nn
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from torch import FloatTensor, LongTensor
+from tqdm import tqdm
 
 from world_model.gpt2.joint_model import JointModel
 from world_model.gpt2.mup_action_expert import MupActionExpert
@@ -23,11 +24,16 @@ class Vai0rbis(nn.Module):
         action_config: OmegaConf,
         action_mup_base_shapes: mupShapes | None,
         finetuning_timesteps: int = 8,
+        num_inference_steps: int = 10,
         flow_sig_min: float = 0.001,
+        final_action_clip_value: float | None = None,
     ) -> None:
         super().__init__()
         # My parameters
+        self.num_inference_steps = num_inference_steps
         self.flow_sig_min = flow_sig_min
+        self.final_action_clip_value = final_action_clip_value
+        self.context_length = finetuning_timesteps
 
         # Load the models
         ## Video generation model
@@ -43,7 +49,6 @@ class Vai0rbis(nn.Module):
 
         # Video generation parameters
         self.nb_tokens_per_timestep = self.gpt.nb_tokens_per_timestep
-        self.context_length = finetuning_timesteps
 
         # Action parameters
         self.action_dim = self.action_expert.action_dim
@@ -87,6 +92,21 @@ class Vai0rbis(nn.Module):
 
         self.register_buffer("attn_mask", attn_mask)
 
+    def build_inference_attention_mask(self, context_length: int, device: torch.device | str) -> torch.BoolTensor:
+        visual_seqlen = self.nb_tokens_per_timestep * context_length
+        action_seq_len = self.action_horizon  # this time we predict only one step
+        seqlen = visual_seqlen + action_seq_len
+        attn_mask = torch.zeros(seqlen, seqlen, dtype=torch.bool, device=device)
+
+        # Causal mask for the visual tokens
+        for i in range(visual_seqlen):
+            attn_mask[i, : i + 1] = True
+
+        # Bi-directional mask for the action tokens + action tokens can attend to all visual tokens
+        attn_mask[visual_seqlen:] = True
+
+        return attn_mask
+
     def psi_t(
         self,
         x: FloatTensor,
@@ -124,6 +144,49 @@ class Vai0rbis(nn.Module):
         # compare to true velocity
         d_psi = x1 - (1 - self.flow_sig_min) * x0
         return torch.mean((v_psi - d_psi) ** 2)
+
+    def forward_inference(
+        self,
+        visual_tokens: LongTensor,
+        high_level_command: LongTensor,
+        dtype: torch.dtype,
+        verbose: bool = False,
+    ) -> torch.FloatTensor:
+        device = visual_tokens.device
+        bsz, context_length, *_ = visual_tokens.size()
+        assert context_length <= self.context_length
+
+        # sample pure action noise
+        action = torch.randn((bsz, 1, self.action_horizon, self.action_dim), device=device, dtype=dtype)
+
+        # attn_mask for inference
+        attn_mask = self.build_inference_attention_mask(context_length, device=device)
+
+        # forward euler integration --- run vlm in each step, which is unnecessary
+        delta_t = 1.0 / self.num_inference_steps
+        t = torch.zeros((bsz, 1), device=device, dtype=dtype)
+        for _ in tqdm(range(self.num_inference_steps), "Euler integration", disable=not verbose):
+            action_vel = self.joint_model(
+                attention_mask=attn_mask,
+                inputs_all={
+                    "visual_tokens": visual_tokens,
+                    "noisy_actions": action,
+                    "high_level_command": high_level_command,
+                    "diffusion_step": t,
+                },
+            )["actions"]
+            # decode action: [Batch_Size, Horizon_Steps, Action_Dim]
+            action += delta_t * action_vel
+            t += delta_t
+
+        # clamp final output if specified
+        if self.final_action_clip_value is not None:
+            action = torch.clamp(
+                action,
+                -self.final_action_clip_value,
+                self.final_action_clip_value,
+            )
+        return action
 
 
 if __name__ == "__main__":
@@ -171,3 +234,8 @@ if __name__ == "__main__":
     t = torch.rand(batch_size, gpt_config.nb_timesteps)
 
     loss = vai0rbis(visual_tokens, high_level_command, actions, t)
+    print("Loss:", loss)
+
+    visual_tokens = torch.randint(0, gpt_config.vocabulary_size, (batch_size, 5, height, width))
+    high_level_command = torch.randint(0, action_expert_config.number_high_level_command, (batch_size, 1))
+    actions_inference = vai0rbis.forward_inference(visual_tokens, high_level_command, torch.float32, verbose=True)
