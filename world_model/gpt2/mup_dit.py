@@ -40,7 +40,7 @@ class MLP(nn.Module):
         return x
 
 
-class CausalSelfAttention(nn.Module):
+class SelfAttention(nn.Module):
 
     def __init__(
         self, dim_model: int, attn_dim: int, dim_heads: int, bias: bool, dropout: float, block_size: int, attn_scale: float
@@ -72,21 +72,12 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size))
 
-        # will be KVCache object managed by inference context manager
-        self.cache = None
-
-    def forward(self, x: Tensor, attn_mask: Tensor, start_pos: int = -1) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         # calculate query, key, values for all heads in batch
         x = self.c_attn(x)
 
         # split into qkv and heads
         q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
-
-        # KV cache update
-        if self.cache is not None:
-            assert isinstance(start_pos, int), "start_pos must be an integer"
-            # update the KV cache with current KV and get all the previous KVs
-            k, v = self.cache.update(start_pos, k, v)
 
         ### muP: just for coord check (debug)
         q = self.query(q)
@@ -101,7 +92,6 @@ class CausalSelfAttention(nn.Module):
             q,
             k,
             v,
-            attn_mask=attn_mask,
             is_causal=False,
             scale=attn_scaling,  # muP: attention scaling
         )
@@ -127,14 +117,81 @@ class Block(nn.Module):
     ) -> None:
         super().__init__()
         self.ln_1 = nn.LayerNorm(dim_model, elementwise_affine=False)
-        self.attn = CausalSelfAttention(dim_model, attn_dim, dim_heads, block_size, attn_scale)
+        self.attn = SelfAttention(dim_model, attn_dim, dim_heads, block_size, attn_scale)
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=False)
         self.mlp = MLP(dim_model, mlp_dim_mult)
 
-    def forward(self, x: Tensor, attn_mask: Tensor, start_pos: int = -1) -> Tensor:
-        x = x + self.attn(self.ln_1(x), attn_mask, start_pos=start_pos)
+    def forward(self, x: Tensor) -> Tensor:
+        x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
+
+
+class SinusoidalPosEmb(nn.Module):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.dim = dim
+
+    def forward(
+        self,
+        t: Tensor,
+        max_period: float = 10000.0,
+    ) -> Tensor:
+        half_dim = self.dim // 2
+        emb = math.log(max_period) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, device=t.device, dtype=t.dtype) * -emb)
+        emb = t[:, None] * emb[None, :]
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        return emb
+
+
+class ActionEncoder(nn.Module):
+    """Matching pi0 appendix"""
+
+    def __init__(
+        self,
+        action_dim: int,
+        width: int,
+        context_length: int,
+        action_horizon: int,
+        number_high_level_command: int,
+        max_period: float = 10000.0,
+        bias: bool = False,
+    ) -> None:
+        super().__init__()
+        self.linear_1 = nn.Linear(action_dim, width, bias=bias)
+        self.linear_2 = nn.Linear(2 * width, width, bias=bias)
+        self.nonlinearity = nn.SiLU()  # swish
+        self.linear_3 = nn.Linear(width, width, bias=bias)
+
+        self.command_embedding = nn.Embedding(number_high_level_command, width)
+        self.action_positional_embedding = nn.Embedding(action_horizon, width)
+        self.context_positional_embedding = nn.Embedding(context_length, width)
+
+        self.diffusion_step_embedding = SinusoidalPosEmb(width, max_period=max_period)
+
+    def forward(
+        self,
+        action: Tensor,
+        diffusion_step: Tensor,
+        high_level_command: int,
+        action_positions: Tensor,
+        context_positions: Tensor,
+    ) -> Tensor:
+        # [Batch_Size, Seq_Len, Width]
+        emb = self.linear_1(action)
+        command_emb = self.command_embedding(high_level_command)
+        action_emb = self.action_positional_embedding(action_positions)
+        context_emb = self.context_positional_embedding(context_positions)
+        emb = emb + command_emb + action_emb + context_emb
+        # repeat time embedding for seq_len
+        # [Batch_Size, Seq_Len, Width]
+        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step)
+        diffusion_step_emb_full = diffusion_step_emb.unsqueeze(1).expand(-1, action.size(1), -1)
+        emb = torch.cat([diffusion_step_emb_full, emb], dim=-1)
+        emb = self.nonlinearity(self.linear_2(emb))
+        emb = self.linear_3(emb)
+        return emb
 
 
 class MupDiT(nn.Module):
@@ -327,7 +384,7 @@ class MupDiT(nn.Module):
             if module.weight is not None:
                 module.weight.data.fill_(1.0)
 
-        elif isinstance(module, CausalSelfAttention):
+        elif isinstance(module, SelfAttention):
             ### muP query zero init
             # yield equal attention weights over all past timesteps at initialization
 
@@ -353,102 +410,12 @@ class MupDiT(nn.Module):
         high_level_command: Tensor,
         action_positions: Tensor,
         context_positions: Tensor,
-        inference: bool = False,
-        start_pos: int = -1,
     ) -> Tensor:
         x = self.transformer.ae(action_sequence, diffusion_step, high_level_command, action_positions, context_positions)
-
-        seqlen = action_sequence.size(1)
-        if inference and start_pos != -1:
-            attn_mask = None
-            if seqlen > 1:
-                attn_mask = torch.full((seqlen, seqlen), float("-inf"), device=action_sequence.device)
-                attn_mask = torch.triu(attn_mask, diagonal=1)
-                # When performing key-value caching, we compute the attention scores
-                # only for the new sequence. Thus, the matrix of scores is of size
-                # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
-                # j > cache_len + i, since row i corresponds to token cache_len + i.
-                attn_mask = torch.hstack([torch.zeros((seqlen, start_pos), device=action_sequence.device), attn_mask]).type_as(
-                    x
-                )
-        else:
-            attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=action_sequence.device, dtype=torch.bool))
-
-        # forward world embeddings to the transformer
+        # forward embeddings to the transformer
         for block in self.transformer.h:
-            x = block(x, attn_mask, start_pos=start_pos)
+            x = block(x)
         emb_out = self.transformer.ln_f(x)
 
-        if not inference:
-            img_logits = self.lm_head(emb_out)
-        else:
-            img_logits = self.lm_head(emb_out[:, [-1], :])  # note: using list [-1] to preserve the time dim
-
-        return img_logits
-
-
-class SinusoidalPosEmb(nn.Module):
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.dim = dim
-
-    def forward(
-        self,
-        t: Tensor,
-        max_period: float = 10000.0,
-    ) -> Tensor:
-        half_dim = self.dim // 2
-        emb = math.log(max_period) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=t.device, dtype=t.dtype) * -emb)
-        emb = t[:, None] * emb[None, :]
-        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
-        return emb
-
-
-class ActionEncoder(nn.Module):
-    """Matching pi0 appendix"""
-
-    def __init__(
-        self,
-        action_dim: int,
-        width: int,
-        context_length: int,
-        action_horizon: int,
-        number_high_level_command: int,
-        max_period: float = 10000.0,
-        bias: bool = False,
-    ) -> None:
-        super().__init__()
-        self.linear_1 = nn.Linear(action_dim, width, bias=bias)
-        self.linear_2 = nn.Linear(2 * width, width, bias=bias)
-        self.nonlinearity = nn.SiLU()  # swish
-        self.linear_3 = nn.Linear(width, width, bias=bias)
-
-        self.command_embedding = nn.Embedding(number_high_level_command, width)
-        self.action_positional_embedding = nn.Embedding(action_horizon, width)
-        self.context_positional_embedding = nn.Embedding(context_length, width)
-
-        self.diffusion_step_embedding = SinusoidalPosEmb(width, max_period=max_period)
-
-    def forward(
-        self,
-        action: Tensor,
-        diffusion_step: Tensor,
-        high_level_command: int,
-        action_positions: Tensor,
-        context_positions: Tensor,
-    ) -> Tensor:
-        # [Batch_Size, Seq_Len, Width]
-        emb = self.linear_1(action)
-        command_emb = self.command_embedding(high_level_command)
-        action_emb = self.action_positional_embedding(action_positions)
-        context_emb = self.context_positional_embedding(context_positions)
-        emb = emb + command_emb + action_emb + context_emb
-        # repeat time embedding for seq_len
-        # [Batch_Size, Seq_Len, Width]
-        diffusion_step_emb = self.diffusion_step_embedding(diffusion_step)
-        diffusion_step_emb_full = diffusion_step_emb.unsqueeze(1).expand(-1, action.size(1), -1)
-        emb = torch.cat([diffusion_step_emb_full, emb], dim=-1)
-        emb = self.nonlinearity(self.linear_2(emb))
-        emb = self.linear_3(emb)
-        return emb
+        actions_out = self.lm_head(emb_out)
+        return actions_out
