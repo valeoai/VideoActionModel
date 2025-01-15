@@ -164,7 +164,7 @@ class Vai0rbis(nn.Module):
         # attn_mask for inference
         attn_mask = self.build_inference_attention_mask(context_length, device=device)
 
-        # forward euler integration --- run vlm in each step, which is unnecessary
+        # forward euler integration ---
         delta_t = 1.0 / self.num_inference_steps
         t = torch.zeros((bsz, 1), device=device, dtype=dtype)
         for _ in tqdm(range(self.num_inference_steps), "Euler integration", disable=not verbose):

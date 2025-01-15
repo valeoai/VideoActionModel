@@ -31,8 +31,13 @@ data:
 
 model:
   _target_: world_model.gpt2.ActionLearning
+  _recursive_: false
+  flow_sampling: uniform
+  flow_alpha: 1.5
+  flow_beta: 1.0
   vai0rbis_conf:
     _target_: world_model.gpt2.Vai0rbis
+    _recursive_: false
     finetuning_timesteps: ${data.sequence_length}
     num_inference_steps: 10
     flow_sig_min: 0.001
@@ -53,12 +58,12 @@ model:
     action_config:
       _target_: world_model.gpt2.MupActionExpert
       embedding_dim: 64
-      attention_dim: ${model.gpt_config.embedding_dim}
+      attention_dim: ${model.vai0rbis_conf.gpt_config.embedding_dim}
       action_dim: 2
       action_horizon: ${data.action_length}
       number_high_level_command: 3
-      dim_heads: ${model.gpt_config.dim_heads}
-      nb_layers: ${model.gpt_config.nb_layers}
+      dim_heads: ${model.vai0rbis_conf.gpt_config.dim_heads}
+      nb_layers: ${model.vai0rbis_conf.gpt_config.nb_layers}
   optimizer_conf:
     lr: 0.0001
     weight_decay: 1e-8

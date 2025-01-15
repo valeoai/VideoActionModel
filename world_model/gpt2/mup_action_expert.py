@@ -1,14 +1,4 @@
 """
-A modified GPT for the adastra project on world model.
-Original code: https://github.com/karpathy/nanoGPT/blob/master/model.py
-
-Full definition of a GPT Language Model, all of it in this single file.
-References:
-1) the official GPT-2 TensorFlow implementation released by OpenAI:
-https://github.com/openai/gpt-2/blob/master/src/model.py
-2) huggingface/transformers PyTorch implementation:
-https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
-
 mup:
 LayerNorm elementwise_affine=False  (see https://arxiv.org/abs/2404.05728)
 MuReadout
@@ -127,7 +117,7 @@ class SelfAttention(nn.Module):
 
     def __init__(self, dim_model: int, attn_dim: int, dim_heads: int, attn_scale: float) -> None:
         super().__init__()
-        assert dim_model % dim_heads == 0, "dim_model must be divisible by dim_heads"
+        assert attn_dim % dim_heads == 0, "dim_model must be divisible by dim_heads"
 
         self.dim_heads = dim_heads
         self.dim_model = dim_model

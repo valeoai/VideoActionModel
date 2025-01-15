@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, Tuple
 import git
 import hydra
 import torch
+from einops import rearrange
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from mup.optim import MuAdamW
@@ -28,14 +29,15 @@ class ActionLearning(LightningModule):
         vai0rbis_conf: DictConfig,
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
+        flow_sampling: str = "uniform",
+        flow_alpha: float = 1.5,
+        flow_beta: float = 1,
         compile: bool = False,
         log_norm: bool = False,
     ) -> None:
         """
         Args:
-            network: The configuration of the model to train.
-            sequence_adapter: The configuration of an adapter the produce
-            a unified sequence of tokens from visual and action tokens.
+            vai0rbis_conf: The configuration for the Vai0rbis model.
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
             compile: Compile model for faster training with pytorch 2.0, registered with save_hyperparameters
@@ -51,6 +53,14 @@ class ActionLearning(LightningModule):
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
 
+        self.flow_sampling = flow_sampling
+        if self.flow_sampling == "beta":
+            self.flow_alpha = flow_alpha
+            self.flow_beta = flow_beta
+            self.flow_sig_min = vai0rbis_conf.flow_sig_min
+            self.flow_t_max = 1 - self.flow_sig_min
+            self.flow_beta_dist = torch.distributions.Beta(flow_alpha, flow_beta)
+
     def on_before_optimizer_step(self, optimizer: Optional[Optimizer]) -> None:
         if self.hparams.log_norm:
             # Compute the 2-norm for each layer
@@ -63,17 +73,23 @@ class ActionLearning(LightningModule):
         pass
 
     def noise_schedule(self, batch: Batch) -> Tensor:
-        """Generate a denoising step.
-
-        Args:
-            batch: A batch of data.
-
-        Returns:
-            The diffusion step
+        """
+        Adapted from:
+        https://github.com/allenzren/open-pi-zero/blob/main/src/agent/train.py
         """
         batch_size, context_length, *_ = batch["visual_tokens"].size()
-        diffusion_step = torch.rand(batch_size, context_length, device=self.device)
-        return diffusion_step
+        bsz = batch_size * context_length
+
+        if self.flow_sampling == "uniform":  # uniform between 0 and 1
+            """https://github.com/gle-bellier/flow-matching/blob/main/Flow_Matching.ipynb"""
+            eps = 1e-5
+            t = (torch.rand(1) + torch.arange(bsz) / bsz) % (1 - eps)
+        elif self.flow_sampling == "beta":  # from pi0 paper
+            z = self.flow_beta_dist.sample((bsz,))
+            t = self.flow_t_max * (1 - z)  # flip and shift
+
+        t = rearrange(t, "(b c) -> b c", b=batch_size, c=context_length)
+        return t
 
     def training_step(self, batch: Batch, batch_idx: int) -> Tensor:
         """Perform a single training step on a batch of data from the training set.
@@ -90,7 +106,7 @@ class ActionLearning(LightningModule):
 
         loss = self.vai0rbis(
             visual_tokens=batch["visual_tokens"],
-            high_level_command=0,  # TODO: add the high level command to the ego trajectory dataset
+            high_level_command=batch["high_level_command"],
             actions=batch["positions"],
             t=diffusion_step,
         )
@@ -223,3 +239,29 @@ class ActionLearning(LightningModule):
 
         checkpoint["gpt_mup_base_shapes"] = self.vai0rbis.gpt_mup_base_shapes
         checkpoint["action_mup_base_shapess"] = self.vai0rbis.action_mup_base_shapess
+
+
+if __name__ == '__main__':
+    from omegaconf import OmegaConf
+
+    config = OmegaConf.load("configs/experiment/action_learning.yaml")
+    data_config = OmegaConf.load("configs/data/ego_trajectory_dataset.yaml")
+
+    vai0rbis_conf = config.model.vai0rbis_conf
+    optimizer_conf = config.model.optimizer_conf
+
+    vai0rbis_conf.finetuning_timesteps = 8
+    vai0rbis_conf.action_config.action_horizon = 6
+
+    model = ActionLearning(vai0rbis_conf, optimizer_conf)
+
+    data_config.nuscenes_tokens_rootdir = config.data.nuscenes_tokens_rootdir
+    data_config.nuscenes_train_pickle_path = config.data.nuscenes_train_pickle_path
+    data_config.nuscenes_val_pickle_path = config.data.nuscenes_val_pickle_path
+
+    dm = hydra.utils.instantiate(data_config)
+    dm = dm.setup("fit")
+    train_loader = dm.train_dataloader()
+
+    batch = next(iter(train_loader))
+    model.training_step(batch, 0)

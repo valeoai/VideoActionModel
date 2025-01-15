@@ -253,7 +253,7 @@ class EgoTrajectoryDataset(Dataset):
             if self.tokens_rootdir is not None:
                 # get visual tokens
                 file_path = os.path.join(self.tokens_rootdir, sample["file_path"].replace(".jpg", ".npy"))
-                tokens = torch.from_numpy(np.load(file_path))
+                tokens = torch.from_numpy(np.load(file_path)).to(dtype=torch.long)
                 data["visual_tokens"].append(tokens)
 
             # Store metadata
