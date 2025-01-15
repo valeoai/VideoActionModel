@@ -238,8 +238,10 @@ class ActionLearning(LightningModule):
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
 
-        checkpoint["gpt_mup_base_shapes"] = mup.shape._extract_shapes(self.vai0rbis.gpt_mup_base_shapes)
-        checkpoint["action_mup_base_shapess"] = mup.shape._extract_shapes(self.vai0rbis.action_mup_base_shapes)
+        if self.vai0rbis.gpt_mup_base_shapes is not None:
+            checkpoint["gpt_mup_base_shapes"] = mup.shape._extract_shapes(self.vai0rbis.gpt_mup_base_shapes)
+        if self.vai0rbis.action_mup_base_shapes is not None:
+            checkpoint["action_mup_base_shapess"] = mup.shape._extract_shapes(self.vai0rbis.action_mup_base_shapes)
 
 
 if __name__ == "__main__":

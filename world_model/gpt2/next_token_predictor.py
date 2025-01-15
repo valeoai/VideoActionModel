@@ -217,4 +217,5 @@ class NextTokenPredictor(LightningModule):
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
 
-        checkpoint["mup_base_shapes"] = mup.shape._extract_shapes(self.mup_base_shapes)
+        if self.mup_base_shapes is not None:
+            checkpoint["mup_base_shapes"] = mup.shape._extract_shapes(self.mup_base_shapes)
