@@ -16,6 +16,10 @@ from torch import Tensor
 
 
 class SinusoidalPosEmb(nn.Module):
+    """
+    Sinusoidal positional embedding the diffusion step.
+    """
+
     def __init__(self, dim: int) -> None:
         super().__init__()
         self.dim = dim
@@ -34,7 +38,25 @@ class SinusoidalPosEmb(nn.Module):
 
 
 class ActionEncoder(nn.Module):
-    """Matching pi0 appendix"""
+    """
+    Embedding for actions.
+
+    - Encodes the noisy actions
+    - Embeds the high level command
+    - Add positional embedding for the action horizon
+
+    - Combines it with the diffusion step temporal embedding
+
+    Parameters
+    ----------
+    action_dim: int, dimension of the action space
+    action_hidden_dim: int, dimension of the action embedding and width of the denoiser
+    action_horizon: int, number of timesteps in the action sequence,
+                         not the same as the context length of the video prediction model.
+    number_high_level_command: int, number of high level commands in the nuScenes / nuPlan dataset
+    max_period: float, maximum period for the sinusoidal positional embedding
+    bias: bool, whether to use bias in the linear layers
+    """
 
     def __init__(
         self,
@@ -389,10 +411,7 @@ class MupActionExpert(nn.Module):
         elif isinstance(module, MLP):
             self._init_c_proj_residual(module, is_mlp=True)
 
-    def forward(
-        self,
-        hidden_states: Tensor,
-    ) -> Tensor:
+    def forward(self, hidden_states: Tensor) -> Tensor:
         raise NotImplementedError("forward not implemented")
 
 

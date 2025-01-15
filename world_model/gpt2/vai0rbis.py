@@ -16,6 +16,13 @@ mupShapes = Dict[str, Tuple[int, ...]]
 
 
 class Vai0rbis(nn.Module):
+    """
+    This module coordinates the training of a JointModel.
+
+    Notable it implements:
+    - the flow matching loss for action prediction.
+    - The denoise diffusion process for action prediction.
+    """
 
     def __init__(
         self,
@@ -59,9 +66,36 @@ class Vai0rbis(nn.Module):
 
         self.build_attention_mask()
 
-    def build_attention_mask(
-        self,
-    ) -> None:
+    def build_attention_mask(self) -> None:
+        """
+        Builds the attention mask for the joint model.
+
+        - Causal attention mask for the visual tokens.
+        - Bi-directional attention mask for the action tokens withing the action horizon.
+        - Full-attention between the action tokens and the visual tokens of the context.
+
+        Attention mask (this same for each sample of the batch, so we ignore the batch dimension for visualazation).
+
+        For a max context length of 3 and 3 tokens per image and an action horizon of 2, the mask looks like this:
+
+        V11 V12 V13 V21 V22 V23 V31 V32 V33 H11 H12 H21 H22 H31 H32
+         x
+         x   x
+         x   x   x
+         x   x   x   x
+         x   x   x   x   x
+         x   x   x   x   x   x
+         x   x   x   x   x   x   x
+         x   x   x   x   x   x   x   x
+         x   x   x   x   x   x   x   x   x
+
+         x   x   x                          x    x
+         x   x   x                          x    x
+         x   x   x   x   x   x                       x    x
+         x   x   x   x   x   x                       x    x
+         x   x   x   x   x   x   x   x                       x    x
+         x   x   x   x   x   x   x   x                       x    x
+        """
         context_length = self.context_length
         action_horizon = self.action_horizon
         nb_tokens_per_timestep = self.nb_tokens_per_timestep
@@ -95,6 +129,12 @@ class Vai0rbis(nn.Module):
         self.register_buffer("attn_mask", attn_mask)
 
     def build_inference_attention_mask(self, context_length: int, device: torch.device | str) -> torch.BoolTensor:
+        """
+        Builds the attention mask for the joint model during inference.
+
+        - Causal attention mask for the visual tokens.
+        - Full attention for the actions tokens
+        """
         visual_seqlen = self.nb_tokens_per_timestep * context_length
         action_seq_len = self.action_horizon  # this time we predict only one step
         seqlen = visual_seqlen + action_seq_len
@@ -154,6 +194,11 @@ class Vai0rbis(nn.Module):
         dtype: torch.dtype,
         verbose: bool = False,
     ) -> torch.FloatTensor:
+        """
+        Inference for action prediction.
+
+        We start from a random action and integrate the dynamics using a forward Euler scheme.
+        """
         device = visual_tokens.device
         bsz, context_length, *_ = visual_tokens.size()
         assert context_length <= self.context_length
@@ -198,6 +243,7 @@ class Vai0rbis(nn.Module):
 
 
 class Vai0rbisInference(Vai0rbis):
+    """Helper class to perform inference with the Vai0rbis model."""
 
     def forward(
         self,
