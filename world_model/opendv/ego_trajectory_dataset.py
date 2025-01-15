@@ -1,9 +1,11 @@
+import enum
 import os
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from pyquaternion import Quaternion
 from torch import Tensor
 from torch.utils.data import ConcatDataset, Dataset
 
@@ -12,6 +14,15 @@ from world_model.utils import RankedLogger
 terminal_log = RankedLogger(__name__, rank_zero_only=True)
 
 Sample = Dict[str, Any]
+
+
+class Command(int, enum.Enum):
+    """Commands for the vehicle."""
+
+    RIGHT = 0
+    LEFT = 1
+    STRAIGHT = 2
+    FOLLOW_REFERENCE = 3
 
 
 class EgoTrajectoryDataset(Dataset):
@@ -35,6 +46,8 @@ class EgoTrajectoryDataset(Dataset):
         - file_paths: List of relative file path for each frame in the sequence
     """
 
+    COMMAND_DISTANCE_THRESHOLD: float = 2.0
+
     def __init__(
         self,
         pickle_data: List[dict],
@@ -44,6 +57,7 @@ class EgoTrajectoryDataset(Dataset):
         action_length: int = 6,
         subsampling_factor: int = 1,
         with_yaw_rate: bool = False,
+        command_distance_threshold: float = 2.0,
     ) -> None:
         self.tokens_rootdir = tokens_rootdir
         self.sequence_length = sequence_length
@@ -51,6 +65,7 @@ class EgoTrajectoryDataset(Dataset):
         self.subsampling_factor = subsampling_factor
         self.with_yaw_rate = with_yaw_rate
         self.camera = camera
+        self.command_distance_threshold = command_distance_threshold
 
         # Sort by scene and timestamp
         pickle_data.sort(key=lambda x: (x["scene"]["name"], x[self.camera]["timestamp"]))
@@ -111,6 +126,33 @@ class EgoTrajectoryDataset(Dataset):
 
         # Return rotated point
         return rotated[1:3]  # Only x,y components
+
+    @staticmethod
+    def pose_to_matrix(translation: List[float], rotation: List[float]) -> Tensor:
+        """Converts a NuScenes ego pose to a transformation matrix."""
+        translation = np.array(translation)
+        rotation = Quaternion(rotation).rotation_matrix
+        matrix = np.eye(4)
+        matrix[:3, :3] = rotation
+        matrix[:3, 3] = translation
+        return torch.from_numpy(matrix).double()
+
+    @staticmethod
+    def get_high_level_command(
+        translation: List[float], rotation: List[float], future_translation: List[float], future_rotation: List[float]
+    ) -> Command:
+        cur_ego2world = EgoTrajectoryDataset.pose_to_matrix(translation, rotation)
+        next_ego2world = EgoTrajectoryDataset.pose_to_matrix(future_translation, future_rotation)
+
+        cur_world2ego = cur_ego2world.inverse()
+        future_pos2ego = cur_world2ego @ next_ego2world[:, -1]  # (4x4) x 4, 1
+        # we get this in x-forward, y left
+        if future_pos2ego[1] > EgoTrajectoryDataset.COMMAND_DISTANCE_THRESHOLD:
+            return Command.LEFT
+        if future_pos2ego[1] < -EgoTrajectoryDataset.COMMAND_DISTANCE_THRESHOLD:
+            return Command.RIGHT
+
+        return Command.STRAIGHT
 
     def get_sequence_indices(self) -> np.ndarray:
         """Generate indices for valid trajectory sequences."""
@@ -183,13 +225,21 @@ class EgoTrajectoryDataset(Dataset):
         temporal_indices = self.sequences_indices[index][: self.sequence_length]
 
         # Get initial pose
-        for idx, temporal_index in enumerate(temporal_indices):
+        for temporal_index in temporal_indices:
             sample = self.pickle_data[temporal_index][self.camera]
 
             positions, rotations = [], []
             for _j in range(1 + self.action_length):
                 positions.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_tran"][:2])
                 rotations.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_rot"])
+
+            high_level_command = EgoTrajectoryDataset.get_high_level_command(
+                self.pickle_data[temporal_index][self.camera]["ego_to_world_tran"],
+                self.pickle_data[temporal_index][self.camera]["ego_to_world_rot"],
+                self.pickle_data[temporal_index + self.action_length][self.camera]["ego_to_world_tran"],
+                self.pickle_data[temporal_index + self.action_length][self.camera]["ego_to_world_rot"],
+            )
+            data["high_level_commands"].append(high_level_command)
 
             relative_position, relative_rotation = self.sequence_of_positions_to_trajectory(positions, rotations)
 
@@ -203,7 +253,7 @@ class EgoTrajectoryDataset(Dataset):
             if self.tokens_rootdir is not None:
                 # get visual tokens
                 file_path = os.path.join(self.tokens_rootdir, sample["file_path"].replace(".jpg", ".npy"))
-                tokens = torch.from_numpy(np.load(file_path))
+                tokens = torch.from_numpy(np.load(file_path)).to(dtype=torch.long)
                 data["visual_tokens"].append(tokens)
 
             # Store metadata
@@ -220,6 +270,7 @@ class EgoTrajectoryDataset(Dataset):
         # Stack tensors
         data["positions"] = torch.stack(data["positions"]).to(dtype=torch.float32)
         data["rotations"] = torch.stack(data["rotations"]).to(dtype=torch.float32)
+        data["high_level_command"] = torch.tensor(data["high_level_commands"], dtype=torch.int64)
         data["timestamps"] = torch.stack(data["timestamps"], dim=0)[: self.sequence_length]
         data["camera"] = self.camera
         if self.tokens_rootdir is not None:
@@ -262,12 +313,12 @@ def combined_ego_trajectory_dataset(
     nuscenes_tokens_rootdir: Optional[str] = None,
     **kwargs,
 ) -> ConcatDataset:
-    if nuplan_pickle_data is not None and nuscenes_pickle_data is not None:
-        # If both datasets are provided, ensure that either both or none of the tokens rootdirs are provided
-        if (nuplan_tokens_rootdir is None and nuscenes_tokens_rootdir is not None) or (
-            nuplan_tokens_rootdir is not None and nuscenes_tokens_rootdir is None
-        ):
-            raise ValueError("Tokens rootdir must be provided for both datasets")
+    # If both datasets are provided, ensure that either both or none of the tokens rootdirs are provided
+    if (nuplan_pickle_data is not None and nuscenes_pickle_data is not None) and (
+        (nuplan_tokens_rootdir is None and nuscenes_tokens_rootdir is not None)
+        or (nuplan_tokens_rootdir is not None and nuscenes_tokens_rootdir is None)
+    ):
+        raise ValueError("Tokens rootdir must be provided for both datasets")
 
     datasets = []
     if nuplan_pickle_data is not None:
@@ -339,7 +390,7 @@ if __name__ == "__main__":
 
         # First pass: calculate all yaw rates and bounds
         all_positions, all_yaw_rates = [], []
-        for i, idx in enumerate(tqdm(indexes, desc="Computing yaw rates", leave=True)):
+        for idx in tqdm(indexes, desc="Computing yaw rates", leave=True):
             positions = dataset[idx]["positions"]
             yaw_rate = dataset[idx]["yaw_rate"]
             all_positions.append(positions)
@@ -355,7 +406,7 @@ if __name__ == "__main__":
         norm = Normalize(vmin=np.min(all_yaw_rates), vmax=np.max(all_yaw_rates))
 
         # Second pass: plot trajectories
-        for i, idx in enumerate(tqdm(indexes, desc="Plotting trajectories", leave=True)):
+        for i, _ in enumerate(tqdm(indexes, desc="Plotting trajectories", leave=True)):
             positions = all_positions[i]
             yaw_rate = all_yaw_rates[i]
 
@@ -408,13 +459,14 @@ if __name__ == "__main__":
         nuplan_pickle_data=nuplan_pickle_data,
         # nuplan_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuplan_v2_tokens/tokens",
         # nuscenes_pickle_data=nuscenes_pickle_data,
-        with_yaw_rate=True,
+        # with_yaw_rate=True,
         # nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
     )
 
     print("Length", len(dataset))
     print("Positions", dataset[0]["positions"].shape)
+    print("high_level_command", dataset[0]["high_level_command"].shape)
     # print("Positions", dataset[0]["positions"])
     # print("Tokens", dataset[0]["visual_tokens"].shape)
 
-    plot_trajectories(dataset, max_trajectories=20000, save_path="trajectory_plot.pdf")
+    # plot_trajectories(dataset, max_trajectories=20000, save_path="trajectory_plot.pdf")

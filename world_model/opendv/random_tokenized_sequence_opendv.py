@@ -64,7 +64,7 @@ if __name__ == "__main__":
     @click.argument("video_list_file", type=click.Path(exists=True))
     @click.option("--sequence-length", "-sl", default=20, help="Number of consecutive frames per sample")
     @click.option("--subsampling-factor", "-sf", default=5, help="Only keep one frame every N frames")
-    def main(data_root_dir: str, video_list_file: str, sequence_length: int, subsampling_factor: int):
+    def main(data_root_dir: str, video_list_file: str, sequence_length: int, subsampling_factor: int) -> None:
         """Analyze and print overview information about the video token dataset."""
 
         import json
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         )
 
         # Print dataset overview
-        click.echo(f"\n=== Dataset Overview ===")
+        click.echo("\n=== Dataset Overview ===")
         click.echo(f"Total number of videos: {len(dataset.video_list)}")
         click.echo(f"Total number of frames {dataset.total_nb_frames}")
         click.echo(f"Total number of sequences (i.e., windows): {len(dataset)}")
@@ -90,7 +90,7 @@ if __name__ == "__main__":
             random_idx = np.random.randint(len(dataset))
             sample = dataset[random_idx]
 
-            click.echo(f"\n=== Random Sample ===")
+            click.echo("\n=== Random Sample ===")
             click.echo(f"Video ID: {sample['video_id']}")
             click.echo(f"Starting frame index: {sample['frame_idx']}")
             click.echo(f"Token sequence shape: {sample['visual_tokens'].shape}")

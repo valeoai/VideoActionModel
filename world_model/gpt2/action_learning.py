@@ -2,23 +2,23 @@ from typing import Any, Dict, Optional, Tuple
 
 import git
 import hydra
-import mup
 import torch
 from einops import rearrange
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from mup.optim import MuAdamW
 from omegaconf import DictConfig
+from torch import Tensor
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 
-from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
+from world_model.gpt2.vai0rbis import Vai0rbis
 
-Batch = Dict[str, torch.Tensor]
+Batch = Dict[str, Tensor]
 mupShapes = Dict[str, Tuple[int, ...]]
 
 
-class NextTokenPredictor(LightningModule):
+class ActionLearning(LightningModule):
     """
     LightningModule docs:
         https://lightning.ai/docs/pytorch/latest/common/lightning_module.html
@@ -26,18 +26,18 @@ class NextTokenPredictor(LightningModule):
 
     def __init__(
         self,
-        network: DictConfig,
+        vai0rbis_conf: DictConfig,
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
+        flow_sampling: str = "uniform",
+        flow_alpha: float = 1.5,
+        flow_beta: float = 1,
         compile: bool = False,
         log_norm: bool = False,
-        mup_base_shapes: mupShapes = None,
     ) -> None:
         """
         Args:
-            network: The configuration of the model to train.
-            sequence_adapter: The configuration of an adapter the produce
-            a unified sequence of tokens from visual and action tokens.
+            vai0rbis_conf: The configuration for the Vai0rbis model.
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
             compile: Compile model for faster training with pytorch 2.0, registered with save_hyperparameters
@@ -49,20 +49,17 @@ class NextTokenPredictor(LightningModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
+        self.vai0rbis: Vai0rbis = hydra.utils.instantiate(vai0rbis_conf)
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
-        self.network = hydra.utils.instantiate(network)
-        self.mup_base_shapes = mup_base_shapes
 
-        if mup_base_shapes is not None:
-            print("mup_base_shapes configured")
-            mup.set_base_shapes(self.network, mup_base_shapes)
-            # re-initialize after set_base_shapes
-            self.network.apply(self.network._init_weights)
-        else:
-            print("Network NOT mu-Parametrized")
-
-        self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
+        self.flow_sampling = flow_sampling
+        if self.flow_sampling == "beta":
+            self.flow_alpha = flow_alpha
+            self.flow_beta = flow_beta
+            self.flow_sig_min = vai0rbis_conf.flow_sig_min
+            self.flow_t_max = 1 - self.flow_sig_min
+            self.flow_beta_dist = torch.distributions.Beta(flow_alpha, flow_beta)
 
     def on_before_optimizer_step(self, optimizer: Optional[Optimizer]) -> None:
         if self.hparams.log_norm:
@@ -75,7 +72,26 @@ class NextTokenPredictor(LightningModule):
         """Lightning hook that is called when training begins."""
         pass
 
-    def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
+    def noise_schedule(self, batch: Batch) -> Tensor:
+        """
+        Adapted from:
+        https://github.com/allenzren/open-pi-zero/blob/main/src/agent/train.py
+        """
+        batch_size, context_length, *_ = batch["visual_tokens"].size()
+        bsz = batch_size * context_length
+
+        if self.flow_sampling == "uniform":  # uniform between 0 and 1
+            """https://github.com/gle-bellier/flow-matching/blob/main/Flow_Matching.ipynb"""
+            eps = 1e-5
+            t = (torch.rand(1) + torch.arange(bsz) / bsz) % (1 - eps)
+        elif self.flow_sampling == "beta":  # from pi0 paper
+            z = self.flow_beta_dist.sample((bsz,))
+            t = self.flow_t_max * (1 - z)  # flip and shift
+
+        t = rearrange(t, "(b c) -> b c", b=batch_size, c=context_length)
+        return t
+
+    def training_step(self, batch: Batch, batch_idx: int) -> Tensor:
         """Perform a single training step on a batch of data from the training set.
 
         Args:
@@ -86,12 +102,14 @@ class NextTokenPredictor(LightningModule):
          A tensor of losses between model predictions and targets.
         """
 
-        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
+        diffusion_step = self.noise_schedule(batch)
 
-        logits_sequence = self.network(**input_data)
-        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
-
-        loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
+        loss = self.vai0rbis(
+            visual_tokens=batch["visual_tokens"],
+            high_level_command=batch["high_level_command"],
+            actions=batch["positions"],
+            t=diffusion_step,
+        )
 
         # log losses
         self.log("train/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
@@ -114,17 +132,19 @@ class NextTokenPredictor(LightningModule):
             batch: A batch of data.
             batch_idx: The index of the current batch.
         """
-        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
+        diffusion_step = self.noise_schedule(batch)
 
-        logits_sequence = self.network(**input_data)
-        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
+        loss = self.vai0rbis(
+            visual_tokens=batch["visual_tokens"],
+            high_level_command=batch["high_level_command"],
+            actions=batch["positions"],
+            t=diffusion_step,
+        )
 
-        loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
+        # log losses
+        self.log("val/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
 
-        # log losses at the end of epoch, rest is automatic
-        self.log("val/loss", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
-
-        # return loss to apply backpropagation
+        # return loss
         return loss
 
     def on_validation_epoch_end(self) -> None:
@@ -163,7 +183,7 @@ class NextTokenPredictor(LightningModule):
         if not self.optimizer_conf:
             return None
 
-        optimizer = MuAdamW(params=self.parameters(), **self.optimizer_conf)
+        optimizer = MuAdamW(params=self.vai0rbis.action_expert.parameters(), **self.optimizer_conf)
 
         if not self.scheduler_conf:
             return {"optimizer": optimizer}
@@ -217,4 +237,31 @@ class NextTokenPredictor(LightningModule):
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
 
-        checkpoint["mup_base_shapes"] = self.mup_base_shapes
+        checkpoint["gpt_mup_base_shapes"] = self.vai0rbis.gpt_mup_base_shapes
+        checkpoint["action_mup_base_shapess"] = self.vai0rbis.action_mup_base_shapess
+
+
+if __name__ == '__main__':
+    from omegaconf import OmegaConf
+
+    config = OmegaConf.load("configs/experiment/action_learning.yaml")
+    data_config = OmegaConf.load("configs/data/ego_trajectory_dataset.yaml")
+
+    vai0rbis_conf = config.model.vai0rbis_conf
+    optimizer_conf = config.model.optimizer_conf
+
+    vai0rbis_conf.finetuning_timesteps = 8
+    vai0rbis_conf.action_config.action_horizon = 6
+
+    model = ActionLearning(vai0rbis_conf, optimizer_conf)
+
+    data_config.nuscenes_tokens_rootdir = config.data.nuscenes_tokens_rootdir
+    data_config.nuscenes_train_pickle_path = config.data.nuscenes_train_pickle_path
+    data_config.nuscenes_val_pickle_path = config.data.nuscenes_val_pickle_path
+
+    dm = hydra.utils.instantiate(data_config)
+    dm = dm.setup("fit")
+    train_loader = dm.train_dataloader()
+
+    batch = next(iter(train_loader))
+    model.training_step(batch, 0)

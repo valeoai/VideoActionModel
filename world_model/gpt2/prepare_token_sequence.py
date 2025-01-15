@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict
 
 import torch
 from einops import rearrange, repeat
