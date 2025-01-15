@@ -234,7 +234,10 @@ class EgoTrajectoryDataset(Dataset):
                 rotations.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_rot"])
 
             high_level_command = EgoTrajectoryDataset.get_high_level_command(
-                positions[0], rotations[0], positions[-1], rotations[-1]
+                self.pickle_data[temporal_index][self.camera]["ego_to_world_tran"],
+                self.pickle_data[temporal_index][self.camera]["ego_to_world_rot"],
+                self.pickle_data[temporal_index + self.action_length][self.camera]["ego_to_world_tran"],
+                self.pickle_data[temporal_index + self.action_length][self.camera]["ego_to_world_rot"],
             )
             data["high_level_commands"].append(high_level_command)
 
@@ -267,7 +270,7 @@ class EgoTrajectoryDataset(Dataset):
         # Stack tensors
         data["positions"] = torch.stack(data["positions"]).to(dtype=torch.float32)
         data["rotations"] = torch.stack(data["rotations"]).to(dtype=torch.float32)
-        data["high_level_commands"] = torch.tensor(data["high_level_commands"], dtype=torch.int64)
+        data["high_level_command"] = torch.tensor(data["high_level_commands"], dtype=torch.int64)
         data["timestamps"] = torch.stack(data["timestamps"], dim=0)[: self.sequence_length]
         data["camera"] = self.camera
         if self.tokens_rootdir is not None:
@@ -449,20 +452,21 @@ if __name__ == "__main__":
     with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl", "rb") as f:
         nuscenes_pickle_data = pickle.load(f)
 
-    with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl", "rb") as f:
-        nuplan_pickle_data = pickle.load(f)
+    # with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl", "rb") as f:
+    #     nuplan_pickle_data = pickle.load(f)
 
     dataset = combined_ego_trajectory_dataset(
-        nuplan_pickle_data=nuplan_pickle_data,
+        # nuplan_pickle_data=nuplan_pickle_data,
         # nuplan_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuplan_v2_tokens/tokens",
-        # nuscenes_pickle_data=nuscenes_pickle_data,
-        with_yaw_rate=True,
+        nuscenes_pickle_data=nuscenes_pickle_data,
+        # with_yaw_rate=True,
         # nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
     )
 
     print("Length", len(dataset))
     print("Positions", dataset[0]["positions"].shape)
+    print("high_level_command", dataset[0]["high_level_command"].shape)
     # print("Positions", dataset[0]["positions"])
     # print("Tokens", dataset[0]["visual_tokens"].shape)
 
-    plot_trajectories(dataset, max_trajectories=20000, save_path="trajectory_plot.pdf")
+    # plot_trajectories(dataset, max_trajectories=20000, save_path="trajectory_plot.pdf")

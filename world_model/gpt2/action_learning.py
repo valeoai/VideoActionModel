@@ -120,7 +120,7 @@ class ActionLearning(LightningModule):
 
         loss = self.vai0rbis(
             visual_tokens=batch["visual_tokens"],
-            high_level_command=0,  # TODO: add the high level command to the ego trajectory dataset
+            high_level_command=batch["high_level_command"],
             actions=batch["positions"],
             t=diffusion_step,
         )
