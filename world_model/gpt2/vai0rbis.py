@@ -28,6 +28,7 @@ class Vai0rbis(nn.Module):
         self,
         gpt_config: OmegaConf,
         gpt_mup_base_shapes: mupShapes | None,
+        gpt_checkpoint_path: str | None,
         action_config: OmegaConf,
         action_mup_base_shapes: mupShapes | None,
         finetuning_timesteps: int = 8,
@@ -48,6 +49,9 @@ class Vai0rbis(nn.Module):
         self.gpt_mup_base_shapes = gpt_mup_base_shapes
         mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
         self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
+        if gpt_checkpoint_path is not None:
+            ckpt = torch.load(gpt_checkpoint_path, map_location="cpu")
+            self.gpt.load_state_dict(ckpt["model"])
         ## Action model
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes

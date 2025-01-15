@@ -43,6 +43,7 @@ model:
     flow_sig_min: 0.001
     final_action_clip_value: null
     gpt_mup_base_shapes: null
+    gpt_checkpoint_path: null
     gpt_config:
       _target_: world_model.gpt2.MupGPT2
       embedding_dim: 256
