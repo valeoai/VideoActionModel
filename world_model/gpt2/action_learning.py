@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import git
 import hydra
+import mup
 import torch
 from einops import rearrange
 from lightning import LightningModule
@@ -89,7 +90,7 @@ class ActionLearning(LightningModule):
             t = self.flow_t_max * (1 - z)  # flip and shift
 
         t = rearrange(t, "(b c) -> b c", b=batch_size, c=context_length)
-        return t
+        return t.to(self.device, non_blocking=True)
 
     def training_step(self, batch: Batch, batch_idx: int) -> Tensor:
         """Perform a single training step on a batch of data from the training set.
@@ -237,11 +238,11 @@ class ActionLearning(LightningModule):
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
 
-        checkpoint["gpt_mup_base_shapes"] = self.vai0rbis.gpt_mup_base_shapes
-        checkpoint["action_mup_base_shapess"] = self.vai0rbis.action_mup_base_shapess
+        checkpoint["gpt_mup_base_shapes"] = mup.shape._extract_shapes(self.vai0rbis.gpt_mup_base_shapes)
+        checkpoint["action_mup_base_shapess"] = mup.shape._extract_shapes(self.vai0rbis.action_mup_base_shapes)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from omegaconf import OmegaConf
 
     config = OmegaConf.load("configs/experiment/action_learning.yaml")
@@ -254,6 +255,7 @@ if __name__ == '__main__':
     vai0rbis_conf.action_config.action_horizon = 6
 
     model = ActionLearning(vai0rbis_conf, optimizer_conf)
+    model.to("cuda")
 
     data_config.nuscenes_tokens_rootdir = config.data.nuscenes_tokens_rootdir
     data_config.nuscenes_train_pickle_path = config.data.nuscenes_train_pickle_path
@@ -264,4 +266,13 @@ if __name__ == '__main__':
     train_loader = dm.train_dataloader()
 
     batch = next(iter(train_loader))
+
+    def _to(v: Tensor | list) -> Tensor | list:
+        if isinstance(v, Tensor):
+            return v.to(model.device)
+
+        return v
+
+    batch = {k: _to(v) for k, v in batch.items()}
+
     model.training_step(batch, 0)
