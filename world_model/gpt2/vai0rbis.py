@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from torch import FloatTensor, LongTensor
+from torch import BoolTensor, FloatTensor, LongTensor
 from tqdm import tqdm
 
 from world_model.gpt2.joint_model import JointModel
@@ -132,7 +132,7 @@ class Vai0rbis(nn.Module):
 
         self.register_buffer("attn_mask", attn_mask)
 
-    def build_inference_attention_mask(self, context_length: int, device: torch.device | str) -> torch.BoolTensor:
+    def build_inference_attention_mask(self, context_length: int, device: torch.device | str) -> BoolTensor:
         """
         Builds the attention mask for the joint model during inference.
 

@@ -139,6 +139,7 @@ class JointModel(nn.Module):
                 dim_heads=gpt_attention.dim_heads,
             )
             if self.kv_cache is not None:
+                # We are still building the cache
                 self.kv_cache.update(visual_k, visual_v, layer_idx)
 
         action_q, action_k, action_v = rearrange(
@@ -153,7 +154,7 @@ class JointModel(nn.Module):
         # attention
         if self.use_kv_cache:
             q = action_q
-            attn_mask = None
+            attn_mask = None  # only the action tokens remain, which use full attention at inference time
         else:
             q = torch.cat([visual_q, action_q], dim=-2)
         k = torch.cat([visual_k, action_k], dim=-2)
@@ -206,16 +207,17 @@ class JointModel(nn.Module):
             visual_attn_input = None
         action_attn_input = action_block.ln_1(action_embeds)
 
+        # Mixed attention forward pass
         visual_attn_output, action_attn_output = self._forward_mutual_attention(
             attention_mask, visual_attn_input, action_attn_input, gpt_attention, action_attention, layer_idx
         )
 
         if not self.use_kv_cache:
-            visual_embeds = visual_embeds + visual_attn_output
-            visual_embeds = visual_embeds + gpt_block.mlp(gpt_block.ln_2(visual_embeds))
+            visual_embeds = visual_embeds + visual_attn_output  # attention residual connection
+            visual_embeds = visual_embeds + gpt_block.mlp(gpt_block.ln_2(visual_embeds))  # FFN residual connection
 
-        action_embeds = action_embeds + action_attn_output
-        action_embeds = action_embeds + action_block.mlp(action_block.ln_2(action_embeds))
+        action_embeds = action_embeds + action_attn_output  # attention residual connection
+        action_embeds = action_embeds + action_block.mlp(action_block.ln_2(action_embeds))  # FFN residual connection
 
         return {"visual_embeds": visual_embeds, "action_embeds": action_embeds}
 
