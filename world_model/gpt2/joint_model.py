@@ -17,6 +17,32 @@ EmbedsDict = Dict[str, FloatTensor]
 InputsDict = Dict[str, FloatTensor | LongTensor]
 
 
+class KVCache:
+
+    def __init__(self, num_layers: int) -> None:
+        super().__init__()
+        self.num_layers = num_layers
+        self.reset()
+
+    def reset(self) -> None:
+        self.k_cache = [None for _ in range(self.num_layers)]
+        self.v_cache = [None for _ in range(self.num_layers)]
+        self._filled = [False for _ in range(self.num_layers)]
+
+    @property
+    def filled(self) -> bool:
+        return all(self._filled)
+
+    def update(self, k_cache: FloatTensor, v_cache: FloatTensor, layer_idx: int) -> None:
+        self.k_cache[layer_idx] = k_cache
+        self.v_cache[layer_idx] = v_cache
+        self._filled[layer_idx] = True
+
+    def get(self, layer_idx: int) -> Tuple[FloatTensor, FloatTensor]:
+        assert self._filled[layer_idx], "Cache not filled"
+        return self.k_cache[layer_idx], self.v_cache[layer_idx]
+
+
 class JointModel(nn.Module):
 
     def __init__(
@@ -30,6 +56,19 @@ class JointModel(nn.Module):
 
         # Archi parameters
         self.num_hidden_layers = len(self.gpt.transformer.h)
+
+        # Cache for key and value
+        self.kv_cache = None
+
+    def init_kv_cache(self) -> None:
+        self.kv_cache = KVCache(self.num_hidden_layers)
+
+    def cleanup_kv_cache(self) -> None:
+        self.kv_cache.reset()
+
+    @property
+    def use_kv_cache(self) -> None:
+        return self.kv_cache is not None and self.kv_cache.filled
 
     def _visual_tokens_to_embeds(self, visual_tokens: LongTensor) -> FloatTensor:
         sequence_data = prepare_token_sequence(visual_tokens)
@@ -52,20 +91,24 @@ class JointModel(nn.Module):
     def _forward_mutual_attention(
         self,
         attn_mask: BoolTensor,
-        visual_attn_input: FloatTensor,
+        visual_attn_input: FloatTensor | None,
         action_attn_input: FloatTensor,
         gpt_attention: GPTAttention,
         action_attention: ActionAttention,
+        layer_idx: int,
     ) -> Tuple[FloatTensor, FloatTensor]:
         # split into qkv and heads
-        visual_q, visual_k, visual_v = rearrange(
-            gpt_attention.c_attn(visual_attn_input),
-            "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads",
-            n=3,
-            dim_heads=gpt_attention.dim_heads,
-        )
-        ### muP: attention scaling 1/dim_heads instead of 1/sqrt(dim_heads)
-        attn_scaling = gpt_attention.attn_scale / visual_v.size(-1)
+        if self.use_kv_cache:
+            visual_k, visual_v = self.kv_cache.get(layer_idx)
+        else:
+            visual_q, visual_k, visual_v = rearrange(
+                gpt_attention.c_attn(visual_attn_input),
+                "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads",
+                n=3,
+                dim_heads=gpt_attention.dim_heads,
+            )
+            if self.kv_cache is not None:
+                self.kv_cache.update(visual_k, visual_v, layer_idx)
 
         action_q, action_k, action_v = rearrange(
             action_attention.c_attn(action_attn_input),
@@ -73,9 +116,14 @@ class JointModel(nn.Module):
             n=3,
             dim_heads=action_attention.dim_heads,
         )
+        ### muP: attention scaling 1/dim_heads instead of 1/sqrt(dim_heads)
+        attn_scaling = action_attention.attn_scale / action_v.size(-1)
 
         # attention
-        q = torch.cat([visual_q, action_q], dim=-2)
+        if self.use_kv_cache:
+            q = action_q
+        else:
+            q = torch.cat([visual_q, action_q], dim=-2)
         k = torch.cat([visual_k, action_k], dim=-2)
         v = torch.cat([visual_v, action_v], dim=-2)
 
@@ -90,9 +138,12 @@ class JointModel(nn.Module):
         )
         y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")  # re-assemble all head outputs side by side
 
-        visual_y, action_y = torch.split(y, [visual_q.size(-2), action_q.size(-2)], dim=1)
+        if self.use_kv_cache:
+            action_y = y
+        else:
+            visual_y, action_y = torch.split(y, [visual_q.size(-2), action_q.size(-2)], dim=1)
+            visual_y = gpt_attention.c_proj(visual_y)
         # output projection
-        visual_y = gpt_attention.c_proj(visual_y)
         action_y = action_attention.c_proj(action_y)
         return visual_y, action_y
 
@@ -110,17 +161,21 @@ class JointModel(nn.Module):
         gpt_attention: GPTAttention = gpt_block.attn
         action_attention: ActionAttention = action_block.attn
 
-        visual_attn_input = gpt_block.ln_1(visual_embeds)
+        if not self.use_kv_cache:
+            visual_attn_input = gpt_block.ln_1(visual_embeds)
+        else:
+            visual_attn_input = None
         action_attn_input = action_block.ln_1(action_embeds)
 
         visual_attn_output, action_attn_output = self._forward_mutual_attention(
-            attention_mask, visual_attn_input, action_attn_input, gpt_attention, action_attention
+            attention_mask, visual_attn_input, action_attn_input, gpt_attention, action_attention, layer_idx
         )
 
-        visual_embeds = visual_embeds + visual_attn_output
-        action_embeds = action_embeds + action_attn_output
+        if not self.use_kv_cache:
+            visual_embeds = visual_embeds + visual_attn_output
+            visual_embeds = visual_embeds + gpt_block.mlp(gpt_block.ln_2(visual_embeds))
 
-        visual_embeds = visual_embeds + gpt_block.mlp(gpt_block.ln_2(visual_embeds))
+        action_embeds = action_embeds + action_attn_output
         action_embeds = action_embeds + action_block.mlp(action_block.ln_2(action_embeds))
 
         return {"visual_embeds": visual_embeds, "action_embeds": action_embeds}
@@ -131,7 +186,10 @@ class JointModel(nn.Module):
         inputs_all: InputsDict,
     ) -> FloatTensor:
         # Get visual embeddings
-        visual_embeds = self._visual_tokens_to_embeds(inputs_all["visual_tokens"])
+        if not self.use_kv_cache:
+            visual_embeds = self._visual_tokens_to_embeds(inputs_all["visual_tokens"])
+        else:
+            visual_embeds = None
 
         # Get action embeddings
         action_embeds = self._noisy_action_to_embeds(

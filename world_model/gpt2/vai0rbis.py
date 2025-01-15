@@ -164,6 +164,9 @@ class Vai0rbis(nn.Module):
         # attn_mask for inference
         attn_mask = self.build_inference_attention_mask(context_length, device=device)
 
+        # Init KV cache
+        self.joint_model.init_kv_cache()
+
         # forward euler integration ---
         delta_t = 1.0 / self.num_inference_steps
         t = torch.zeros((bsz, 1), device=device, dtype=dtype)
@@ -180,6 +183,9 @@ class Vai0rbis(nn.Module):
             # decode action: [Batch_Size, Horizon_Steps, Action_Dim]
             action += delta_t * action_vel
             t += delta_t
+
+        # cleanup KV cache
+        self.joint_model.cleanup_kv_cache()
 
         # clamp final output if specified
         if self.final_action_clip_value is not None:
