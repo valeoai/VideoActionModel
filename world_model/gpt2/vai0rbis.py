@@ -1,3 +1,4 @@
+import os
 from typing import Dict, Tuple
 
 import mup
@@ -47,11 +48,14 @@ class Vai0rbis(nn.Module):
         ## Video generation model
         self.gpt: MupGPT2 = instantiate(gpt_config)
         self.gpt_mup_base_shapes = gpt_mup_base_shapes
-        mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
-        self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
         if gpt_checkpoint_path is not None:
-            ckpt = torch.load(gpt_checkpoint_path, map_location="cpu")
+            ckpt = torch.load(os.path.expanduser(os.path.expandvars(gpt_checkpoint_path)), map_location="cpu")
             self.gpt.load_state_dict(ckpt["model"])
+            mup.set_base_shapes(self.gpt, gpt_mup_base_shapes, rescale_params=False)
+            self.gpt.requires_grad_(False)
+        else:
+            mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
+            self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
         ## Action model
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes
