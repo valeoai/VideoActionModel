@@ -126,7 +126,7 @@ class Vai0rbis(nn.Module):
         actions: FloatTensor,
         t: FloatTensor,
     ) -> FloatTensor:
-        """flow matching loss for action prediction, no use of kv cache"""
+        """flow matching loss for action prediction"""
         # noisy action
         # [Batch_Size, finetuning_timesteps, Horizon_Steps, Action_Dim]
         x0 = torch.randn_like(actions, device=t.device, dtype=t.dtype)

@@ -68,7 +68,7 @@ class JointModel(nn.Module):
 
     @property
     def use_kv_cache(self) -> None:
-        return self.kv_cache is not None and self.kv_cache.filled
+        return (self.kv_cache is not None) and self.kv_cache.filled
 
     def _visual_tokens_to_embeds(self, visual_tokens: LongTensor) -> FloatTensor:
         sequence_data = prepare_token_sequence(visual_tokens)
@@ -122,6 +122,7 @@ class JointModel(nn.Module):
         # attention
         if self.use_kv_cache:
             q = action_q
+            attn_mask = None
         else:
             q = torch.cat([visual_q, action_q], dim=-2)
         k = torch.cat([visual_k, action_k], dim=-2)
@@ -140,6 +141,7 @@ class JointModel(nn.Module):
 
         if self.use_kv_cache:
             action_y = y
+            visual_y = None
         else:
             visual_y, action_y = torch.split(y, [visual_q.size(-2), action_q.size(-2)], dim=1)
             visual_y = gpt_attention.c_proj(visual_y)
