@@ -452,13 +452,13 @@ if __name__ == "__main__":
     with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl", "rb") as f:
         nuscenes_pickle_data = pickle.load(f)
 
-    # with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl", "rb") as f:
-    #     nuplan_pickle_data = pickle.load(f)
+    with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl", "rb") as f:
+        nuplan_pickle_data = pickle.load(f)
 
     dataset = combined_ego_trajectory_dataset(
-        # nuplan_pickle_data=nuplan_pickle_data,
+        nuplan_pickle_data=nuplan_pickle_data,
         # nuplan_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuplan_v2_tokens/tokens",
-        nuscenes_pickle_data=nuscenes_pickle_data,
+        # nuscenes_pickle_data=nuscenes_pickle_data,
         # with_yaw_rate=True,
         # nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
     )
