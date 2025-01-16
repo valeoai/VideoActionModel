@@ -26,9 +26,9 @@ echo "Scenario: $scenario"
 ## Tokenizer paths
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
 ## Vai0rbis paths
-export WM_BASE_LOGDIR=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/Finetune_opendv_dim2048_part3_imitation_learning_nuscenes_2epoch_dropLR
-export WM_CKPT_PATH=$WM_BASE_LOGDIR/"checkpoints/step=0000000056_fused.pt"
-export WM_CONFIG_PATH=$WM_BASE_LOGDIR/"checkpoints/hparams.yaml"
+export VAI0RBIS_BASE_LOGDIR=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/Finetune_opendv_dim2048_part3_imitation_learning_nuscenes_2epoch_dropLR
+export VAI0RBIS_CKPT_PATH=$VAI0RBIS_BASE_LOGDIR/"checkpoints/step=0000000056_fused.pt"
+export VAI0RBIS_CONFIG_PATH=$VAI0RBIS_BASE_LOGDIR/"checkpoints/hparams.yaml"
 
 find_free_port() {
   python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()'
@@ -41,7 +41,7 @@ export model_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0))
 
 singularity exec --nv \
     --bind $BASE_DIR/neurad-studio:/neurad_studio \
-    --bind $fzh_ALL_CCFRSCRATCH/nuscenes_cvpr:/neurad_studio/data/nuscenes \
+    --bind $ycy_ALL_CCFRSCRATCH/nuscenes_v2:/neurad_studio/data/nuscenes \
     --bind $HOME/.cache:/.cache \
     --pwd /neurad_studio \
     --env PYTHONPATH=. \
@@ -57,9 +57,7 @@ singularity exec --nv \
 singularity exec --nv \
     --bind $WORK/NextTokenPredictor:/model \
     --bind $IMAGE_TOKENIZER_PATH:/model/weights/tokenizers/image_tokenizer.jit \
-    --bind $TRAJECTORY_TOKENIZER_PATH:/model/weights/tokenizers/trajectory_tokenizer.jit \
-    --bind $WM_CKPT_PATH:/model/weights/world_model/checkpoint.pt \
-    --bind $WM_CONFIG_PATH:/model/weights/world_model/config.yaml \
+    --bind $VAI0RBIS_CONFIG_PATH:/model/weights/world_model/config.yaml \
     --pwd /model \
     --env PYTHONPATH=. \
 	--env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
@@ -72,7 +70,7 @@ singularity exec --nv \
 
 singularity exec --nv \
   --bind $NCAP_FOLDER:/neuro_ncap \
-  --bind $fzh_ALL_CCFRSCRATCH/nuscenes_cvpr:/neuro_ncap/data/nuscenes \
+  --bind $ycy_ALL_CCFRSCRATCH/nuscenes_v2:/neuro_ncap/data/nuscenes \
   --bind $fzh_CCFRSCRATCH/logs/debug_neuroncap:/neuro_ncap/logdir \
   --pwd /neuro_ncap \
   --env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \

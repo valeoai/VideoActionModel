@@ -1,29 +1,113 @@
 # Neuro-NCAP evaluation
 
-## Docker image
+## Local install part
 
-Build the docker image with:
+Tutorial to install NeuroNCAP. This is the first part that must be done on the local cluster to have access to docker.
+
+First define the base directory where to store all folder:
 
 ```bash
-docker build -t ncap_vai0rbis:latest -f docker/Dockerfile .
+export BASE_REPO=~/shared/eramzi/
+cd $BASE_REPO
 ```
 
-Save it as a tar file to transfer to Jean-Zaa:
+Clone all the repository.
 
 ```bash
+git clone https://github.com/atonderski/neuro-ncap.git
+git clone https://github.com/georghess/neurad-studio.git
+# We assume that the NextTokenPredictor repo is already here
+```
+
+Build the different docker images and save them as tar file
+
+NeuroNCap:
+
+```bash
+docker build -t ncap:latest -f neuro-ncap/docker/Dockerfile .
+docker save -o ncap.docker.tar.gz ncap:latest
+```
+
+Neurad-studio:
+
+/!\ To make it work on Jean-Zay (V100) I had to add `70` to the `CUDA_ARCHITECTURES` in the `Dockerfile` of `neurad-studio`.
+
+```bash
+docker build -t neurad:latest -f neurad-studio/Dockerfile
+docker save -o neurad.docker.tar.gz neurad:latest
+```
+
+Vai0rbis:
+
+```bash
+docker build -t ncap_vai0rbis:latest -f NextTokenPredictor/docker/Dockerfile .
 docker save -o ncap_vai0rbis.docker.tar.gz ncap_vai0rbis:latest
-export DOCKER_JZ_FOLDER=$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file  # you need to define this
-scp ncap_vai0rbis.docker.tar.gz jz:$DOCKER_JZ_FOLDER/neuro-ncap
 ```
 
-## Building singularity image
+Then send them all to JZ.
 
 ```bash
-singularity build ncap_vai0rbis.sif docker-daemon://ncap_vai0rbis:latest
+export $DOCKER_JZ_FOLDER=$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file  # you need to define this
+scp $BASE_REPO/neuro-ncap/ncap.docker.tar.gz jz:$DOCKER_JZ_FOLDER
+scp $BASE_REPO/neurad-studio/rendering.docker.tar.gz jz:$DOCKER_JZ_FOLDER
+scp $BASE_REPO/NextTokenPredictor/ncap_vai0rbis.docker.tar.gz jz:$DOCKER_JZ_FOLDER
 ```
 
-## Launching SLURM jobs
+## Jean-Zay install part
+
+Tutorial to install NeuroNCAP on your SLURM cluster.
+
+First define the base directory where to store all folder:
 
 ```bash
-sbatch --cpus-per-task=4 --mem=16G --gres=gpu:1 --time=1:00:00 --wrap="singularity exec ncap_vai0rbis.sif python3 inference.py"
+export BASE_JZ_REPO=$WORK/
+export DOCKER_JZ_FOLDER=$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file
+cd $BASE_JZ_REPO
+```
+
+Clone the repo on JZ:
+
+```bash
+cd $BASE_JZ_REPO
+git clone https://github.com/atonderski/neuro-ncap.git
+git clone https://github.com/georghess/neurad-studio.git
+# We assume that the NextTokenPredictor repo is already here
+```
+
+Download the weights / checkpoinst:
+
+```bash
+cd $BASE_JZ_REPO/neuro-ncap
+bash scripts/download/download_neurad_weights.sh
+cd $BASE_JZ_REPO
+module purge
+module load pytorch-gpu/py3/2.4.0
+python -c 'import torchvision; torchvision.models.vgg19(pretrained=True)'
+python -c 'import torchvision; torchvision.models.alexnet(pretrained=True)'
+```
+
+Then build the singularity images by running the following:
+
+```bash
+sbatch scripts/build_singularity_images.slurm
+```
+
+### Run the NeuroNCAP pipeline
+
+To run the pipeline, you need to run the following command:
+
+```bash
+bash scripts/run_neuro_ncap_eval.sh
+```
+
+You can then get the results by running the following command:
+
+```bash
+python scripts/evaluate_results.py --result_path /path/to/logs
+```
+
+(Optional) You can create the GIF for qualitative results by running the following command:
+
+```bash
+python scripts/create_gif.py ----rootdir /path/to/logs
 ```
