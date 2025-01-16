@@ -19,7 +19,7 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
     """
 
     def __init__(self, data_root_dir: str, video_list: List[str], sequence_length: int, subsampling_factor: int = 1) -> None:
-        self.data_root_dir = data_root_dir
+        self.data_root_dir = os.path.expanduser(os.path.expandvars(data_root_dir))
         self.video_list = video_list
         self.sequence_length = sequence_length
         self.subsampling_factor = subsampling_factor
@@ -48,7 +48,7 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
         video_id, start_idx = self.video_windows[idx]
         frame_sequence = []
 
-        for i in range(0, self.sequence_length, self.subsampling_factor):
+        for i in range(0, self.sequence_length * self.subsampling_factor, self.subsampling_factor):
             frame_path = os.path.join(self.data_root_dir, video_id, self.video_frames[video_id][start_idx + i])
             frame_data = np.load(frame_path)
             frame_tensor = torch.from_numpy(frame_data).long()
