@@ -364,7 +364,7 @@ if __name__ == "__main__":
 
         # First pass: calculate all yaw rates and bounds
         all_positions, all_yaw_rates = [], []
-        loader = DataLoader(dataset, batch_size=32, num_workers=8, shuffle=False)
+        loader = DataLoader(dataset, batch_size=128, num_workers=16, shuffle=False)
         for batch in tqdm(loader, desc="Computing yaw rates", leave=True):
             positions = batch["positions"]
             yaw_rate = batch["yaw_rate"]
@@ -383,7 +383,7 @@ if __name__ == "__main__":
         norm = Normalize(vmin=np.min(all_yaw_rates), vmax=np.max(all_yaw_rates))
 
         # Second pass: plot trajectories
-        for i, _ in enumerate(tqdm(indexes, desc="Plotting trajectories", leave=True)):
+        for i, _ in enumerate(tqdm(all_positions, desc="Plotting trajectories", leave=True)):
             positions = all_positions[i]
             yaw_rate = all_yaw_rates[i]
 
