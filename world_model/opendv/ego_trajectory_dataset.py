@@ -52,6 +52,7 @@ class EgoTrajectoryDataset(Dataset):
         self,
         pickle_data: List[dict],
         tokens_rootdir: Optional[str] = None,
+        tokens_only: bool = False,
         camera: str = "CAM_FRONT",
         sequence_length: int = 8,
         action_length: int = 6,
@@ -59,7 +60,9 @@ class EgoTrajectoryDataset(Dataset):
         with_yaw_rate: bool = False,
         command_distance_threshold: float = 2.0,
     ) -> None:
+        self.tokens_only = tokens_only
         self.tokens_rootdir = tokens_rootdir
+        assert not (self.tokens_only and self.tokens_rootdir is None), "Tokens rootdir must be provided for tokens_only"
         self.sequence_length = sequence_length
         self.action_length = action_length
         self.subsampling_factor = subsampling_factor
@@ -228,6 +231,25 @@ class EgoTrajectoryDataset(Dataset):
         for temporal_index in temporal_indices:
             sample = self.pickle_data[temporal_index][self.camera]
 
+            # Store metadata
+            data["scene_names"].append(self.pickle_data[temporal_index]["scene"]["name"])
+            data["file_paths"].append(sample["file_path"])
+
+            # Calculate relative timestamp in seconds
+            timestamp = sample["timestamp"]
+            if first_frame_timestamp is None:
+                first_frame_timestamp = timestamp
+            relative_timestamp = (timestamp - first_frame_timestamp) * 1e-6  # Convert microseconds to seconds
+            data["timestamps"].append(torch.tensor(relative_timestamp))
+
+            if self.tokens_rootdir is not None:
+                # get visual tokens
+                file_path = os.path.join(self.tokens_rootdir, sample["file_path"].replace(".jpg", ".npy"))
+                tokens = torch.from_numpy(np.load(file_path)).to(dtype=torch.long)
+                data["visual_tokens"].append(tokens)
+                if self.tokens_only:
+                    continue
+
             positions, rotations = [], []
             for _j in range(1 + self.action_length):
                 positions.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_tran"][:2])
@@ -250,29 +272,13 @@ class EgoTrajectoryDataset(Dataset):
             if self.with_yaw_rate:
                 data["yaw_rate"].append(self.quaternion_to_euler_rates(relative_rotation))
 
-            if self.tokens_rootdir is not None:
-                # get visual tokens
-                file_path = os.path.join(self.tokens_rootdir, sample["file_path"].replace(".jpg", ".npy"))
-                tokens = torch.from_numpy(np.load(file_path)).to(dtype=torch.long)
-                data["visual_tokens"].append(tokens)
-
-            # Store metadata
-            data["scene_names"].append(self.pickle_data[temporal_index]["scene"]["name"])
-            data["file_paths"].append(sample["file_path"])
-
-            # Calculate relative timestamp in seconds
-            timestamp = sample["timestamp"]
-            if first_frame_timestamp is None:
-                first_frame_timestamp = timestamp
-            relative_timestamp = (timestamp - first_frame_timestamp) * 1e-6  # Convert microseconds to seconds
-            data["timestamps"].append(torch.tensor(relative_timestamp))
-
         # Stack tensors
-        data["positions"] = torch.stack(data["positions"]).to(dtype=torch.float32)
-        data["rotations"] = torch.stack(data["rotations"]).to(dtype=torch.float32)
-        data["high_level_command"] = torch.tensor(data["high_level_commands"], dtype=torch.int64)
         data["timestamps"] = torch.stack(data["timestamps"], dim=0)[: self.sequence_length]
         data["camera"] = self.camera
+        if not self.tokens_only:
+            data["positions"] = torch.stack(data["positions"]).to(dtype=torch.float32)
+            data["rotations"] = torch.stack(data["rotations"]).to(dtype=torch.float32)
+            data["high_level_command"] = torch.tensor(data["high_level_commands"], dtype=torch.int64)
         if self.tokens_rootdir is not None:
             data["visual_tokens"] = torch.stack(data["visual_tokens"], dim=0)
         if self.with_yaw_rate:
@@ -449,7 +455,7 @@ if __name__ == "__main__":
         print(f"Saving plot to {save_path}...")
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
 
-    with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl", "rb") as f:
+    with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl", "rb") as f:
         nuscenes_pickle_data = pickle.load(f)
 
     with open("/lustre/fswork/projects/rech/ycy/commun/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl", "rb") as f:
@@ -458,10 +464,13 @@ if __name__ == "__main__":
     dataset = combined_ego_trajectory_dataset(
         nuplan_pickle_data=nuplan_pickle_data,
         # nuplan_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuplan_v2_tokens/tokens",
-        # nuscenes_pickle_data=nuscenes_pickle_data,
+        nuscenes_pickle_data=nuscenes_pickle_data,
         # with_yaw_rate=True,
         # nuscenes_tokens_rootdir="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2/tokens",
     )
+
+    print("Nuplan size", len(dataset.datasets[0]))
+    print("Nuscenes size", len(dataset.datasets[1]))
 
     print("Length", len(dataset))
     print("Positions", dataset[0]["positions"].shape)

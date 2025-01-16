@@ -4,11 +4,11 @@ from typing import Any, Dict, List
 
 import numpy as np
 import torch
+from einops import rearrange
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from PIL import Image
 from torch import Tensor
-from einops import rearrange
 
 from world_model.gpt2 import Vai0rbis
 from world_model.opendv.transforms import CropAndResizeTransform
