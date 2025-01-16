@@ -6,16 +6,17 @@
 module purge
 module load singularity
 export TMPDIR=$JOBSCRATCH
+export SINGULARITY_CACHEDIR=$JOBSCRATCH
 
 singularity version
 
 export seq=0101
 export scenario=stationary
 export runs=50
-export BASE_DIR=$WORK/
+export BASE_DIR=$WORK
 export RENDERING_FOLDER=$BASE_DIR/neurad-studio
 export RENDERING_CHECKPOITNS_PATH=/neurad_studio/checkpoints
-export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/neurad.sif
+export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/neurad_70.sif
 export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap_vai0rbis.sif
 export NCAP_FOLDER=$BASE_DIR/neuro-ncap
 export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap.sif
@@ -30,14 +31,8 @@ export VAI0RBIS_BASE_LOGDIR=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/Finet
 export VAI0RBIS_CKPT_PATH=$VAI0RBIS_BASE_LOGDIR/"checkpoints/step=0000000056_fused.pt"
 export VAI0RBIS_CONFIG_PATH=$VAI0RBIS_BASE_LOGDIR/"checkpoints/hparams.yaml"
 
-find_free_port() {
-  python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()'
-}
-
 export renderer_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
 export model_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
-# export renderer_port=$(find_free_port)
-# export model_port=$(find_free_port)
 
 singularity exec --nv \
     --bind $BASE_DIR/neurad-studio:/neurad_studio \
@@ -57,7 +52,6 @@ singularity exec --nv \
 singularity exec --nv \
     --bind $WORK/NextTokenPredictor:/model \
     --bind $IMAGE_TOKENIZER_PATH:/model/weights/tokenizers/image_tokenizer.jit \
-    --bind $VAI0RBIS_CONFIG_PATH:/model/weights/world_model/config.yaml \
     --pwd /model \
     --env PYTHONPATH=. \
 	--env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
@@ -71,7 +65,7 @@ singularity exec --nv \
 singularity exec --nv \
   --bind $NCAP_FOLDER:/neuro_ncap \
   --bind $ycy_ALL_CCFRSCRATCH/nuscenes_v2:/neuro_ncap/data/nuscenes \
-  --bind $fzh_CCFRSCRATCH/logs/debug_neuroncap:/neuro_ncap/logdir \
+  --bind $ycy_CCFRSCRATCH/logs/debug_neuroncap:/neuro_ncap/logdir \
   --pwd /neuro_ncap \
   --env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
   $NCAP_CONTAINER \

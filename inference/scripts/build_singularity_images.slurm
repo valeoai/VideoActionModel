@@ -47,10 +47,12 @@ singularity build \
 # that is only accessible when loading the singularity module
 idrcontmgr cp ${TARGET_SINGULARITY_IMAGE[$SLURM_ARRAY_TASK_ID]}
 
-# srun -A ycy@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=20 --gres=gpu:0 --hint=nomultithread --qos=qos_gpu_h100-dev --time=02:00:00 bash
-# export TMPDIR=$JOBSCRATCH
-# export SINGULARITY_CACHEDIR=$JOBSCRATCH
-# singularity build \
-# $ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.sif \
-# docker-archive://$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.docker.tar.gz
-# idrcontmgr cp $ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.sif
+srun -A ycy@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=20 --gres=gpu:0 --hint=nomultithread --qos=qos_gpu_h100-dev --time=02:00:00 bash
+module purge
+module load singularity
+export TMPDIR=$JOBSCRATCH
+export SINGULARITY_CACHEDIR=$JOBSCRATCH
+singularity build \
+$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.sif \
+docker-archive://$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.docker.tar.gz
+idrcontmgr cp $ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.sif
