@@ -323,11 +323,11 @@ class MupActionExpert(nn.Module):
         """
         # times 2 because in a block there are 2 residual paths, attn & mlp
 
-        depth_std = self.init_std * (2 * self.nb_layers)**-0.5
+        depth_std = self.init_std * (2 * self.nb_layers) ** -0.5
 
         for p_name, p in module.named_parameters():
             if p_name.endswith("c_proj.weight"):
-                if hasattr(p, 'infshape'):
+                if hasattr(p, "infshape"):
                     normal_(p, mean=0.0, std=depth_std)
                 else:
                     p.data.normal_(mean=0.0, std=depth_std)
@@ -408,24 +408,20 @@ class MupActionExpert(nn.Module):
         elif isinstance(module, MLP):
             self._init_c_proj_residual(module)
 
-    def forward(
-        self, noisy_actions: Tensor, high_level_command: Tensor, t: Tensor
-    ) -> Tensor:
-        
+    def forward(self, noisy_actions: Tensor, high_level_command: Tensor, t: Tensor) -> Tensor:
+
         # noisy_actions: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
-        action_embeds = self.action_encoder(
-            actions=noisy_actions, high_level_command=high_level_command, diffusion_step=t
-        )
+        action_embeds = self.action_encoder(actions=noisy_actions, high_level_command=high_level_command, diffusion_step=t)
         action_embeds = rearrange(action_embeds, "b t h d -> b (t h) d")
-        
+
         for block in self.transformer.h:
             action_embeds = block(action_embeds)
         action_embeds = self.transformer.ln_f(action_embeds)
-            
+
         denoised_actions = self.action_decoder(action_embeds)
-        
+
         denoised_actions = rearrange(denoised_actions, "b (t h) d -> b t h d", t=noisy_actions.size(1))
-        
+
         return denoised_actions
 
 

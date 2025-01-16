@@ -247,15 +247,14 @@ class MupGPT2(nn.Module):
         Note: for the MLP c_proj, the scaling is 1/sqrt(width * mlp_hidden_mult)
         """
         # times 2 because in a block there are 2 residual paths, attn & mlp
-        depth_std = self.init_std * (2 * self.nb_layers)**-0.5
+        depth_std = self.init_std * (2 * self.nb_layers) ** -0.5
 
         for p_name, p in module.named_parameters():
             if p_name.endswith(".c_proj.weight"):
-                if hasattr(p, 'infshape'):
+                if hasattr(p, "infshape"):
                     normal_(p, mean=0.0, std=depth_std)
                 else:
                     p.data.normal_(mean=0.0, std=depth_std)
-
 
     def _init_weights(self, module: nn.Module) -> None:
         """

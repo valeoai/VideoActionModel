@@ -51,10 +51,8 @@ class MixFinetuningDataModule(LightningDataModule):
         nuscenes_train_pickle_path: str,
         nuscenes_val_pickle_path: str,
         sequence_length: int = 8,
-        train_ratios: List[float] | None = None,
-        train_total_number_of_samples: int | None = None,
-        val_ratios: List[float] | None = None,
-        val_total_number_of_samples: int | None = None,
+        ratios: List[float] | None = None,
+        total_number_of_samples: int | None = None,
         seed: int = 0,
         batch_size: int = 32,
         num_workers: int = 4,
@@ -71,10 +69,8 @@ class MixFinetuningDataModule(LightningDataModule):
         self.nuscenes_val_pickle_path = _path(nuscenes_val_pickle_path)
 
         self.sequence_length = sequence_length
-        self.train_ratios = train_ratios
-        self.train_total_number_of_samples = train_total_number_of_samples
-        self.val_ratios = val_ratios
-        self.val_total_number_of_samples = val_total_number_of_samples
+        self.train_ratios = ratios
+        self.train_total_number_of_samples = total_number_of_samples
         self.seed = seed
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -112,12 +108,11 @@ class MixFinetuningDataModule(LightningDataModule):
                 nuplan_val_data = _read_pickle(self.nuplan_val_pickle_path)
                 nuscenes_val_data = _read_pickle(self.nuscenes_val_pickle_path)
 
-                self.val_dataset = all_token_datasets(
+                # This creates the three datasets in the background
+                self.all_val_datasets = all_token_datasets(
                     opendv_video_list=opendv_val_video_list,
                     nuplan_pickle_data=nuplan_val_data,
                     nuscenes_pickle_data=nuscenes_val_data,
-                    ratios=self.val_ratios,
-                    total_number_of_samples=self.val_total_number_of_samples,
                     **kwargs,
                 )
 
@@ -130,11 +125,11 @@ class MixFinetuningDataModule(LightningDataModule):
             )
         return self.train_dataloader_
 
-    def val_dataloader(self) -> StatefulDataLoader:
+    def val_dataloader(self) -> List[StatefulDataLoader]:
         if not hasattr(self, "val_dataloader_"):
-            self.val_dataloader_ = StatefulDataLoader(
-                self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True
-            )
+            self.val_dataloader_ = [StatefulDataLoader(
+                dts, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True
+            ) for dts in self.all_val_datasets.datasets]
         return self.val_dataloader_
 
     def state_dict(self) -> StateDict:
@@ -151,8 +146,6 @@ class MixFinetuningDataModule(LightningDataModule):
             "sequence_length": self.sequence_length,
             "train_ratios": self.train_ratios,
             "train_total_number_of_samples": self.train_total_number_of_samples,
-            "val_ratios": self.val_ratios,
-            "val_total_number_of_samples": self.val_total_number_of_samples,
             "batch_size": self.batch_size,
             "num_workers": self.num_workers,
             "train_loader_state_dict": self.train_dataloader_.state_dict(),
@@ -171,8 +164,6 @@ class MixFinetuningDataModule(LightningDataModule):
         self.sequence_length = state_dict["sequence_length"]
         self.train_ratios = state_dict["train_ratios"]
         self.train_total_number_of_samples = state_dict["train_total_number_of_samples"]
-        self.val_ratios = state_dict["val_ratios"]
-        self.val_total_number_of_samples = state_dict["val_total_number_of_samples"]
         self.batch_size = state_dict["batch_size"]
         self.num_workers = state_dict["num_workers"]
         _ = self.setup()
@@ -182,7 +173,6 @@ class MixFinetuningDataModule(LightningDataModule):
 
 
 if __name__ == "__main__":
-    from tqdm import tqdm
 
     dm = MixFinetuningDataModule(
         opendv_tokens_rootdir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
@@ -199,12 +189,13 @@ if __name__ == "__main__":
     train_loader = dm.train_dataloader()
     val_loader = dm.val_dataloader()
 
-    for i, batch in enumerate(tqdm(train_loader, "Train")):
+    for i, batch in enumerate(train_loader):
         if i > 10:
             break
         print(i, batch["visual_tokens"].shape)
 
-    for i, batch in enumerate(tqdm(val_loader, "Val")):
-        if i > 10:
-            break
-        print(i, batch["visual_tokens"].shape)
+    for val_loader in dm.val_dataloader():
+        for i, batch in enumerate(val_loader):
+            if i > 10:
+                break
+            print(i, batch["visual_tokens"].shape)
