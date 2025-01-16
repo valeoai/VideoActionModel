@@ -1,5 +1,6 @@
 import os
 from typing import Dict, Tuple
+from collections import OrderedDict
 
 import mup
 import torch
@@ -50,8 +51,8 @@ class Vai0rbis(nn.Module):
         self.gpt: MupGPT2 = instantiate(gpt_config)
         self.gpt_mup_base_shapes = gpt_mup_base_shapes
         if gpt_checkpoint_path is not None:
-            ckpt = torch.load(os.path.expanduser(os.path.expandvars(gpt_checkpoint_path)), map_location="cpu")
-            self.gpt.load_state_dict(ckpt["model"])
+            gpt_state_dict = self._load_ckpt(gpt_checkpoint_path, key="network.")
+            self.gpt.load_state_dict(gpt_state_dict)
             mup.set_base_shapes(self.gpt, gpt_mup_base_shapes, rescale_params=False)
             self.gpt.requires_grad_(False)
         else:
@@ -61,8 +62,8 @@ class Vai0rbis(nn.Module):
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes
         if action_checkpoint_path is not None:
-            ckpt = torch.load(os.path.expanduser(os.path.expandvars(action_checkpoint_path)), map_location="cpu")
-            self.action_expert.load_state_dict(ckpt["model"])
+            action_state_dict = self._load_ckpt(action_checkpoint_path)
+            self.action_expert.load_state_dict(action_state_dict)
             mup.set_base_shapes(self.action_expert, action_mup_base_shapes, rescale_params=False)
             self.action_expert.requires_grad_(False)
         else:
@@ -80,6 +81,17 @@ class Vai0rbis(nn.Module):
         self.action_hidden_dim = self.action_expert.embedding_dim
 
         self.build_attention_mask()
+
+    def _load_ckpt(self, ckpt: str, key: str | None) -> OrderedDict:
+        ckpt = torch.load(os.path.expanduser(os.path.expandvars(ckpt)), map_location="cpu")
+        if key is not None:
+            # We need to remove the prefix "network." from the keys of the state_dict
+            state_dict = OrderedDict()
+            for k, v in ckpt["state_dict"].items():
+                state_dict[k.replace(key, "")] = v
+        else:
+            state_dict = ckpt["state_dict"]
+        return state_dict
 
     def build_attention_mask(self) -> None:
         """

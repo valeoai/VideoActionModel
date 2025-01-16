@@ -1,5 +1,4 @@
 import uuid
-import yaml
 from typing import List, Dict, Any
 from dataclasses import dataclass
 
@@ -73,15 +72,16 @@ class Vai0rbisInferenceOutput:
 class Vai0rbisRunner:
 
     def __init__(self, config_path: str, checkpoint_path: str, device: torch.device, dtype: torch.dtype) -> None:
-        with open(config_path, 'r') as file:
-            inference_config = yaml.safe_load(file)
-        self.inference_config = OmegaConf.create(inference_config)
+        self.inference_config = OmegaConf.load(config_path)
 
         image_tokenizer_path = self.inference_config.image_tokenizer_path
         self.image_tokenizer = torch.jit.load(image_tokenizer_path)
         self.image_tokenizer.to(device)
 
-        self.vai0rbis: Vai0rbisInference = instantiate(inference_config.model)
+        self.vai0rbis_experiment_config = OmegaConf.load(self.inference_config.vai0rbis_experiment_config)
+        self.vai0rbis_experiment_config.model.vai0rbis.gpt_checkpoint_path = self.inference_config.gpt_checkpoint_path
+        self.vai0rbis_experiment_config.model.vai0rbis.action_checkpoint_path = self.inference_config.action_checkpoint_path
+        self.vai0rbis: Vai0rbisInference = instantiate(self.inference_config.model)
         self.nb_timesteps = self.vai0rbis.context_length
 
         self.device = device
@@ -190,6 +190,7 @@ if __name__ == "__main__":
         config_path="configs/inference_ncap.yaml",
         checkpoint_path=None,
         device=torch.device(device),
+        dtype=torch.float16,
     )
 
     # load the first surround-cam in nusc mini

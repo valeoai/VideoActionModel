@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - paths: default
+  - hydra: default
+
+name: "inference" # used by hydra in case of error looging
+
+# Image preprocessing
+top_crop: 0
+scale_factor: 3.125
+
+# Different checkpoints paths required for the model
+# Note that we start at /model since this will be run inside a docker / singularity container
+# mup_base_shapes_path: /model/mup_shapes/gpt2_24layers_nobias_basewidth128_with_commands.bsh
+# wm_ckpt_path: /model/weights/world_model/checkpoint.pt
+# wm_config_path: /model/weights/world_model/config.yaml
+
+# # tokenizers
+# image_tokenizer_path: /model/weights/tokenizers/image_tokenizer.jit
+# trajectory_tokenizer_path: /model/weights/tokenizers/trajectory_tokenizer.jit
+
+
+vai0rbis_experiment_config: configs/experiment/action_learning.yaml
+gpt_checkpoint_path: tmp/epoch_0-step_15529_fused.ckpt
+action_checkpoint_path: null
+
+# tokenizers
+image_tokenizer_path:  ${oc.env:HOME}/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit
