@@ -72,7 +72,6 @@ class ActionEncoder(nn.Module):
         self.action_horizon = action_horizon
         self.action_hidden_dim = action_hidden_dim
 
-        # TODO: fix linear_1 this for mup type: input
         self.linear_1 = nn.Linear(action_dim, action_hidden_dim, bias=bias)
         self.linear_2 = nn.Linear(2 * action_hidden_dim, action_hidden_dim, bias=bias)
         self.nonlinearity = nn.SiLU()  # swish
@@ -310,7 +309,7 @@ class MupActionExpert(nn.Module):
         n_params = sum(p.numel() for p in self.parameters())
         return n_params
 
-    def _init_c_proj_residual(self, module: nn.Module, is_mlp: bool) -> None:
+    def _init_c_proj_residual(self, module: nn.Module) -> None:
         """
         Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
 
@@ -323,16 +322,15 @@ class MupActionExpert(nn.Module):
         Note: for the MLP c_proj, the scaling is 1/sqrt(width * mlp_hidden_mult)
         """
         # times 2 because in a block there are 2 residual paths, attn & mlp
-        scaling = 2 * self.nb_layers * self.embedding_dim
 
-        if is_mlp:
-            scaling *= self.mlp_dim_mult
-
-        depth_std = self.init_std * scaling**-0.5
+        depth_std = self.init_std * (2 * self.nb_layers)**-0.5
 
         for p_name, p in module.named_parameters():
             if p_name.endswith("c_proj.weight"):
-                p.data.normal_(mean=0.0, std=depth_std)
+                if hasattr(p, 'infshape'):
+                    normal_(p, mean=0.0, std=depth_std)
+                else:
+                    p.data.normal_(mean=0.0, std=depth_std)
 
     def _init_weights(self, module: nn.Module) -> None:
         """
@@ -375,8 +373,7 @@ class MupActionExpert(nn.Module):
             if hasattr(module.weight, "infshape"):
                 normal_(module.weight, mean=0.0, std=self.init_std)
             else:
-
-                module.weight.data.normal_(mean=0.0, std=self.init_std * self.embedding_dim**-0.5)
+                module.weight.data.normal_(mean=0.0, std=self.init_std)
 
             if module.bias is not None:
                 module.bias.data.zero_()
@@ -406,18 +403,18 @@ class MupActionExpert(nn.Module):
             # if using Conv1D, change init in last dim
             module.c_attn.weight.data[: fanout // 3, :] = 0
 
-            self._init_c_proj_residual(module, is_mlp=False)
+            self._init_c_proj_residual(module)
 
         elif isinstance(module, MLP):
-            self._init_c_proj_residual(module, is_mlp=True)
+            self._init_c_proj_residual(module)
 
     def forward(
-        self, noisy_action: Tensor, high_level_command: Tensor, t: Tensor
+        self, noisy_actions: Tensor, high_level_command: Tensor, t: Tensor
     ) -> Tensor:
         
-        # noisy_action: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
+        # noisy_actions: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
         action_embeds = self.action_encoder(
-            actions=noisy_action, high_level_command=high_level_command, diffusion_step=t
+            actions=noisy_actions, high_level_command=high_level_command, diffusion_step=t
         )
         action_embeds = rearrange(action_embeds, "b t h d -> b (t h) d")
         
@@ -425,7 +422,11 @@ class MupActionExpert(nn.Module):
             action_embeds = block(action_embeds)
         action_embeds = self.transformer.ln_f(action_embeds)
             
-        denoised_actions = self.action_decoder(denoised_actions)
+        denoised_actions = self.action_decoder(action_embeds)
+        
+        denoised_actions = rearrange(denoised_actions, "b (t h) d -> b t h d", t=noisy_actions.size(1))
+        
+        return denoised_actions
 
 
 if __name__ == "__main__":

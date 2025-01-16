@@ -18,6 +18,7 @@ trainer:
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1
   log_every_n_steps: 5
+  default_root_dir: ${paths.output_dir}/${name}/
 
 scheduler:
   warmup_iter: 15529 # 1% ~ end_iter * 0.01
@@ -28,7 +29,7 @@ data:
   data_root_dir: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
   video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json
   val_video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json
-  sequence_length: 20
+  sequence_length: 8
   subsampling_factor: 5
 
 # VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan

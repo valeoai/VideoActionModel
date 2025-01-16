@@ -70,12 +70,12 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         trainer.fit(model=model, datamodule=datamodule, ckpt_path=config.get("ckpt_path"))
 
         # Print path to best checkpoint
-        if not config.trainer.get("fast_dev_run"):
+        if not config.trainer.get("fast_dev_run") and not (trainer.checkpoint_callback is None):
             log.info(f"Best model ckpt at {trainer.checkpoint_callback.best_model_path}")
 
     train_metrics = trainer.callback_metrics
 
-    if config.get("test"):
+    if config.get("test") and not (trainer.checkpoint_callback is None):
         log.info("Starting testing!")
         ckpt_path = trainer.checkpoint_callback.best_model_path
         if ckpt_path == "":

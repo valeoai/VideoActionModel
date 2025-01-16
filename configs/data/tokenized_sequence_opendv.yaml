@@ -2,7 +2,7 @@ _target_: world_model.opendv.TokenizedSequenceOpenDVDataModule
 data_root_dir: ???
 video_list_path: ???
 val_video_list_path: ???
-sequence_length: 20
+sequence_length: 8
 subsampling_factor: 5
 batch_size: 1
 num_workers: 4
