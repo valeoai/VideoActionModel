@@ -43,7 +43,7 @@ def mix_datasets(
 
 
 def all_token_datasets(
-    opendv_data_root_dir: str,
+    opendv_data_rootdir: str,
     opendv_video_list: List[str],
     nuplan_pickle_data: List[dict],
     nuplan_tokens_rootdir: str,
@@ -55,7 +55,7 @@ def all_token_datasets(
     seed: int = 0,
 ) -> ConcatDataset:
     opendv_dataset = RandomTokenizedSequenceOpenDVDataset(
-        data_root_dir=opendv_data_root_dir,
+        data_root_dir=opendv_data_rootdir,
         video_list=opendv_video_list,
         sequence_length=sequence_length,
         subsampling_factor=5,
@@ -168,7 +168,7 @@ if __name__ == "__main__":
         video_list = json.load(f)
 
     token_dataset = all_token_datasets(
-        opendv_data_root_dir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
+        opendv_data_rootdir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
         opendv_video_list=video_list,
         nuplan_pickle_data=nuplan_pickle_data,
         nuplan_tokens_rootdir="$ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens",

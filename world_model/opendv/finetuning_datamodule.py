@@ -1,10 +1,11 @@
+import json
 import os
 import pickle
 from typing import Any, Dict, List, Optional
 
 from lightning import LightningDataModule
 
-from world_model.opendv.data_mixing import combined_ego_trajectory_dataset
+from world_model.opendv.data_mixing import all_token_datasets
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
 
 StateDict = Dict[str, Any]
@@ -27,22 +28,41 @@ def _read_pickle(pickle_path: str) -> List[Dict[str, Any]] | None:
     return data
 
 
-class EgoTrajectoryDataModule(LightningDataModule):
+def _read_json(json_path: str) -> Dict[str, Any] | None:
+    if json_path is None:
+        return None
+
+    with open(json_path, "r") as f:
+        data = json.load(f)
+    return data
+
+
+class MixFinetuningDataModule(LightningDataModule):
     def __init__(
         self,
         *,
-        nuplan_tokens_rootdir: Optional[str] = None,
-        nuscenes_tokens_rootdir: Optional[str] = None,
-        nuplan_train_pickle_path: Optional[str] = None,
-        nuscenes_train_pickle_path: Optional[str] = None,
-        nuplan_val_pickle_path: Optional[str] = None,
-        nuscenes_val_pickle_path: Optional[str] = None,
+        opendv_tokens_rootdir: str,
+        opendv_video_list_path: str,
+        opendv_val_video_list_path: str,
+        nuplan_tokens_rootdir: str,
+        nuplan_train_pickle_path: str,
+        nuplan_val_pickle_path: str,
+        nuscenes_tokens_rootdir: str,
+        nuscenes_train_pickle_path: str,
+        nuscenes_val_pickle_path: str,
         sequence_length: int = 8,
-        action_length: int = 6,
+        train_ratios: List[float] | None = None,
+        train_total_number_of_samples: int | None = None,
+        val_ratios: List[float] | None = None,
+        val_total_number_of_samples: int | None = None,
+        seed: int = 0,
         batch_size: int = 32,
         num_workers: int = 4,
     ) -> None:
         super().__init__()
+        self.opendv_tokens_rootdir = _path(opendv_tokens_rootdir)
+        self.opendv_video_list_path = _path(opendv_video_list_path)
+        self.opendv_val_video_list_path = _path(opendv_val_video_list_path)
         self.nuplan_tokens_rootdir = _path(nuplan_tokens_rootdir)
         self.nuscenes_tokens_rootdir = _path(nuscenes_tokens_rootdir)
         self.nuplan_train_pickle_path = _path(nuplan_train_pickle_path)
@@ -51,40 +71,53 @@ class EgoTrajectoryDataModule(LightningDataModule):
         self.nuscenes_val_pickle_path = _path(nuscenes_val_pickle_path)
 
         self.sequence_length = sequence_length
-        self.action_length = action_length
+        self.train_ratios = train_ratios
+        self.train_total_number_of_samples = train_total_number_of_samples
+        self.val_ratios = val_ratios
+        self.val_total_number_of_samples = val_total_number_of_samples
+        self.seed = seed
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-    def setup(self, stage: Optional[str] = None) -> "EgoTrajectoryDataModule":
+    def setup(self, stage: Optional[str] = None) -> "MixFinetuningDataModule":
         if hasattr(self, "train_dataset"):
             return
 
         # Read train and validation video lists
+        opendv_video_list = _read_json(self.opendv_video_list_path)
         nuplan_train_data = _read_pickle(self.nuplan_train_pickle_path)
         nuscenes_train_data = _read_pickle(self.nuscenes_train_pickle_path)
 
         # Create datasets
         if stage == "fit" or stage is None:
             kwargs = {
+                "opendv_data_rootdir": self.opendv_tokens_rootdir,
                 "nuplan_tokens_rootdir": self.nuplan_tokens_rootdir,
                 "nuscenes_tokens_rootdir": self.nuscenes_tokens_rootdir,
                 "sequence_length": self.sequence_length,
-                "action_length": self.action_length,
+                "seed": self.seed,
             }
 
-            self.train_dataset = combined_ego_trajectory_dataset(
+            self.train_dataset = all_token_datasets(
+                opendv_video_list=opendv_video_list,
                 nuplan_pickle_data=nuplan_train_data,
                 nuscenes_pickle_data=nuscenes_train_data,
+                ratios=self.train_ratios,
+                total_number_of_samples=self.train_total_number_of_samples,
                 **kwargs,
             )
 
-            if self.nuplan_val_pickle_path is not None or self.nuscenes_val_pickle_path is not None:
+            if self.opendv_val_video_list_path is not None:
+                opendv_val_video_list = _read_json(self.opendv_val_video_list_path)
                 nuplan_val_data = _read_pickle(self.nuplan_val_pickle_path)
                 nuscenes_val_data = _read_pickle(self.nuscenes_val_pickle_path)
 
-                self.val_dataset = combined_ego_trajectory_dataset(
+                self.val_dataset = all_token_datasets(
+                    opendv_video_list=opendv_val_video_list,
                     nuplan_pickle_data=nuplan_val_data,
                     nuscenes_pickle_data=nuscenes_val_data,
+                    ratios=self.val_ratios,
+                    total_number_of_samples=self.val_total_number_of_samples,
                     **kwargs,
                 )
 
@@ -106,28 +139,40 @@ class EgoTrajectoryDataModule(LightningDataModule):
 
     def state_dict(self) -> StateDict:
         return {
+            "opendv_tokens_rootdir": self.opendv_tokens_rootdir,
+            "opendv_video_list_path": self.opendv_video_list_path,
+            "opendv_val_video_list_path": self.opendv_val_video_list_path,
             "nuplan_tokens_rootdir": self.nuplan_tokens_rootdir,
-            "nuscenes_tokens_rootdir": self.nuscenes_tokens_rootdir,
             "nuplan_train_pickle_path": self.nuplan_train_pickle_path,
-            "nuscenes_train_pickle_path": self.nuscenes_train_pickle_path,
             "nuplan_val_pickle_path": self.nuplan_val_pickle_path,
+            "nuscenes_tokens_rootdir": self.nuscenes_tokens_rootdir,
+            "nuscenes_train_pickle_path": self.nuscenes_train_pickle_path,
             "nuscenes_val_pickle_path": self.nuscenes_val_pickle_path,
             "sequence_length": self.sequence_length,
-            "action_length": self.action_length,
+            "train_ratios": self.train_ratios,
+            "train_total_number_of_samples": self.train_total_number_of_samples,
+            "val_ratios": self.val_ratios,
+            "val_total_number_of_samples": self.val_total_number_of_samples,
             "batch_size": self.batch_size,
             "num_workers": self.num_workers,
             "train_loader_state_dict": self.train_dataloader_.state_dict(),
         }
 
     def load_state_dict(self, state_dict: StateDict) -> None:
+        self.opendv_tokens_rootdir = state_dict["opendv_tokens_rootdir"]
+        self.opendv_video_list_path = state_dict["opendv_video_list_path"]
+        self.opendv_val_video_list_path = state_dict["opendv_val_video_list_path"]
         self.nuplan_tokens_rootdir = state_dict["nuplan_tokens_rootdir"]
-        self.nuscenes_tokens_rootdir = state_dict["nuscenes_tokens_rootdir"]
         self.nuplan_train_pickle_path = state_dict["nuplan_train_pickle_path"]
-        self.nuscenes_train_pickle_path = state_dict["nuscenes_train_pickle_path"]
         self.nuplan_val_pickle_path = state_dict["nuplan_val_pickle_path"]
+        self.nuscenes_tokens_rootdir = state_dict["nuscenes_tokens_rootdir"]
+        self.nuscenes_train_pickle_path = state_dict["nuscenes_train_pickle_path"]
         self.nuscenes_val_pickle_path = state_dict["nuscenes_val_pickle_path"]
         self.sequence_length = state_dict["sequence_length"]
-        self.action_length = state_dict["action_length"]
+        self.train_ratios = state_dict["train_ratios"]
+        self.train_total_number_of_samples = state_dict["train_total_number_of_samples"]
+        self.val_ratios = state_dict["val_ratios"]
+        self.val_total_number_of_samples = state_dict["val_total_number_of_samples"]
         self.batch_size = state_dict["batch_size"]
         self.num_workers = state_dict["num_workers"]
         _ = self.setup()
@@ -137,24 +182,29 @@ class EgoTrajectoryDataModule(LightningDataModule):
 
 
 if __name__ == "__main__":
-    dm = EgoTrajectoryDataModule(
+    from tqdm import tqdm
+
+    dm = MixFinetuningDataModule(
+        opendv_tokens_rootdir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
+        opendv_video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json",
+        opendv_val_video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json",
         nuplan_tokens_rootdir="$ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens",
-        nuscenes_tokens_rootdir="$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens",
         nuplan_train_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_train_data_cleaned.pkl",
-        nuscenes_train_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl",
         nuplan_val_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl",
+        nuscenes_tokens_rootdir="$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens",
+        nuscenes_train_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl",
         nuscenes_val_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl",
     ).setup()
 
     train_loader = dm.train_dataloader()
     val_loader = dm.val_dataloader()
 
-    for i, batch in enumerate(train_loader):
+    for i, batch in enumerate(tqdm(train_loader, "Train")):
         if i > 10:
             break
-        print(i, batch["visual_tokens"].shape, batch["positions"].shape)
+        print(i, batch["visual_tokens"].shape)
 
-    for i, batch in enumerate(val_loader):
+    for i, batch in enumerate(tqdm(val_loader, "Val")):
         if i > 10:
             break
-        print(i, batch["visual_tokens"].shape, batch["positions"].shape)
+        print(i, batch["visual_tokens"].shape)
