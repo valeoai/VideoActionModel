@@ -24,7 +24,8 @@ Build the different docker images and save them as tar file
 NeuroNCap:
 
 ```bash
-docker build -t ncap:latest -f neuro-ncap/docker/Dockerfile .
+cd $BASE_REPO/neuro-ncap
+docker build -t ncap:latest -f docker/Dockerfile .
 docker save -o ncap.docker.tar.gz ncap:latest
 ```
 
@@ -33,14 +34,16 @@ Neurad-studio:
 /!\ To make it work on Jean-Zay (V100) I had to add `70` to the `CUDA_ARCHITECTURES` in the `Dockerfile` of `neurad-studio`.
 
 ```bash
-docker build -t neurad:latest -f neurad-studio/Dockerfile
+cd $BASE_REPO/neurad-studio
+docker build -t neurad:latest -f Dockerfile
 docker save -o neurad.docker.tar.gz neurad:latest
 ```
 
 Vai0rbis:
 
 ```bash
-docker build -t ncap_vai0rbis:latest -f NextTokenPredictor/docker/Dockerfile .
+cd $BASE_REPO/NextTokenPredictor
+docker build -t ncap_vai0rbis:latest -f docker/Dockerfile .
 docker save -o ncap_vai0rbis.docker.tar.gz ncap_vai0rbis:latest
 ```
 
