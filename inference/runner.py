@@ -1,17 +1,17 @@
 import uuid
-from typing import List, Dict, Any
 from dataclasses import dataclass
+from typing import Any, Dict, List
 
 import numpy as np
 import torch
+from hydra.utils import instantiate
+from omegaconf import OmegaConf
 from PIL import Image
 from torch import Tensor
-from hydra.utils import instantiate
+from einops import rearrange
 
-from omegaconf import OmegaConf
-from world_model.gpt2 import Vai0rbisInference
+from world_model.gpt2 import Vai0rbis
 from world_model.opendv.transforms import CropAndResizeTransform
-
 
 NUSCENES_CAM_ORDER = [
     "CAM_FRONT",
@@ -79,10 +79,14 @@ class Vai0rbisRunner:
         self.image_tokenizer.to(device)
 
         self.vai0rbis_experiment_config = OmegaConf.load(self.inference_config.vai0rbis_experiment_config)
-        self.vai0rbis_experiment_config.model.vai0rbis.gpt_checkpoint_path = self.inference_config.gpt_checkpoint_path
-        self.vai0rbis_experiment_config.model.vai0rbis.action_checkpoint_path = self.inference_config.action_checkpoint_path
-        self.vai0rbis: Vai0rbisInference = instantiate(self.inference_config.model)
+        self.vai0rbis_experiment_config.model.vai0rbis_conf.gpt_checkpoint_path = self.inference_config.gpt_checkpoint_path
+        self.vai0rbis_experiment_config.model.vai0rbis_conf.action_checkpoint_path = (
+            self.inference_config.action_checkpoint_path
+        )
+        self.vai0rbis: Vai0rbis = instantiate(self.vai0rbis_experiment_config.model.vai0rbis_conf)
         self.nb_timesteps = self.vai0rbis.context_length
+        self.vai0rbis.to(device)
+        self.vai0rbis.requires_grad_(False)
 
         self.device = device
         self.dtype = dtype
@@ -117,10 +121,11 @@ class Vai0rbisRunner:
         else:
             # append the current frame to the previous frames
             self.prev_frame_info["prev_frames"] = torch.cat(
-                [self.prev_frame_info["prev_frames"], preproc_output.unsqueeze(0)], dim=0,
-            )[-self.nb_timesteps:]
+                [self.prev_frame_info["prev_frames"], preproc_output.unsqueeze(0)],
+                dim=0,
+            )[-self.nb_timesteps :]
             self.prev_frame_info["prev_command"].append(input.command)
-            self.prev_frame_info["prev_command"] = self.prev_frame_info["prev_command"][-self.nb_timesteps:]
+            self.prev_frame_info["prev_command"] = self.prev_frame_info["prev_command"][-self.nb_timesteps :]
 
         # This should (T, c, h, w)
         # So here the temporal frames play the role of batch size
@@ -129,20 +134,18 @@ class Vai0rbisRunner:
         visual_tokens = self.image_tokenizer(preproc_output).unsqueeze(0)
 
         # Get the command tokens
-        command_tokens = torch.tensor(self.prev_frame_info["prev_command"]).unsqueeze(0).to(self.device)
+        command_tokens = torch.tensor([input.command]).unsqueeze(0).to(self.device)
 
         # Get the trajectory
         with torch.amp.autocast("cuda", dtype=self.dtype):
-            trajectory = self.vai0rbis(
-                visual_tokens, command_tokens, self.dtype
-            )
+            trajectory = self.vai0rbis.forward_inference(visual_tokens, command_tokens, self.dtype)
 
         if self.prev_frame_info["prev_actions"] is None:
             self.prev_frame_info["prev_actions"] = trajectory
         else:
-            self.prev_frame_info["prev_actions"] = torch.cat(
-                [self.prev_frame_info["prev_actions"], trajectory], dim=0
-            )[-self.nb_timesteps:]
+            self.prev_frame_info["prev_actions"] = torch.cat([self.prev_frame_info["prev_actions"], trajectory], dim=0)[
+                -self.nb_timesteps :
+            ]
 
         return Vai0rbisInferenceOutput(
             trajectory=_format_trajs(trajectory),
@@ -155,7 +158,7 @@ def _format_trajs(trajs: Tensor) -> Tensor:
     Transform the trajector from Vai0rbis to the format expected by the server.
     dummy function for now
     """
-    return trajs.cpu().numpy()
+    return rearrange(trajs.cpu().numpy(), "1 1 h a -> h a")
 
 
 if __name__ == "__main__":
@@ -168,9 +171,7 @@ if __name__ == "__main__":
         # get cameras
         camera_tokens = [sample["data"][camera_type] for camera_type in NUSCENES_CAM_ORDER]
         # get the image filepaths
-        image_filepaths = [
-            nusc.get_sample_data(cam_token)[0] for cam_token in camera_tokens
-        ]
+        image_filepaths = [nusc.get_sample_data(cam_token)[0] for cam_token in camera_tokens]
 
         # load the images in rgb hwc format
         images = []
@@ -194,8 +195,8 @@ if __name__ == "__main__":
     )
 
     # load the first surround-cam in nusc mini
-    # nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
-    nusc = NuScenes(version="v1.0-mini", dataroot="/model/data/nuscenes")
+    nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
+    # nusc = NuScenes(version="v1.0-mini", dataroot="/model/data/nuscenes")
     scene_name = "scene-0103"
     scene = [s for s in nusc.scene if s["name"] == scene_name][0]
     # get the first sample in the scene
@@ -203,9 +204,9 @@ if __name__ == "__main__":
 
     inference_input = _get_sample_input(nusc, sample)
     plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2)
+    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
     plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2)
+    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
     plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2)
+    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
     print("All tests passed!")

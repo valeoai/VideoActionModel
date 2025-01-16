@@ -28,6 +28,8 @@ data:
   nuscenes_tokens_rootdir: $ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens
   nuscenes_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl
   nuscenes_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
+  sequence_length: 8
+  action_length: 6
 
 model:
   _target_: world_model.gpt2.ActionLearning

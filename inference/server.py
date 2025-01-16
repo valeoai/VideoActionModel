@@ -6,14 +6,9 @@ import numpy as np
 import torch
 import uvicorn  # type: ignore
 from fastapi import FastAPI  # type: ignore
-from pydantic import BaseModel, Base64Bytes  # type: ignore
+from pydantic import Base64Bytes, BaseModel  # type: ignore
 
-from inference.runner import (
-    NUSCENES_CAM_ORDER,
-    Vai0rbisInferenceInput,
-    Vai0rbisRunner,
-)
-
+from inference.runner import NUSCENES_CAM_ORDER, Vai0rbisInferenceInput, Vai0rbisRunner
 
 app = FastAPI()
 

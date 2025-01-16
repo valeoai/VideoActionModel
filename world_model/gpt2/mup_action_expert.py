@@ -94,7 +94,7 @@ class ActionEncoder(nn.Module):
         # high_level_command: [Batch_Size, context_length]
         # diffusion_step: [Batch_Size, context_length]
         bs, context_length, horizon, _ = actions.size()
-        action_emb = self.linear_1(actions)  # [Batch_Size, timesteps, Horizon_Steps, Action_Hidden_Dim]
+        action_emb = self.linear_1(actions)  # [Batch_Size, context_length, Horizon_Steps, Action_Hidden_Dim]
         # embedd high level command
         command_emb = self.command_embedding(high_level_command)  # [Batch_Size, context_length, Action_Hidden_Dim]
         command_emb = repeat(command_emb, "b t d -> b t h d", h=horizon)

@@ -1,6 +1,6 @@
 import os
-from typing import Dict, Tuple
 from collections import OrderedDict
+from typing import Dict, Tuple
 
 import mup
 import torch
