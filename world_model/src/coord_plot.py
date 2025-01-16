@@ -10,6 +10,8 @@ from lightning.pytorch.utilities import move_data_to_device
 from matplotlib import cm
 
 
+
+
 class MplColorHelper:
 
     def __init__(self, cmap_name, start_val, stop_val):
@@ -22,19 +24,17 @@ class MplColorHelper:
         return self.scalarMap.to_rgba(val)
 
 
-def generate_coord_plot_data(track_list, model_init, run_forward, dataloader, widths, num_backprop_iters, device):
+def generate_coord_plot_data(track_list, model_init, run_forward, dataloader, widths, num_backprop_iters, device, optimizer=None):
     log_dict = {}
 
     for width in widths:
 
         coord_check_dict = defaultdict(list)
 
-        model = model_init(width=width)
+        model, optimizer = model_init(width=width)
 
         model.to(device)
-        model.train()
-
-        optimizer = model.configure_optimizers(weight_decay=1e-8, lr=0.001)
+        model.train()          
 
         for batch_idx, batch in enumerate(dataloader):
 
@@ -60,6 +60,7 @@ def generate_coord_plot_data(track_list, model_init, run_forward, dataloader, wi
                             break
                     else:
                         raise ValueError("track_type '{track_type}' not in ['equals', 'endswith']")
+                    
             loss = run_forward(batch, model)
 
             optimizer.zero_grad()
@@ -84,11 +85,11 @@ def generate_coord_plot_data(track_list, model_init, run_forward, dataloader, wi
 
     return log_dict
 
-track_list_llama = [
+track_list_llama = [ # TODO: messed things up need to redo it
     ('equals', 'vocab_embed', 'token_embedding'),
     ('equals', 'spatial_pos_embed', 'spatial_embedding'),
     ('equals', 'out_proj.1', 'output_logits'),
-    ('endswith', '.c_attn', 'attn_in'),
+    ('endswith', '.attn_out', 'attn'),
     ('endswith', '.query', 'query'),
     ('endswith', '.key', 'key'),
     ('endswith', '.value', 'value'),
@@ -105,15 +106,14 @@ track_list_action_expert = [
     ('equals', 'action_encoder.linear_1', 'action_embed'),
     ('equals', 'action_encoder.linear_2', 'action+diffusion_step'),
     ('equals', 'action_encoder.linear_3', 'action_encoder_out'),
-    ('equals', 'out_proj.1', 'output_logits'),
+    ('endswith', '.c_attn', 'attn_in'),
+    ('endswith', '.attn.c_proj', 'attn_out'),
     ('endswith', '.query', 'query'),
     ('endswith', '.key', 'key'),
     ('endswith', '.value', 'value'),
-    ('endswith', '.attn_out', 'attn'),
-    ('endswith', '.ffn_down', 'ffn'),
-    ('endswith', '.ffn_gate', 'ffn_gate'),
-    ('endswith', '.ffn_up', 'ffn_up'),
-    ('endswith', '.out', 'transformer_block'),
+    ('endswith', '.mlp.c_fc', 'ffn_in_proj'),
+    ('endswith', '.mlp.c_proj', 'ffn_out_proj'),
+    ('equals', 'action_decoder', 'action_decoder_out'),
 ]
 
 

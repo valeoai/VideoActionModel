@@ -234,7 +234,7 @@ class MupGPT2(nn.Module):
             n_params -= self.transformer.wie.weight.numel()
         return n_params
 
-    def _init_c_proj_residual(self, module: nn.Module, is_mlp: bool) -> None:
+    def _init_c_proj_residual(self, module: nn.Module) -> None:
         """
         Apply special scaled init to the residual projections (attn & mlp), per GPT-2 paper
 
@@ -247,16 +247,15 @@ class MupGPT2(nn.Module):
         Note: for the MLP c_proj, the scaling is 1/sqrt(width * mlp_hidden_mult)
         """
         # times 2 because in a block there are 2 residual paths, attn & mlp
-        scaling = 2 * self.nb_layers * self.embedding_dim
-
-        if is_mlp:
-            scaling *= self.mlp_dim_mult
-
-        depth_std = self.init_std * scaling**-0.5
+        depth_std = self.init_std * (2 * self.nb_layers)**-0.5
 
         for p_name, p in module.named_parameters():
-            if p_name.endswith("c_proj.weight"):
-                p.data.normal_(mean=0.0, std=depth_std)
+            if p_name.endswith(".c_proj.weight"):
+                if hasattr(p, 'infshape'):
+                    normal_(p, mean=0.0, std=depth_std)
+                else:
+                    p.data.normal_(mean=0.0, std=depth_std)
+
 
     def _init_weights(self, module: nn.Module) -> None:
         """
@@ -299,8 +298,7 @@ class MupGPT2(nn.Module):
             if hasattr(module.weight, "infshape"):
                 normal_(module.weight, mean=0.0, std=self.init_std)
             else:
-
-                module.weight.data.normal_(mean=0.0, std=self.init_std * self.embedding_dim**-0.5)
+                module.weight.data.normal_(mean=0.0, std=self.init_std)
 
             if module.bias is not None:
                 module.bias.data.zero_()
@@ -330,10 +328,10 @@ class MupGPT2(nn.Module):
             # if using Conv1D, change init in last dim
             module.c_attn.weight.data[: fanout // 3, :] = 0
 
-            self._init_c_proj_residual(module, is_mlp=False)
+            self._init_c_proj_residual(module)
 
         elif isinstance(module, MLP):
-            self._init_c_proj_residual(module, is_mlp=True)
+            self._init_c_proj_residual(module)
 
     def forward(
         self,
