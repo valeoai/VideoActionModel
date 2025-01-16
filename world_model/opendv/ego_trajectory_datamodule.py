@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from lightning import LightningDataModule
 
-from world_model.opendv.ego_trajectory_dataset import combined_ego_trajectory_dataset
+from world_model.opendv.data_mixing import combined_ego_trajectory_dataset
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
 
 StateDict = Dict[str, Any]

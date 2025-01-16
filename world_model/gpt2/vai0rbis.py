@@ -1,3 +1,5 @@
+import os
+from collections import OrderedDict
 from typing import Dict, Tuple
 
 import mup
@@ -5,24 +7,33 @@ import torch
 import torch.nn as nn
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from torch import FloatTensor, LongTensor
+from torch import BoolTensor, FloatTensor, LongTensor
 from tqdm import tqdm
 
 from world_model.gpt2.joint_model import JointModel
 from world_model.gpt2.mup_action_expert import MupActionExpert
 from world_model.gpt2.mup_gpt2 import MupGPT2
 
-mupShapes = Dict[str, Tuple[int, ...]]
+mupShapes = str | Dict[str, Tuple[int, ...]]
 
 
 class Vai0rbis(nn.Module):
+    """
+    This module coordinates the training of a JointModel.
+
+    Notable it implements:
+    - the flow matching loss for action prediction.
+    - The denoise diffusion process for action prediction.
+    """
 
     def __init__(
         self,
         gpt_config: OmegaConf,
         gpt_mup_base_shapes: mupShapes | None,
+        gpt_checkpoint_path: str | None,
         action_config: OmegaConf,
         action_mup_base_shapes: mupShapes | None,
+        action_checkpoint_path: str | None,
         finetuning_timesteps: int = 8,
         num_inference_steps: int = 10,
         flow_sig_min: float = 0.001,
@@ -39,13 +50,25 @@ class Vai0rbis(nn.Module):
         ## Video generation model
         self.gpt: MupGPT2 = instantiate(gpt_config)
         self.gpt_mup_base_shapes = gpt_mup_base_shapes
-        mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
-        self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
+        if gpt_checkpoint_path is not None:
+            gpt_state_dict = self._load_ckpt(gpt_checkpoint_path, key="network.")
+            self.gpt.load_state_dict(gpt_state_dict)
+            mup.set_base_shapes(self.gpt, gpt_mup_base_shapes, rescale_params=False)
+            self.gpt.requires_grad_(False)
+        else:
+            mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
+            self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
         ## Action model
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes
-        mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
-        self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
+        if action_checkpoint_path is not None:
+            action_state_dict = self._load_ckpt(action_checkpoint_path)
+            self.action_expert.load_state_dict(action_state_dict)
+            mup.set_base_shapes(self.action_expert, action_mup_base_shapes, rescale_params=False)
+            self.action_expert.requires_grad_(False)
+        else:
+            mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
+            self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
         ## Joint model
         self.joint_model = JointModel(self.gpt, self.action_expert)
 
@@ -59,9 +82,47 @@ class Vai0rbis(nn.Module):
 
         self.build_attention_mask()
 
-    def build_attention_mask(
-        self,
-    ) -> None:
+    def _load_ckpt(self, ckpt: str, key: str | None) -> OrderedDict:
+        ckpt = torch.load(os.path.expanduser(os.path.expandvars(ckpt)), map_location="cpu")
+        if key is not None:
+            # We need to remove the prefix "network." from the keys of the state_dict
+            state_dict = OrderedDict()
+            for k, v in ckpt["state_dict"].items():
+                state_dict[k.replace(key, "")] = v
+        else:
+            state_dict = ckpt["state_dict"]
+        return state_dict
+
+    def build_attention_mask(self) -> None:
+        """
+        Builds the attention mask for the joint model.
+
+        - Causal attention mask for the visual tokens.
+        - Bi-directional attention mask for the action tokens withing the action horizon.
+        - Full-attention between the action tokens and the visual tokens of the context.
+
+        Attention mask (this same for each sample of the batch, so we ignore the batch dimension for visualazation).
+
+        For a max context length of 3 and 3 tokens per image and an action horizon of 2, the mask looks like this:
+
+        V11 V12 V13 V21 V22 V23 V31 V32 V33 H11 H12 H21 H22 H31 H32
+         x
+         x   x
+         x   x   x
+         x   x   x   x
+         x   x   x   x   x
+         x   x   x   x   x   x
+         x   x   x   x   x   x   x
+         x   x   x   x   x   x   x   x
+         x   x   x   x   x   x   x   x   x
+
+         x   x   x                          x    x
+         x   x   x                          x    x
+         x   x   x   x   x   x                       x    x
+         x   x   x   x   x   x                       x    x
+         x   x   x   x   x   x   x   x                       x    x
+         x   x   x   x   x   x   x   x                       x    x
+        """
         context_length = self.context_length
         action_horizon = self.action_horizon
         nb_tokens_per_timestep = self.nb_tokens_per_timestep
@@ -94,7 +155,13 @@ class Vai0rbis(nn.Module):
 
         self.register_buffer("attn_mask", attn_mask)
 
-    def build_inference_attention_mask(self, context_length: int, device: torch.device | str) -> torch.BoolTensor:
+    def build_inference_attention_mask(self, context_length: int, device: torch.device | str) -> BoolTensor:
+        """
+        Builds the attention mask for the joint model during inference.
+
+        - Causal attention mask for the visual tokens.
+        - Full attention for the actions tokens
+        """
         visual_seqlen = self.nb_tokens_per_timestep * context_length
         action_seq_len = self.action_horizon  # this time we predict only one step
         seqlen = visual_seqlen + action_seq_len
@@ -126,7 +193,7 @@ class Vai0rbis(nn.Module):
         actions: FloatTensor,
         t: FloatTensor,
     ) -> FloatTensor:
-        """flow matching loss for action prediction, no use of kv cache"""
+        """flow matching loss for action prediction"""
         # noisy action
         # [Batch_Size, finetuning_timesteps, Horizon_Steps, Action_Dim]
         x0 = torch.randn_like(actions, device=t.device, dtype=t.dtype)
@@ -154,6 +221,11 @@ class Vai0rbis(nn.Module):
         dtype: torch.dtype,
         verbose: bool = False,
     ) -> torch.FloatTensor:
+        """
+        Inference for action prediction.
+
+        We start from a random action and integrate the dynamics using a forward Euler scheme.
+        """
         device = visual_tokens.device
         bsz, context_length, *_ = visual_tokens.size()
         assert context_length <= self.context_length
@@ -163,6 +235,9 @@ class Vai0rbis(nn.Module):
 
         # attn_mask for inference
         attn_mask = self.build_inference_attention_mask(context_length, device=device)
+
+        # Init KV cache
+        self.joint_model.init_kv_cache()
 
         # forward euler integration ---
         delta_t = 1.0 / self.num_inference_steps
@@ -181,6 +256,9 @@ class Vai0rbis(nn.Module):
             action += delta_t * action_vel
             t += delta_t
 
+        # cleanup KV cache
+        self.joint_model.cleanup_kv_cache()
+
         # clamp final output if specified
         if self.final_action_clip_value is not None:
             action = torch.clamp(
@@ -192,6 +270,7 @@ class Vai0rbis(nn.Module):
 
 
 class Vai0rbisInference(Vai0rbis):
+    """Helper class to perform inference with the Vai0rbis model."""
 
     def forward(
         self,
