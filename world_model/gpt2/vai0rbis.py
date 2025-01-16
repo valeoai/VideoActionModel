@@ -13,7 +13,7 @@ from world_model.gpt2.joint_model import JointModel
 from world_model.gpt2.mup_action_expert import MupActionExpert
 from world_model.gpt2.mup_gpt2 import MupGPT2
 
-mupShapes = Dict[str, Tuple[int, ...]]
+mupShapes = str | Dict[str, Tuple[int, ...]]
 
 
 class Vai0rbis(nn.Module):
@@ -32,6 +32,7 @@ class Vai0rbis(nn.Module):
         gpt_checkpoint_path: str | None,
         action_config: OmegaConf,
         action_mup_base_shapes: mupShapes | None,
+        action_checkpoint_path: str | None,
         finetuning_timesteps: int = 8,
         num_inference_steps: int = 10,
         flow_sig_min: float = 0.001,
@@ -59,8 +60,14 @@ class Vai0rbis(nn.Module):
         ## Action model
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes
-        mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
-        self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
+        if action_checkpoint_path is not None:
+            ckpt = torch.load(os.path.expanduser(os.path.expandvars(action_checkpoint_path)), map_location="cpu")
+            self.action_expert.load_state_dict(ckpt["model"])
+            mup.set_base_shapes(self.action_expert, action_mup_base_shapes, rescale_params=False)
+            self.action_expert.requires_grad_(False)
+        else:
+            mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
+            self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
         ## Joint model
         self.joint_model = JointModel(self.gpt, self.action_expert)
 
