@@ -10,6 +10,8 @@ from lightning.pytorch.utilities import move_data_to_device
 from matplotlib import cm
 
 
+
+
 class MplColorHelper:
 
     def __init__(self, cmap_name, start_val, stop_val):
@@ -22,19 +24,17 @@ class MplColorHelper:
         return self.scalarMap.to_rgba(val)
 
 
-def generate_coord_plot_data(model_init, run_forward, dataloader, widths, num_backprop_iters, device):
+def generate_coord_plot_data(track_list, model_init, run_forward, dataloader, widths, num_backprop_iters, device, optimizer=None):
     log_dict = {}
 
     for width in widths:
 
         coord_check_dict = defaultdict(list)
 
-        model = model_init(width=width)
+        model, optimizer = model_init(width=width)
 
         model.to(device)
-        model.train()
-
-        optimizer = model.configure_optimizers(weight_decay=1e-8, lr=0.001)
+        model.train()          
 
         for batch_idx, batch in enumerate(dataloader):
 
@@ -49,29 +49,18 @@ def generate_coord_plot_data(model_init, run_forward, dataloader, widths, num_ba
             coord_check_handles = []
 
             for module_name, module in model.named_modules():
-                if module_name == "vocab_embed":
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="token_embedding")))
-                elif module_name == "spatial_pos_embed":
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="spatial_embedding")))
-                elif module_name.endswith(".query"):
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="query")))
-                elif module_name.endswith(".key"):
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="key")))
-                elif module_name.endswith(".value"):
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="value")))
-                elif module_name.endswith(".attn_out"):
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="attn")))
-                elif module_name.endswith(".ffn_down"):
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="ffn")))
-                elif module_name.endswith(".ffn_gate"):
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="ffn_gate")))
-                elif module_name.endswith(".ffn_up"):
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="ffn_up")))
-                elif module_name.endswith(".out"):
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="transformer_block")))
-                elif module_name == "out_proj.1":
-                    coord_check_handles.append(module.register_forward_hook(partial(hook, key="output_logits")))
-
+                for track_type, track_pattern, key_name in track_list:
+                    if track_type == 'equals':
+                        if module_name == track_pattern:
+                            coord_check_handles.append(module.register_forward_hook(partial(hook, key=key_name)))
+                            break
+                    elif track_type == 'endswith':
+                        if module_name.endswith(track_pattern):
+                            coord_check_handles.append(module.register_forward_hook(partial(hook, key=key_name)))
+                            break
+                    else:
+                        raise ValueError("track_type '{track_type}' not in ['equals', 'endswith']")
+                    
             loss = run_forward(batch, model)
 
             optimizer.zero_grad()
@@ -95,6 +84,37 @@ def generate_coord_plot_data(model_init, run_forward, dataloader, widths, num_ba
         torch.cuda.empty_cache()
 
     return log_dict
+
+track_list_llama = [ # TODO: messed things up need to redo it
+    ('equals', 'vocab_embed', 'token_embedding'),
+    ('equals', 'spatial_pos_embed', 'spatial_embedding'),
+    ('equals', 'out_proj.1', 'output_logits'),
+    ('endswith', '.attn_out', 'attn'),
+    ('endswith', '.query', 'query'),
+    ('endswith', '.key', 'key'),
+    ('endswith', '.value', 'value'),
+    ('endswith', '.attn.c_proj', 'attn_out'),
+    ('endswith', '.ffn_down', 'ffn'),
+    ('endswith', '.ffn_gate', 'ffn_gate'),
+    ('endswith', '.ffn_up', 'ffn_up'),
+    ('endswith', '.out', 'transformer_block'),
+]
+
+track_list_action_expert = [
+    ('equals', 'action_encoder.command_embedding', 'command_embedding'),
+    ('equals', 'action_encoder.action_positional_embedding', 'spatial_embedding'),
+    ('equals', 'action_encoder.linear_1', 'action_embed'),
+    ('equals', 'action_encoder.linear_2', 'action+diffusion_step'),
+    ('equals', 'action_encoder.linear_3', 'action_encoder_out'),
+    ('endswith', '.c_attn', 'attn_in'),
+    ('endswith', '.attn.c_proj', 'attn_out'),
+    ('endswith', '.query', 'query'),
+    ('endswith', '.key', 'key'),
+    ('endswith', '.value', 'value'),
+    ('endswith', '.mlp.c_fc', 'ffn_in_proj'),
+    ('endswith', '.mlp.c_proj', 'ffn_out_proj'),
+    ('equals', 'action_decoder', 'action_decoder_out'),
+]
 
 
 def restructure_log_dict(log_dict):

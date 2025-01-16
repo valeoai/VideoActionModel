@@ -411,8 +411,21 @@ class MupActionExpert(nn.Module):
         elif isinstance(module, MLP):
             self._init_c_proj_residual(module, is_mlp=True)
 
-    def forward(self, hidden_states: Tensor) -> Tensor:
-        raise NotImplementedError("forward not implemented")
+    def forward(
+        self, noisy_action: Tensor, high_level_command: Tensor, t: Tensor
+    ) -> Tensor:
+        
+        # noisy_action: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
+        action_embeds = self.action_encoder(
+            actions=noisy_action, high_level_command=high_level_command, diffusion_step=t
+        )
+        action_embeds = rearrange(action_embeds, "b t h d -> b (t h) d")
+        
+        for block in self.transformer.h:
+            action_embeds = block(action_embeds)
+        action_embeds = self.transformer.ln_f(action_embeds)
+            
+        denoised_actions = self.action_decoder(denoised_actions)
 
 
 if __name__ == "__main__":
