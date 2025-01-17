@@ -1,18 +1,37 @@
+"""
+Example usage:
+
+python scripts/regain_index_from_train.py \
+--ckpt /path/to/ckpt.pt \
+--name checkpoint_90_pretraining
+
+python scripts/regain_index_from_train.py \
+--ckpt /lustre/fsn1/projects/rech/ycy/commun/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-11_0116_1245_1737027921/checkpoints/before_drop_epoch=000_step=0000139763.ckpt \
+--name checkpoint_90_pretraining
+"""
+import argparse
 import json
 import os
+from typing import Any, Dict
 
 import torch
 import torch.distributed
-
-# from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
+from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from torch.utils.data import DistributedSampler
 from tqdm import tqdm
 
 from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
 
+StateDict = Dict[str, Any]
 
-def main(name: str, train_dataset: RandomTokenizedSequenceOpenDVDataset, rank: int, hp: dict) -> None:
+
+def _path(path: str) -> str:
+    path = os.path.expanduser(os.path.expandvars(path))
+    return path
+
+
+def main(name: str, outdir: str, train_dataset: RandomTokenizedSequenceOpenDVDataset, rank: int, hp: dict) -> None:
     ckpt = hp["loops"]["fit_loop"]["state_dict"]["combined_loader"][0]
     world_size = len(ckpt)
 
@@ -33,7 +52,7 @@ def main(name: str, train_dataset: RandomTokenizedSequenceOpenDVDataset, rank: i
 
     train_dataloader.load_state_dict(ckpt[rank])
 
-    if (txt_path := f"tmp/indexes_{name}_{rank}.json") and os.path.exists(txt_path):
+    if (txt_path := f"{outdir}/indexes_{name}_{rank}.json") and os.path.exists(txt_path):
         os.remove(txt_path)
 
     all_indexes = []
@@ -45,53 +64,50 @@ def main(name: str, train_dataset: RandomTokenizedSequenceOpenDVDataset, rank: i
         json.dump(all_indexes, f)
 
 
-if __name__ == "__main__":
+parser = argparse.ArgumentParser()
+parser.add_argument("--ckpt", type=_path, required=True)
+parser.add_argument("--is_deep_speed", action="store_true", default=False)
+parser.add_argument("--name", type=str, required=True)
+parser.add_argument("--outdir", type=_path, default="tmp")
+args = parser.parse_args()
 
-    def _path(path: str) -> str:
-        path = os.path.expanduser(os.path.expandvars(path))
-        return path
+os.makedirs(args.outdir, exist_ok=True)
 
-    # if os.path.exists("tmp/test_data_loader.pt"):
-    #     ckpt = torch.load("tmp/test_data_loader.pt")
-    #     hp = torch.load("tmp/test_data.pt")
-    # else:
-    #     hp = convert_zero_checkpoint_to_fp32_state_dict(
-    #         "/lustre/fsn1/projects/rech/ycy/commun/WM_debug_restart_deepspeed/default_log_dir/hpc_ckpt_1.ckpt",
-    #         "tmp/test_data.pt",
-    #     )
-    #     ckpt = hp["loops"]["fit_loop"]["state_dict"]["combined_loader"].pop(0)
-    #     torch.save(ckpt, "tmp/test_data_loader.pt")
-
-    hp = torch.load(
-        "/lustre/fsn1/projects/rech/ycy/commun/output_data/"
-        "opendv_gpt2_LlamaGen/wd_sweep/"
-        "GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay0.001_0116_1241_1737027680/"
-        "checkpoints/quarters_epoch=000_step=0000038823_fused.pt"
+if args.is_deep_speed:
+    hp = convert_zero_checkpoint_to_fp32_state_dict(
+        args.ckpt,
+        f"{args.outdir}/fused_ckpt.pt",
     )
-    ckpt = hp["loops"]["fit_loop"]["state_dict"]["combined_loader"][0]
+else:
+    hp = torch.load(args.ckpt)
 
-    world_size = len(ckpt)
+ckpt = hp["loops"]["fit_loop"]["state_dict"]["combined_loader"][0]
 
-    data_root_dir = _path("$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens")
-    with open(_path("$fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json"), "r") as f:
-        video_list = json.load(f)
-    video_list = [os.path.join(data_root_dir, video) for video in video_list]
+world_size = len(ckpt)
 
-    # Create datasets
-    train_dataset = RandomTokenizedSequenceOpenDVDataset(
-        data_root_dir,
-        video_list,
-        hp["TokenizedSequenceOpenDVDataModule"]["sequence_length"],
-    )
-    train_dataset._idx_only = True
+import ipdb; ipdb.set_trace()
 
-    for rank in tqdm(range(world_size), "Creating indexes", position=0):
-        main("florent_hpc_test", train_dataset, rank, hp)
+# we should be able to get paths from the checkpoint
+data_root_dir = _path("$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens")
+with open(_path("$fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json"), "r") as f:
+    video_list = json.load(f)
+video_list = [os.path.join(data_root_dir, video) for video in video_list]
 
-    all_indexes = []
-    for rank in range(world_size):
-        with open(f"tmp/indexes_florent_hpc_test_{rank}.json", "r") as f:
-            all_indexes.extend(json.load(f))
+# Create datasets
+train_dataset = RandomTokenizedSequenceOpenDVDataset(
+    data_root_dir,
+    video_list,
+    hp["TokenizedSequenceOpenDVDataModule"]["sequence_length"],
+)
+train_dataset._idx_only = True
 
-    with open("tmp/indexes_florent_hpc_test.json", "w") as f:
-        json.dump(all_indexes, f)
+for rank in tqdm(range(world_size), "Creating indexes", position=0):
+    main(args.name, train_dataset, rank, hp)
+
+all_indexes = []
+for rank in range(world_size):
+    with open(f"{args.outdir}/indexes_{args.name}_{rank}.json", "r") as f:
+        all_indexes.extend(json.load(f))
+
+with open(f"{args.outdir}/indexes_{args.name}.json", "w") as f:
+    json.dump(all_indexes, f)

@@ -109,6 +109,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     device = torch.device(args.device)
 
-    vai0rbis_runner = Vai0rbisRunner(args.config_path, args.checkpoint_path, device)
+    vai0rbis_runner = Vai0rbisRunner(args.config_path, args.checkpoint_path, device, torch.bfloat16)
 
     uvicorn.run(app, host=args.host, port=args.port)
