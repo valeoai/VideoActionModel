@@ -48,7 +48,7 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, Tensor]:
         if self._idx_only:
-            return {"idx": idx}
+            return {"window_idx": idx}
 
         video_id, start_idx = self.video_windows[idx]
         frame_sequence = []
@@ -59,7 +59,12 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
             frame_tensor = torch.from_numpy(frame_data).long()
             frame_sequence.append(frame_tensor)
 
-        return {"visual_tokens": torch.stack(frame_sequence), "video_id": video_id, "frame_idx": start_idx + i, "idx": idx}
+        return {
+            "visual_tokens": torch.stack(frame_sequence),
+            "window_idx": idx,
+            "video_id": video_id,
+            "frame_idx": start_idx + i,
+        }
 
 
 if __name__ == "__main__":

@@ -183,7 +183,14 @@ class EgoTrajectoryDataset(Dataset):
                     is_valid_sequence = False
                     break
 
-                sequence_indices.append(temporal_index)
+                if t < self.sequence_length * self.subsampling_factor:
+                    sequence_indices.append(temporal_index)
+                else:
+                    pass
+                    # even tho we collected `sequence_length` frames
+                    # continue looping until reaching `max_temporal_index` to check is sequence is valid
+                    # if not, it means not all frames have possible future actions, so we ditch the seq
+
                 previous_sample = sample
 
             if is_valid_sequence:
@@ -291,7 +298,7 @@ class EgoTrajectoryDataset(Dataset):
                 "visual_tokens": data["visual_tokens"],
                 "video_id": self.pickle_data[temporal_index]["scene"]["name"],
                 "frame_idx": index,
-                "idx": index,
+                "window_idx": index,
             }
         else:
             return data

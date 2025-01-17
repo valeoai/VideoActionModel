@@ -55,7 +55,7 @@ def main(name: str, outdir: str, train_dataset: RandomTokenizedSequenceOpenDVDat
 
     all_indexes = []
     for batch in tqdm(train_dataloader, f"Aggregating {rank}", position=1, leave=False):
-        indexes = batch["idx"].view(-1).tolist()
+        indexes = batch["window_idx"].view(-1).tolist()
         all_indexes.extend(indexes)
 
     with open(txt_path, "w") as f:

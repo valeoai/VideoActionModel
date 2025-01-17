@@ -1,0 +1,66 @@
+# @package _global_
+
+defaults:
+  - override /data: finetuning_mix
+  - override /callbacks: callbacks_finetuning
+  - override /trainer: deepspeed2
+  - override /logger: many_loggers
+  - override /paths: jeanzay_nuplan
+  - override /scheduler: warmup_stable_drop
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+
+trainer:
+  max_steps: 15529 # 10 % of total pretain len_dataset // BATCH_SIZE
+  # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  log_every_n_steps: 5
+  default_root_dir: ${paths.output_dir}/${name}/
+
+
+scheduler:
+  warmup_iter: 0
+  end_iter: ${trainer.max_steps}
+  drop_iter: ${scheduler.end_iter} # We are finetuning so we linearly decay the LR
+
+data:
+  opendv_tokens_rootdir: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
+  opendv_video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json
+  opendv_val_video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json
+  nuplan_tokens_rootdir: $ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens
+  nuplan_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_train_data_cleaned.pkl
+  nuplan_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl
+  nuscenes_tokens_rootdir: $ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens
+  nuscenes_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl
+  nuscenes_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
+  sequence_length: 8
+  ratios: [40, 58.72, 1.28]
+
+
+# VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
+model:
+  _target_: world_model.gpt2.NextTokenPredictor
+  compile: False # compile model for faster training with pytorch 2.0
+  log_norm: False # For debuging purposes, log gradients norm to loggers
+  mup_base_shapes: ./mup_shapes/gpt2_24layers_basewidth256.bsh
+  is_pretrained: True
+  network:
+    _target_: world_model.gpt2.mup_gpt2.MupGPT2
+    embedding_dim: 256
+    dim_heads: 128
+    nb_layers: 24
+    mlp_dim_mult: 4
+    vocabulary_size: 16385
+    nb_timesteps: ${data.sequence_length}
+    nb_tokens_per_timestep: 576 # 18*32 = 576 | h*w of visual tokens
+    init_std: 0.02
+    output_tied: True
+  optimizer_conf:
+    lr: 0.0001
+    weight_decay: 1e-8
+    betas: [0.9, 0.95]
+    eps: 1e-08
+    decoupled_wd: True

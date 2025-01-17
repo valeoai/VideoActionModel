@@ -1,0 +1,15 @@
+_target_: world_model.opendv.finetuning_datamodule.MixFinetuningDataModule
+opendv_tokens_rootdir: null
+opendv_video_list_path: null
+opendv_val_video_list_path: null
+nuplan_tokens_rootdir: null
+nuplan_train_pickle_path: null
+nuplan_val_pickle_path: null
+nuscenes_tokens_rootdir: null
+nuscenes_train_pickle_path: null
+nuscenes_val_pickle_path: null
+ratios: ??? # List[float] | None = None,
+seed: 42
+sequence_length: 8
+batch_size: 4
+num_workers: 4
