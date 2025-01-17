@@ -1,12 +1,12 @@
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
-import torch
 import hydra
 import lightning
+import torch
 from lightning import Callback, LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
-import os
 
 from world_model.utils import (
     RankedLogger,
@@ -37,23 +37,27 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     # set seed for random number generators in pytorch, numpy and python.random
     if config.get("seed"):
-        lightning.seed_everything(config.seed, workers=True)     
+        lightning.seed_everything(config.seed, workers=True)
 
     log.info(f"Instantiating datamodule <{config.data._target_}>")
     datamodule: LightningDataModule = hydra.utils.instantiate(config.data)
-    
+
     if config.get("is_finetuning"):
-        
+
         deepspeed_ckpt_dir = config.get("ckpt_path")
-        pt_path = 'checkpoint/mp_rank_00_model_states.pt'
+        pt_path = "checkpoint/mp_rank_00_model_states.pt"
         pt_path = os.path.join(deepspeed_ckpt_dir, pt_path)
-        pt = torch.load(pt_path, map_location='cpu')
-        pretrained_global_step = pt['global_step']
-        
-        config.trainer.max_steps = pretrained_global_step + config.trainer.max_steps 
-        
-        log.info(f"Finetuning | past global_step = {pretrained_global_step}, incrementing trainer max_steps tp {config.trainer.max_steps}")
-        log.info(f"Finetuning | scheduler.end_iter={config.scheduler.end_iter} ; scheduler.drop_iter={config.scheduler.drop_iter}")
+        pt = torch.load(pt_path, map_location="cpu")
+        pretrained_global_step = pt["global_step"]
+
+        config.trainer.max_steps = pretrained_global_step + config.trainer.max_steps
+
+        log.info(
+            f"Finetuning | past global_step = {pretrained_global_step}, incrementing trainer max_steps tp {config.trainer.max_steps}"
+        )
+        log.info(
+            f"Finetuning | scheduler.end_iter={config.scheduler.end_iter} ; scheduler.drop_iter={config.scheduler.drop_iter}"
+        )
 
     log.info(f"Instantiating model <{config.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(config.model, scheduler_conf=config.scheduler, _recursive_=False)

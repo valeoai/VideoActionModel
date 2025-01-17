@@ -62,7 +62,7 @@ if __name__ == "__main__":
         "module load pytorch-gpu/py3/2.4.0",
         f"export PYTHONUSERBASE={WORK_DIR}/python_envs/worldmodel",
         "export MPICH_GPU_SUPPORT_ENABLED=1",
-        #"export NCCL_DEBUG=INFO",
+        # "export NCCL_DEBUG=INFO",
         "export CUDA_LAUNCH_BLOCKING=1",
         "export HYDRA_FULL_ERROR=1",
         # Important change when using deepspeed (which now uses triton)
