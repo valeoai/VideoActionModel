@@ -81,7 +81,7 @@ class JointModel(nn.Module):
         self.kv_cache = None
 
     def init_kv_cache(self) -> None:
-        """initialize the KV cache for inference."""
+        """Initialize the KV cache for inference."""
         self.kv_cache = KVCache(self.num_hidden_layers)
 
     def cleanup_kv_cache(self) -> None:
@@ -122,7 +122,7 @@ class JointModel(nn.Module):
         action_attention: ActionAttention,
         layer_idx: int,
     ) -> Tuple[FloatTensor, FloatTensor]:
-        """ "
+        """
         Mixed attention between the GPT2 and the action expert.
 
         - The resulting values for the GPT2 model are the same as the vanilla GPT2 model.
