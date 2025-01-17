@@ -16,11 +16,53 @@ MuSharedReadout
 normal_ init
 """
 
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 from einops import rearrange
 from mup import MuReadout, MuSharedReadout, normal_
 from torch import Tensor
+from tqdm import tqdm
+
+from world_model.gpt2.prepare_token_sequence import compute_position_indices
+
+
+class KVCache(nn.Module):
+    """
+    Adapted from
+    https://github.com/karpathy/nano-llama31/blob/06461cada7744a7da86a408f094549800b6bee3f/llama31.py#L141
+
+    It is a simplified version as we assume that for each element of the batch there
+    the same number of tokens.
+
+    Also note that for the attention mask, we either have to recompute the full cache,
+    so we use the causal mask, or we foward a single token so we don't need the mask.
+    """
+
+    def __init__(
+        self, batch_size: int, seq_length: int, n_kv_heads: int, head_dim: int, dtype: torch.dtype, device: torch.device
+    ) -> None:
+        super().__init__()
+        cache_shape = (batch_size, n_kv_heads, seq_length, head_dim)
+        self.register_buffer("cache_k", torch.zeros(cache_shape, dtype=dtype, device=device))
+        self.register_buffer("cache_v", torch.zeros(cache_shape, dtype=dtype, device=device))
+        self.start_pos = 0
+
+    def reset(self) -> None:
+        self.cache_k.zero_()
+        self.cache_v.zero_()
+        self.start_pos = 0
+
+    def update(self, xk: Tensor, xv: Tensor) -> Tuple[Tensor, Tensor]:
+        # changed from original implementation because shape in mup_GPT2 is (b nb_heads seq dim_head)
+        seqlen = xk.size(2)
+        self.cache_k[:, :, self.start_pos : self.start_pos + seqlen] = xk
+        self.cache_v[:, :, self.start_pos : self.start_pos + seqlen] = xv
+        xk = self.cache_k[:, :, : self.start_pos + seqlen]
+        xv = self.cache_v[:, :, : self.start_pos + seqlen]
+        self.start_pos += seqlen
+        return xk, xv
 
 
 class MLP(nn.Module):
@@ -46,6 +88,7 @@ class CausalSelfAttention(nn.Module):
 
         self.dim_heads = dim_heads
         self.dim_model = dim_model
+        self.nb_heads = dim_model // dim_heads
 
         ########### muP ###########
         self.attn_scale = attn_scale
@@ -70,7 +113,7 @@ class CausalSelfAttention(nn.Module):
         # will be KVCache object managed by inference context manager
         self.cache = None
 
-    def forward(self, x: Tensor, attn_mask: Tensor, start_pos: int = -1) -> Tensor:
+    def forward(self, x: Tensor, attn_mask: Tensor) -> Tensor:
 
         # calculate query, key, values for all heads in batch
         x = self.c_attn(x)
@@ -80,9 +123,8 @@ class CausalSelfAttention(nn.Module):
 
         # KV cache update
         if self.cache is not None:
-            assert isinstance(start_pos, int), "start_pos must be an integer"
             # update the KV cache with current KV and get all the previous KVs
-            k, v = self.cache.update(start_pos, k, v)
+            k, v = self.cache.update(k, v)
 
         ### muP: just for coord check (debug)
         q = self.query(q)
@@ -126,8 +168,8 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=False)
         self.mlp = MLP(dim_model, mlp_dim_mult)
 
-    def forward(self, x: Tensor, attn_mask: Tensor, start_pos: int = -1) -> Tensor:
-        x = x + self.attn(self.ln_1(x), attn_mask, start_pos=start_pos)
+    def forward(self, x: Tensor, attn_mask: Tensor) -> Tensor:
+        x = x + self.attn(self.ln_1(x), attn_mask)
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -338,7 +380,7 @@ class MupGPT2(nn.Module):
         spatial_positions: Tensor,
         temporal_positions: Tensor,
         inference: bool = False,
-        start_pos: int = -1,
+        use_kv_cache: bool = False,
     ) -> Tensor:
         """
         Args:
@@ -364,24 +406,14 @@ class MupGPT2(nn.Module):
         x = tok_emb + temporal_pos_emb + spatial_pos_emb
 
         seqlen = token_sequence.size(1)
-        if inference and start_pos != -1:
+        if inference and use_kv_cache:
             attn_mask = None
-            if seqlen > 1:
-                attn_mask = torch.full((seqlen, seqlen), float("-inf"), device=token_sequence.device)
-                attn_mask = torch.triu(attn_mask, diagonal=1)
-                # When performing key-value caching, we compute the attention scores
-                # only for the new sequence. Thus, the matrix of scores is of size
-                # (seqlen, cache_len + seqlen), and the only masked entries are (i, j) for
-                # j > cache_len + i, since row i corresponds to token cache_len + i.
-                attn_mask = torch.hstack([torch.zeros((seqlen, start_pos), device=token_sequence.device), attn_mask]).type_as(
-                    x
-                )
         else:
             attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
 
         # forward world embeddings to the transformer
         for block in self.transformer.h:
-            x = block(x, attn_mask, start_pos=start_pos)
+            x = block(x, attn_mask)
         emb_out = self.transformer.ln_f(x)
 
         if not inference:
@@ -390,3 +422,158 @@ class MupGPT2(nn.Module):
             img_logits = self.lm_head(emb_out[:, [-1], :])  # note: using list [-1] to preserve the time dim
 
         return img_logits
+
+    def _setup_kv_cache(self, batch_size: int) -> None:
+        """
+        Sets up key-value caching for transformer attention layers.
+
+        KV Cache:
+        - Stores the Key and Value projections for each token
+        - Avoids recomputing these for previous tokens during generation
+        - Cache size matches max_context_size to align with rolling context
+        - Must be updated (rolled) when context is rolled
+        """
+        for block in self.transformer.h:
+            layer = block.attn
+            cache = KVCache(
+                batch_size=batch_size,
+                seq_length=self.block_size,
+                n_kv_heads=layer.nb_heads,
+                head_dim=layer.dim_heads,
+                dtype=layer.c_attn.weight.dtype,
+                device=layer.c_attn.weight.device,
+            )
+            layer.cache = cache
+
+    def _reset_kv_cache(self) -> None:
+        """Reset the key-value cache."""
+        for block in self.transformer.h:
+            block.attn.cache.reset()
+
+    def _clear_kv_cache(self) -> None:
+        """Clear the key-value cache."""
+        for block in self.transformer.h:
+            block.attn.cache = None
+
+    def _sample_next_token(self, logits: Tensor, temperature: float, topk_sampler: int) -> Tuple[Tensor, Tensor]:
+        """
+        Sample the next token from the logits using top-k sampling.
+
+        Args:
+            logits: The logits from the model.
+            temperature: The temperature for sampling.
+            topk_sampler: The number of top-k tokens to sample from.
+
+        Returns:
+            The sampled tokens
+        """
+        logits = logits[:, -1, :] / temperature
+        tokens_probs = torch.softmax(logits, dim=-1)
+        topk_probs, topk_tokens = torch.topk(tokens_probs, topk_sampler, dim=-1, sorted=False)
+        topk_renormalized_probs = topk_probs / topk_probs.sum(dim=-1, keepdim=True)
+        # Sample from the top k normalized probabilities
+        next_token_idx = torch.multinomial(topk_renormalized_probs, num_samples=1)
+        next_token = torch.gather(topk_tokens, -1, next_token_idx)
+        return next_token
+
+    def _process_generated_frame(self, context: Tensor, height: int, width: int) -> Tensor:
+        """Extract and process the latest generated frame."""
+        frame = context[:, -self.nb_tokens_per_timestep :]
+        frame = rearrange(frame, "b (h w) -> b h w", h=height, w=width)
+        return frame
+
+    def forward_inference(
+        self,
+        number_of_future_frames: int,
+        burnin_visual_tokens: Tensor,
+        temperature: float = 1.0,
+        topk_sampler: int = 1,
+        use_kv_cache: bool = False,
+        verbose: int | bool = 0,
+    ) -> Tensor:
+        verbose = int(verbose)
+
+        bs, _, height, width = burnin_visual_tokens.shape
+        context = rearrange(burnin_visual_tokens, "b t h w -> b (t h w)")
+
+        def _count_nb_frames(context: Tensor) -> int:
+            return context.size(1) // (height * width)
+
+        # we get positions for the max context size we are allowed
+        positions = compute_position_indices(bs, self.nb_timesteps, height, width)
+
+        # cut the context to the maximum context size
+        context = context[:, -self.block_size :]
+        spatial_positions = positions["spatial_positions"]
+        temporal_positions = positions["temporal_positions"]
+
+        generated_frames = torch.zeros(
+            bs, number_of_future_frames, height, width, device=burnin_visual_tokens.device, dtype=burnin_visual_tokens.dtype
+        )
+
+        if use_kv_cache:
+            self._setup_kv_cache(bs)
+            kv_cache_was_reset = True
+
+        for frame_idx in tqdm(
+            range(number_of_future_frames), f"Generating {number_of_future_frames} frames", disable=verbose < 1
+        ):
+
+            # We should always have at most self.nb_timesteps - 1 frames in the context
+            # to leave space for the generated frame
+            if _count_nb_frames(context) > self.nb_timesteps - 1:
+                context = context[:, : (self.nb_timesteps - 1) * self.nb_tokens_per_timestep]
+                # because we use learned positional embeddings, we can not keep the context
+                # in cache and simply roll it. We need to recompute the whole cache.
+                self._reset_kv_cache()
+                kv_cache_was_reset = True
+
+            for _ in tqdm(
+                range(self.nb_tokens_per_timestep),
+                f"AR generation of {self.nb_tokens_per_timestep} tokens",
+                disable=verbose < 2,
+                leave=False,
+                position=1,
+            ):
+                # Get next token
+                if use_kv_cache and not kv_cache_was_reset:
+                    tmp_ctx = context[:, -1:]
+                    tmp_spatial_positions = spatial_positions[:, -1:]
+                    tmp_temporal_positions = temporal_positions[:, -1:]
+                else:
+                    tokens_in_context = context.size(1)
+                    tmp_ctx = context
+                    tmp_spatial_positions = spatial_positions[:, :tokens_in_context]
+                    tmp_temporal_positions = temporal_positions[:, :tokens_in_context]
+
+                logits = self.forward(
+                    tmp_ctx,
+                    tmp_spatial_positions,
+                    tmp_temporal_positions,
+                    inference=True,
+                    use_kv_cache=use_kv_cache and not kv_cache_was_reset,
+                )
+                next_tokens = self._sample_next_token(logits, temperature, topk_sampler)
+                context = torch.cat([context, next_tokens], dim=1)
+                kv_cache_was_reset = False
+
+            generated_frames[:, frame_idx] = self._process_generated_frame(context, height, width)
+
+        if use_kv_cache:
+            self._clear_kv_cache()
+        return generated_frames
+
+
+if __name__ == "__main__":
+    import mup
+
+    height, width = 8, 12
+
+    model = MupGPT2(
+        embedding_dim=128, nb_layers=4, nb_tokens_per_timestep=height * width, nb_timesteps=8, vocabulary_size=1024
+    )
+    mup.set_base_shapes(model, None)
+
+    visual_tokens = torch.randint(0, 1024, (1, 4, 8, 12), dtype=torch.long)
+
+    generated_frames = model.forward_inference(2, visual_tokens, temperature=1.0, topk_sampler=3, use_kv_cache=True, verbose=2)
