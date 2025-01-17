@@ -29,6 +29,8 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
         self.total_windows = 0
         self.total_nb_frames = 0
 
+        self._idx_only = False
+
         for video_id in self.video_list:
             video_dir = os.path.join(self.data_root_dir, video_id)
             frames = sorted([f for f in os.listdir(video_dir) if f.endswith(".npy")])
@@ -45,6 +47,9 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
         return self.total_windows
 
     def __getitem__(self, idx: int) -> Dict[str, Tensor]:
+        if self._idx_only:
+            return {"window_idx": idx}
+
         video_id, start_idx = self.video_windows[idx]
         frame_sequence = []
 

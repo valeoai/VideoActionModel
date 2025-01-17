@@ -23,8 +23,10 @@ scale_factor: 3.125
 
 
 vai0rbis_experiment_config: configs/experiment/action_learning.yaml
-gpt_checkpoint_path: tmp/epoch_0-step_15529_fused.ckpt
+gpt_checkpoint_path: null
+# gpt_checkpoint_path: tmp/epoch_0-step_15529_fused.ckpt
 action_checkpoint_path: null
 
 # tokenizers
-image_tokenizer_path:  ${oc.env:HOME}/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit
+image_tokenizer_path: /model/weights/tokenizers/image_tokenizer.jit
+# image_tokenizer_path:  ${oc.env:HOME}/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit

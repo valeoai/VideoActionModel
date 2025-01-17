@@ -1,3 +1,4 @@
+import json
 import random
 from typing import List, Optional
 
@@ -28,10 +29,15 @@ def mix_datasets(
     total_number_of_samples: int,
     seed: int = 0,
 ) -> ConcatDataset:
+    assert len(datasets) == len(ratios), "The number of datasets and ratios must be the same"
+    assert [r >= 0 for r in ratios], "Ratios must be positive"
     new_dataset_size = [int(r * total_number_of_samples) for r in ratios]
 
     final_datasets = []
     for target_size, dts in zip(new_dataset_size, datasets):
+        if target_size == 0:
+            continue
+
         if target_size == len(dts):
             final_datasets.append(dts)
         elif target_size > len(dts):
@@ -49,6 +55,7 @@ def all_token_datasets(
     nuplan_tokens_rootdir: str,
     nuscenes_pickle_data: List[dict],
     nuscenes_tokens_rootdir: str,
+    fixed_indices_json: Optional[List[str]] = None,
     sequence_length: int = 8,
     ratios: Optional[List[float]] = None,
     total_number_of_samples: Optional[int] = None,
@@ -77,11 +84,26 @@ def all_token_datasets(
         sequence_length=sequence_length,
     )
 
+    token_datasets = [opendv_dataset, nuplan_dataset, nuscenes_dataset]
+
+    if fixed_indices_json is not None:
+        assert len(fixed_indices_json) == len(token_datasets)
+        new_token_datasets = []
+        for idx_json, dts in zip(fixed_indices_json, token_datasets):
+            if idx_json is None:
+                new_token_datasets.append(dts)
+                continue
+
+            with open(idx_json, "r") as f:
+                idx = json.load(f)
+            new_token_datasets.append(Subset(dts, idx))
+        token_datasets = new_token_datasets
+
     if ratios is None:
-        return ConcatDataset([opendv_dataset, nuplan_dataset, nuscenes_dataset])
+        return ConcatDataset(token_datasets)
 
     return mix_datasets(
-        datasets=[opendv_dataset, nuplan_dataset, nuscenes_dataset],
+        datasets=token_datasets,
         ratios=ratios,
         total_number_of_samples=total_number_of_samples,
         seed=seed,
@@ -138,7 +160,6 @@ def combined_ego_trajectory_dataset(
 
 
 if __name__ == "__main__":
-    import json
     import os
     import pickle
 
