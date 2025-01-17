@@ -33,6 +33,8 @@ train: True
 # lightning chooses best weights based on the metric specified in checkpoint callback
 test: False
 
+is_finetuning: False
+
 # simply provide checkpoint path to resume training
 ckpt_path: null
 

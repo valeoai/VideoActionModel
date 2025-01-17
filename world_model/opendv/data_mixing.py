@@ -1,4 +1,5 @@
 import json
+import os
 import random
 from typing import List, Optional
 
@@ -94,7 +95,7 @@ def all_token_datasets(
                 new_token_datasets.append(dts)
                 continue
 
-            with open(idx_json, "r") as f:
+            with open(os.path.expandvars(idx_json), "r") as f:
                 idx = json.load(f)
             new_token_datasets.append(Subset(dts, idx))
         token_datasets = new_token_datasets

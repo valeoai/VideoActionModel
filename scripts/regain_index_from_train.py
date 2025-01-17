@@ -94,6 +94,7 @@ train_dataset = RandomTokenizedSequenceOpenDVDataset(
     data_root_dir,
     video_list,
     hp["TokenizedSequenceOpenDVDataModule"]["sequence_length"],
+    hp["TokenizedSequenceOpenDVDataModule"]["subsampling_factor"],
 )
 train_dataset._idx_only = True
 
