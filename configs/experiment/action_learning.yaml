@@ -55,7 +55,6 @@ model:
       vocabulary_size: 16385
       nb_timesteps: 8  # this should be the one from pretraining != to the action learning one
       nb_tokens_per_timestep: 576 # 18*32 = 576 | h*w of visual tokens
-      init_std: 0.0056
       output_tied: True
     action_mup_base_shapes: null
     action_checkpoint_path: null
@@ -68,10 +67,10 @@ model:
       number_high_level_command: 3
       dim_heads: ${model.vai0rbis_conf.gpt_config.dim_heads}
       nb_layers: ${model.vai0rbis_conf.gpt_config.nb_layers}
+      init_std: 0.01
   optimizer_conf:
     lr: 0.0001
     weight_decay: 1e-8
     betas: [0.9, 0.95]
     eps: 1e-08
     decoupled_wd: True
-  scheduler_conf: null
