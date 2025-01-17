@@ -74,10 +74,12 @@ class NextTokenPredictor(LightningModule):
 
         if mup_base_shapes is not None:
             print("mup_base_shapes configured")
-            rescale_params = not load_pretrained_network and not is_pretrained
-            mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=rescale_params)
-            # re-initialize after set_base_shapes
-            self.network.apply(self.network._init_weights)
+            if is_pretrained or load_pretrained_network:
+                mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=False)
+            else:
+                mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=True)
+                # re-initialize after set_base_shapes for proper std_init with mup.init._normal
+                self.network.apply(self.network._init_weights)
         else:
             print("Network NOT mu-Parametrized")
 
