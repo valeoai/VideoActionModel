@@ -127,9 +127,12 @@ class MixFinetuningDataModule(LightningDataModule):
 
     def val_dataloader(self) -> List[StatefulDataLoader]:
         if not hasattr(self, "val_dataloader_"):
-            self.val_dataloader_ = [StatefulDataLoader(
-                dts, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True
-            ) for dts in self.all_val_datasets.datasets]
+            self.val_dataloader_ = [
+                StatefulDataLoader(
+                    dts, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=True
+                )
+                for dts in self.all_val_datasets.datasets
+            ]
         return self.val_dataloader_
 
     def state_dict(self) -> StateDict:

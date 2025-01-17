@@ -9,7 +9,7 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.10.0"
 authors = [
-    { name = "", email = "florent.bartoccioni@valeo.com" }
+    { name = "Florent Bartoccioni", email = "florent.bartoccioni@valeo.com" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -19,6 +19,7 @@ classifiers = [
 
 dependencies = [
     "lightning",
+    "deepspeed",
     "hydra-core",
     "hydra-colorlog",
     "mup @ git+https://github.com/microsoft/mup.git",

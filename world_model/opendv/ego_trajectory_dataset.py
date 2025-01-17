@@ -251,7 +251,7 @@ class EgoTrajectoryDataset(Dataset):
                     continue
 
             positions, rotations = [], []
-            for _j in range(1 + self.action_length):
+            for _j in range(0, 1 + self.action_length, self.subsampling_factor):
                 positions.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_tran"][:2])
                 rotations.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_rot"])
 
@@ -291,6 +291,7 @@ class EgoTrajectoryDataset(Dataset):
                 "visual_tokens": data["visual_tokens"],
                 "video_id": self.pickle_data[temporal_index]["scene"]["name"],
                 "frame_idx": index,
+                "idx": index,
             }
         else:
             return data
@@ -364,7 +365,7 @@ if __name__ == "__main__":
 
         # First pass: calculate all yaw rates and bounds
         all_positions, all_yaw_rates = [], []
-        loader = DataLoader(dataset, batch_size=128, num_workers=16, shuffle=False)
+        loader = DataLoader(dataset, batch_size=128, num_workers=10, shuffle=False)
         for batch in tqdm(loader, desc="Computing yaw rates", leave=True):
             positions = batch["positions"]
             yaw_rate = batch["yaw_rate"]
@@ -449,4 +450,4 @@ if __name__ == "__main__":
     # print("Positions", dataset[0]["positions"])
     # print("Tokens", dataset[0]["visual_tokens"].shape)
 
-    plot_trajectories(dataset, max_trajectories=None, save_path="trajectory_plot_nuplan_val.pdf")
+    plot_trajectories(dataset, max_trajectories=None, save_path="trajectory_plot_nuplan_val.png")
