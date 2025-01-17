@@ -1,3 +1,4 @@
+import json
 import random
 from typing import List, Optional
 
@@ -91,10 +92,12 @@ def all_token_datasets(
         for idx_json, dts in zip(fixed_indices_json, token_datasets):
             if idx_json is None:
                 new_token_datasets.append(dts)
+                continue
 
             with open(idx_json, "r") as f:
                 idx = json.load(f)
             new_token_datasets.append(Subset(dts, idx))
+        token_datasets = new_token_datasets
 
     if ratios is None:
         return ConcatDataset(token_datasets)
@@ -157,7 +160,6 @@ def combined_ego_trajectory_dataset(
 
 
 if __name__ == "__main__":
-    import json
     import os
     import pickle
 

@@ -53,6 +53,7 @@ class MixFinetuningDataModule(LightningDataModule):
         sequence_length: int = 8,
         ratios: List[float] | None = None,
         total_number_of_samples: int | None = None,
+        fixed_indices_json: Optional[List[str]] = None,
         seed: int = 0,
         batch_size: int = 32,
         num_workers: int = 4,
@@ -71,6 +72,7 @@ class MixFinetuningDataModule(LightningDataModule):
         self.sequence_length = sequence_length
         self.train_ratios = ratios
         self.train_total_number_of_samples = total_number_of_samples
+        self.train_fixed_indices_json = fixed_indices_json
         self.seed = seed
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -100,6 +102,7 @@ class MixFinetuningDataModule(LightningDataModule):
                 nuscenes_pickle_data=nuscenes_train_data,
                 ratios=self.train_ratios,
                 total_number_of_samples=self.train_total_number_of_samples,
+                fixed_indices_json=self.train_fixed_indices_json,
                 **kwargs,
             )
 
@@ -149,8 +152,10 @@ class MixFinetuningDataModule(LightningDataModule):
             "sequence_length": self.sequence_length,
             "train_ratios": self.train_ratios,
             "train_total_number_of_samples": self.train_total_number_of_samples,
+            "train_fixed_indices_json": self.train_fixed_indices_json,
             "batch_size": self.batch_size,
             "num_workers": self.num_workers,
+            "seed": self.seed,
             "train_loader_state_dict": self.train_dataloader_.state_dict(),
         }
 
@@ -167,8 +172,10 @@ class MixFinetuningDataModule(LightningDataModule):
         self.sequence_length = state_dict["sequence_length"]
         self.train_ratios = state_dict["train_ratios"]
         self.train_total_number_of_samples = state_dict["train_total_number_of_samples"]
+        self.train_fixed_indices_json = state_dict["train_fixed_indices_json"]
         self.batch_size = state_dict["batch_size"]
         self.num_workers = state_dict["num_workers"]
+        self.seed = state_dict["seed"]
         _ = self.setup()
         _ = self.train_dataloader()  # Initialize train dataloader
         _ = self.val_dataloader()  # Initialize val dataloader
@@ -187,6 +194,9 @@ if __name__ == "__main__":
         nuscenes_tokens_rootdir="$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens",
         nuscenes_train_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl",
         nuscenes_val_pickle_path="$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl",
+        ratios=[0.4, 0.587, 0.013],
+        total_number_of_samples=5963251,
+        fixed_indices_json=["tmp/indexes_florent_hpc_test.json", None, None],
     ).setup()
 
     train_loader = dm.train_dataloader()
