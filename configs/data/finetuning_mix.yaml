@@ -8,7 +8,8 @@ nuplan_val_pickle_path: null
 nuscenes_tokens_rootdir: null
 nuscenes_train_pickle_path: null
 nuscenes_val_pickle_path: null
-ratios: ??? # List[float] | None = None,
+ratios: ??? # List[float] | None = None
+fixed_indices_json: ??? # Optional[List[str]] = None,
 seed: 42
 sequence_length: 8
 batch_size: 4
