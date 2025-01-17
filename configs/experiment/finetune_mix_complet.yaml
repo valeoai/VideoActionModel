@@ -38,7 +38,7 @@ data:
   nuscenes_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl
   nuscenes_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
   sequence_length: 8
-  ratios: [40, 58.72, 1.28]
+  ratios: [0.40, 0.5872, 0.0128]
   total_number_of_samples: 5963251
   fixed_indices_json: [$ycy_ALL_CCFRWORK/indexes_checkpoint_90_pretraining.json, null, null]
 
