@@ -104,11 +104,14 @@ if __name__ == "__main__":
     parser.add_argument("--config_path", type=str, required=True)
     parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--dtype", type=str, default="bf16", choices=["bf16", "fp32", "fp16"])
     parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=9000)
     args = parser.parse_args()
     device = torch.device(args.device)
 
-    vai0rbis_runner = Vai0rbisRunner(args.config_path, args.checkpoint_path, device, torch.bfloat16)
+    dtype = {"bf16": torch.bfloat16, "fp32": torch.float32, "fp16": torch.float16}[args.dtype]
+
+    vai0rbis_runner = Vai0rbisRunner(args.config_path, args.checkpoint_path, device, dtype)
 
     uvicorn.run(app, host=args.host, port=args.port)
