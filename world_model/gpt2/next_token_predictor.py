@@ -143,7 +143,7 @@ class NextTokenPredictor(LightningModule):
         loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
 
         # log losses at the end of epoch, rest is automatic
-        self.log("val/loss_{dataloader_idx}", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
+        self.log(f"val/loss_{dataloader_idx}", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
 
         # return loss to apply backpropagation
         return loss
