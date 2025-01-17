@@ -3,12 +3,10 @@ Example usage:
 
 python scripts/regain_index_from_train.py \
 --ckpt /path/to/ckpt.pt \
---name checkpoint_90_pretraining
-
-python scripts/regain_index_from_train.py \
---ckpt /lustre/fsn1/projects/rech/ycy/commun/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-11_0116_1245_1737027921/checkpoints/before_drop_epoch=000_step=0000139763.ckpt \
+--is_deepspeed \
 --name checkpoint_90_pretraining
 """
+
 import argparse
 import json
 import os
@@ -66,14 +64,14 @@ def main(name: str, outdir: str, train_dataset: RandomTokenizedSequenceOpenDVDat
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--ckpt", type=_path, required=True)
-parser.add_argument("--is_deep_speed", action="store_true", default=False)
+parser.add_argument("--is_deepspeed", action="store_true", default=False)
 parser.add_argument("--name", type=str, required=True)
 parser.add_argument("--outdir", type=_path, default="tmp")
 args = parser.parse_args()
 
 os.makedirs(args.outdir, exist_ok=True)
 
-if args.is_deep_speed:
+if args.is_deepspeed:
     hp = convert_zero_checkpoint_to_fp32_state_dict(
         args.ckpt,
         f"{args.outdir}/fused_ckpt.pt",
@@ -85,11 +83,9 @@ ckpt = hp["loops"]["fit_loop"]["state_dict"]["combined_loader"][0]
 
 world_size = len(ckpt)
 
-import ipdb; ipdb.set_trace()
-
 # we should be able to get paths from the checkpoint
-data_root_dir = _path("$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens")
-with open(_path("$fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json"), "r") as f:
+data_root_dir = _path(hp["TokenizedSequenceOpenDVDataModule"]["data_root_dir"])
+with open(_path(hp["TokenizedSequenceOpenDVDataModule"]["video_list_path"]), "r") as f:
     video_list = json.load(f)
 video_list = [os.path.join(data_root_dir, video) for video in video_list]
 
@@ -102,7 +98,7 @@ train_dataset = RandomTokenizedSequenceOpenDVDataset(
 train_dataset._idx_only = True
 
 for rank in tqdm(range(world_size), "Creating indexes", position=0):
-    main(args.name, train_dataset, rank, hp)
+    main(args.name, args.outdir, train_dataset, rank, hp)
 
 all_indexes = []
 for rank in range(world_size):
