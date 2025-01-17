@@ -258,7 +258,7 @@ class EgoTrajectoryDataset(Dataset):
                     continue
 
             positions, rotations = [], []
-            for _j in range(1 + self.action_length):
+            for _j in range(0, 1 + self.action_length, self.subsampling_factor):
                 positions.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_tran"][:2])
                 rotations.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_rot"])
 
