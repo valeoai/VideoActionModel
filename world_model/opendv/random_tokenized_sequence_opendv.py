@@ -54,7 +54,12 @@ class RandomTokenizedSequenceOpenDVDataset(Dataset):
             frame_tensor = torch.from_numpy(frame_data).long()
             frame_sequence.append(frame_tensor)
 
-        return {"visual_tokens": torch.stack(frame_sequence), "video_id": video_id, "frame_idx": start_idx + i}
+        return {
+            "visual_tokens": torch.stack(frame_sequence),
+            "window_idx": idx,
+            "video_id": video_id,
+            "frame_idx": start_idx + i,
+        }
 
 
 if __name__ == "__main__":

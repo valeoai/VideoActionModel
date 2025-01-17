@@ -14,6 +14,18 @@ from torch.optim.optimizer import Optimizer
 
 from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
 
+
+def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
+    result = dict()
+    for k, v in state_dict.items():
+        tokens = k.split(".")
+        if tokens[0] == prefix:
+            tokens = tokens[1:]
+            key = ".".join(tokens)
+            result[key] = v
+    return result
+
+
 Batch = Dict[str, torch.Tensor]
 mupShapes = Dict[str, Tuple[int, ...]]
 
@@ -32,12 +44,12 @@ class NextTokenPredictor(LightningModule):
         compile: bool = False,
         log_norm: bool = False,
         mup_base_shapes: mupShapes = None,
+        statedict_ckpt_path: str = None,
+        is_pretrained: bool = False,
     ) -> None:
         """
         Args:
             network: The configuration of the model to train.
-            sequence_adapter: The configuration of an adapter the produce
-            a unified sequence of tokens from visual and action tokens.
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
             compile: Compile model for faster training with pytorch 2.0, registered with save_hyperparameters
@@ -54,11 +66,20 @@ class NextTokenPredictor(LightningModule):
         self.network = hydra.utils.instantiate(network)
         self.mup_base_shapes = mup_base_shapes
 
+        load_pretrained_network = statedict_ckpt_path is not None
+        if load_pretrained_network:
+            checkpoint_data = torch.load(statedict_ckpt_path, map_location=self.device)
+            network_state_dict = remove_prefix(checkpoint_data["state_dict"], "network")
+            self.network.load_pretrained_statedict(network_state_dict)
+
         if mup_base_shapes is not None:
             print("mup_base_shapes configured")
-            mup.set_base_shapes(self.network, mup_base_shapes)
-            # re-initialize after set_base_shapes
-            self.network.apply(self.network._init_weights)
+            if is_pretrained or load_pretrained_network:
+                mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=False)
+            else:
+                mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=True)
+                # re-initialize after set_base_shapes for proper std_init with mup.init._normal
+                self.network.apply(self.network._init_weights)
         else:
             print("Network NOT mu-Parametrized")
 
@@ -75,7 +96,7 @@ class NextTokenPredictor(LightningModule):
         """Lightning hook that is called when training begins."""
         pass
 
-    def training_step(self, batch: Batch, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> torch.Tensor:
         """Perform a single training step on a batch of data from the training set.
 
         Args:
@@ -107,7 +128,7 @@ class NextTokenPredictor(LightningModule):
         """Lightning hook that is called when training begins."""
         pass
 
-    def validation_step(self, batch: Batch, batch_idx: int) -> None:
+    def validation_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Perform a single validation step on a batch of data from the validation set.
 
         Args:
@@ -122,7 +143,7 @@ class NextTokenPredictor(LightningModule):
         loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
 
         # log losses at the end of epoch, rest is automatic
-        self.log("val/loss", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
+        self.log(f"val/loss_{dataloader_idx}", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
 
         # return loss to apply backpropagation
         return loss
