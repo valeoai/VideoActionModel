@@ -16,7 +16,8 @@ from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
 
 
 def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
-    result = dict()
+    """Remove prefix from keys in state_dict."""
+    result = {}
     for k, v in state_dict.items():
         tokens = k.split(".")
         if tokens[0] == prefix:
@@ -45,7 +46,7 @@ class NextTokenPredictor(LightningModule):
         log_norm: bool = False,
         mup_base_shapes: mupShapes = None,
         statedict_ckpt_path: str = None,
-        is_pretrained: bool = False,
+        is_finetuning: bool = False,
     ) -> None:
         """
         Args:
@@ -61,6 +62,8 @@ class NextTokenPredictor(LightningModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
+        self.is_finetuning = is_finetuning
+
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
         self.network = hydra.utils.instantiate(network)
@@ -70,11 +73,11 @@ class NextTokenPredictor(LightningModule):
         if load_pretrained_network:
             checkpoint_data = torch.load(statedict_ckpt_path, map_location=self.device)
             network_state_dict = remove_prefix(checkpoint_data["state_dict"], "network")
-            self.network.load_pretrained_statedict(network_state_dict)
+            self.network.load_state_dict(network_state_dict)
 
         if mup_base_shapes is not None:
             print("mup_base_shapes configured")
-            if is_pretrained or load_pretrained_network:
+            if is_finetuning or load_pretrained_network:
                 mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=False)
             else:
                 mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=True)

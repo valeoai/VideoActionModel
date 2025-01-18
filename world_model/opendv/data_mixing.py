@@ -31,6 +31,7 @@ def mix_datasets(
     seed: int = 0,
 ) -> ConcatDataset:
     assert len(datasets) == len(ratios), "The number of datasets and ratios must be the same"
+    assert sum(ratios) <= 1.0, f"the sum of dataset ratios ({sum(ratios)}) is bigger than 1 ! "
     assert [r >= 0 for r in ratios], "Ratios must be positive"
     new_dataset_size = [int(r * total_number_of_samples) for r in ratios]
 
@@ -161,7 +162,6 @@ def combined_ego_trajectory_dataset(
 
 
 if __name__ == "__main__":
-    import os
     import pickle
 
     from torch.utils.data import DataLoader

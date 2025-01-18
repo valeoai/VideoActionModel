@@ -10,7 +10,7 @@ StateDict = Dict[str, Any]
 
 class StatefulDataLoader(_StatefulDataLoader):
 
-    def __init__(self, *args: Args, **kwargs: Kwargs) -> None:
+    def __init__(self, *args: Args, is_finetuning: bool = False, **kwargs: Kwargs) -> None:
         super().__init__(*args, **kwargs)
         # is distributed
         self.is_distributed = dist.is_available() and dist.is_initialized()
@@ -18,6 +18,8 @@ class StatefulDataLoader(_StatefulDataLoader):
             self.world_size = dist.get_world_size()
         else:
             self.world_size = 1
+
+        self.is_finetuning = is_finetuning
 
     def _gather_state_dict(self, state_dict: StateDict) -> List[StateDict]:
         """
@@ -46,6 +48,10 @@ class StatefulDataLoader(_StatefulDataLoader):
         return state_dict
 
     def load_state_dict(self, state_dict: Union[StateDict, List[StateDict]]) -> None:
+        if self.is_finetuning:
+            # If we are finetuning, we don't need to load the state_dict
+            return
+
         # If we are not in distributed mode, load the state_dict as is
         if not self.is_distributed:
             super().load_state_dict(state_dict)
