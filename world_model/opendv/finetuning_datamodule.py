@@ -57,6 +57,7 @@ class MixFinetuningDataModule(LightningDataModule):
         seed: int = 0,
         batch_size: int = 32,
         num_workers: int = 4,
+        is_finetuning: bool = False,
     ) -> None:
         super().__init__()
         self.opendv_tokens_rootdir = _path(opendv_tokens_rootdir)
@@ -76,6 +77,7 @@ class MixFinetuningDataModule(LightningDataModule):
         self.seed = seed
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.is_finetuning = is_finetuning
 
     def setup(self, stage: Optional[str] = None) -> "MixFinetuningDataModule":
         if hasattr(self, "train_dataset"):
@@ -124,7 +126,12 @@ class MixFinetuningDataModule(LightningDataModule):
     def train_dataloader(self) -> StatefulDataLoader:
         if not hasattr(self, "train_dataloader_"):
             self.train_dataloader_ = StatefulDataLoader(
-                self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers, pin_memory=True
+                self.train_dataset,
+                is_finetuning=self.is_finetuning,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.num_workers,
+                pin_memory=True,
             )
         return self.train_dataloader_
 

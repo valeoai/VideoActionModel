@@ -162,7 +162,6 @@ def combined_ego_trajectory_dataset(
 
 
 if __name__ == "__main__":
-    import os
     import pickle
 
     from torch.utils.data import DataLoader
