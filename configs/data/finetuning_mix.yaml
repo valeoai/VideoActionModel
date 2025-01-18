@@ -14,3 +14,4 @@ seed: 42
 sequence_length: 8
 batch_size: 4
 num_workers: 4
+is_finetuning: ${is_finetuning}
