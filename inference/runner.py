@@ -11,7 +11,7 @@ from PIL import Image
 from torch import Tensor
 
 from world_model.gpt2 import Vai0rbis
-from world_model.opendv.transforms import CropAndResizeTransform
+from world_model.opendv.transforms import NeuroNCAPTransform
 
 NUSCENES_CAM_ORDER = [
     "CAM_FRONT",
@@ -90,9 +90,7 @@ class Vai0rbisRunner:
 
         self.device = device
         self.dtype = dtype
-        self.top_crop = self.inference_config.top_crop
-        self.scale_factor = self.inference_config.scale_factor
-        self.preproc_pipeline = CropAndResizeTransform(self.top_crop, self.scale_factor)
+        self.preproc_pipeline = NeuroNCAPTransform()
         self.reset()
 
     def reset(self) -> None:
@@ -146,7 +144,7 @@ def _format_trajs(trajs: Tensor) -> Tensor:
     Transform the trajector from Vai0rbis to the format expected by the server.
     dummy function for now
     """
-    return rearrange(trajs.cpu().numpy(), "1 1 h a -> h a")
+    return rearrange(trajs.float().cpu().numpy(), "1 1 h a -> h a")
 
 
 if __name__ == "__main__":

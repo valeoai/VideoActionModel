@@ -4,7 +4,7 @@ from world_model.opendv.ego_trajectory_dataset import EgoTrajectoryDataset
 from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
 from world_model.opendv.token_creator import TokenCreator, create_tokens
 from world_model.opendv.tokenized_sequence_opendv import TokenizedSequenceOpenDVDataModule
-from world_model.opendv.transforms import CropAndResizeTransform, torch_image_to_plot
+from world_model.opendv.transforms import CropAndResizeTransform, NeuroNCAPTransform, torch_image_to_plot
 
 __all__ = [
     "all_token_datasets",
@@ -17,5 +17,6 @@ __all__ = [
     "create_tokens",
     "TokenizedSequenceOpenDVDataModule",
     "CropAndResizeTransform",
+    "NeuroNCAPTransform",
     "torch_image_to_plot",
 ]

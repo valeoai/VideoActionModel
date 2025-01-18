@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import torch
 
@@ -60,3 +62,45 @@ class CropAndResizeTransform:
 def torch_image_to_plot(img: Tensor) -> np.ndarray:
     img = torch.clamp(127.5 * img + 128.0, 0, 255).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8).numpy()
     return img
+
+
+class SafeResize:
+    def __init__(self, resize_factor: float, size: Tuple[int, int]) -> None:
+        self.resize_factor = resize_factor
+        self.size = size
+
+    def __call__(self, img: Tensor) -> Tensor:
+        height, width = img.shape[1], img.shape[2]
+        print(f"size: {img.shape}")
+        if (height != self.size[0]) or (width != self.size[1]):
+            img = TF.resize(img, self.size, antialias=True)
+            print(f"Resized to: {img.shape}")
+
+        new_width = int(img.shape[2] / self.resize_factor)
+        new_height = int(img.shape[1] / self.resize_factor)
+        return TF.resize(img, (new_height, new_width), antialias=True)
+
+
+class NeuroNCAPTransform:
+    """
+    NeuroNCAP transform for nuScenes.
+
+    Some images send by Neuro-NCAP are exactly the correct shape.
+    For instance:
+    (900, 1599) instead of (900, 1600)
+    """
+
+    def __init__(self, resize_factor: float = 3.125, default_size: Tuple[int, int] = (900, 1600)) -> None:
+
+        self.transforms = transforms.Compose(
+            [
+                transforms.ToImage(),
+                transforms.ToDtype(torch.uint8, scale=True),
+                SafeResize(resize_factor, default_size),
+                transforms.ToDtype(torch.float32, scale=True),
+                Normalize(),  # Normalize to [-1, 1]
+            ]
+        )
+
+    def __call__(self, *args, **kwargs) -> Tensor:
+        return self.transforms(*args, **kwargs)
