@@ -42,7 +42,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating datamodule <{config.data._target_}>")
     datamodule: LightningDataModule = hydra.utils.instantiate(config.data)
 
-    if config.get("is_finetuning"):
+    if config.get("is_finetuning") and config.get("ckpt_path") is not None:
 
         deepspeed_ckpt_dir = config.get("ckpt_path")
         pt_path = "checkpoint/mp_rank_00_model_states.pt"
