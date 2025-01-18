@@ -28,6 +28,10 @@ scheduler:
   end_iter: ${trainer.max_steps} # interpolate max_steps as in will be incremeted in train.py by pretrained global_step
   drop_iter: 15529 # We are finetuning so we linearly decay the LR
 
+callbacks:
+  end_of_epoch_checkpoint:
+    every_n_train_steps: 15529
+
 data:
   opendv_tokens_rootdir: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
   opendv_video_list_path: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json
