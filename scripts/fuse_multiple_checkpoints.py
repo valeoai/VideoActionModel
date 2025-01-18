@@ -1,12 +1,13 @@
 import glob
 import os
+from typing import List, Tuple
 
 import click
 from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from tqdm import tqdm
 
 
-def find_deepspeed_checkpoints(root_dir, pattern="quarters*.ckpt"):
+def find_deepspeed_checkpoints(root_dir: str, pattern: str = "quarters*.ckpt") -> List[str]:
     """Find all DeepSpeed checkpoint directories matching the pattern."""
     # Search recursively in all subdirectories
     search_pattern = os.path.join(root_dir, "**/", pattern)
@@ -24,7 +25,7 @@ def find_deepspeed_checkpoints(root_dir, pattern="quarters*.ckpt"):
     return non_fused_checkpoints
 
 
-def format_path(path, max_length=100):
+def format_path(path: str, max_length: int = 100) -> str:
     """Format path for display, showing ellipsis in middle if too long."""
     if len(path) <= max_length:
         return path
@@ -32,10 +33,10 @@ def format_path(path, max_length=100):
     middle_len = max_length - len(tail) - 5  # 5 for '/.../'
     if middle_len < 10:  # if too short, just truncate from the start
         return "..." + path[-(max_length - 3) :]
-    return f"{head[:middle_len//2]}...{head[-(middle_len//2):]}/{tail}"
+    return f"{head[:middle_len // 2]}...{head[-(middle_len // 2):]}/{tail}"
 
 
-def fuse_checkpoint(checkpoint_dir):
+def fuse_checkpoint(checkpoint_dir: str) -> Tuple[bool, str | None]:
     """Fuse a single DeepSpeed checkpoint directory."""
     output_path = checkpoint_dir.rsplit(".ckpt", 1)[0] + "_fused.pt"
 
@@ -55,7 +56,7 @@ def fuse_checkpoint(checkpoint_dir):
     default="quarters_epoch=*.ckpt",
     help="Pattern to match checkpoint directories (default: quarters_epoch=*.ckpt)",
 )
-def main(root_dir, pattern):
+def main(root_dir: str, pattern: str) -> None:
     """
     Fuse DeepSpeed checkpoints starting from ROOT_DIR.
 

@@ -16,7 +16,8 @@ from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
 
 
 def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
-    result = dict()
+    """Remove prefix from keys in state_dict."""
+    result = {}
     for k, v in state_dict.items():
         tokens = k.split(".")
         if tokens[0] == prefix:
