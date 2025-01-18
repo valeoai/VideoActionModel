@@ -41,13 +41,21 @@ class KVCache(nn.Module):
     """
 
     def __init__(
-        self, batch_size: int, seq_length: int, n_kv_heads: int, head_dim: int, dtype: torch.dtype, device: torch.device
+        self,
+        batch_size: int,
+        seq_length: int,
+        n_kv_heads: int,
+        head_dim: int,
+        dtype: torch.dtype,
+        device: torch.device,
+        layer_idx: int = 0,
     ) -> None:
         super().__init__()
         cache_shape = (batch_size, n_kv_heads, seq_length, head_dim)
         self.register_buffer("cache_k", torch.zeros(cache_shape, dtype=dtype, device=device))
         self.register_buffer("cache_v", torch.zeros(cache_shape, dtype=dtype, device=device))
         self.start_pos = 0
+        self.layer_idx = layer_idx
 
     def reset(self) -> None:
         self.cache_k.zero_()
@@ -59,10 +67,10 @@ class KVCache(nn.Module):
         seqlen = xk.size(2)
         self.cache_k[:, :, self.start_pos : self.start_pos + seqlen] = xk
         self.cache_v[:, :, self.start_pos : self.start_pos + seqlen] = xv
-        xk = self.cache_k[:, :, : self.start_pos + seqlen]
-        xv = self.cache_v[:, :, : self.start_pos + seqlen]
+        xk_cached = self.cache_k[:, :, : self.start_pos + seqlen]
+        xv_cached = self.cache_v[:, :, : self.start_pos + seqlen]
         self.start_pos += seqlen
-        return xk, xv
+        return xk_cached, xv_cached
 
 
 class MLP(nn.Module):
@@ -434,7 +442,7 @@ class MupGPT2(nn.Module):
         - Cache size matches max_context_size
         - Must be reset when context is rolled
         """
-        for block in self.transformer.h:
+        for layer_idx, block in enumerate(self.transformer.h):
             layer = block.attn
             cache = KVCache(
                 batch_size=batch_size,
@@ -443,6 +451,7 @@ class MupGPT2(nn.Module):
                 head_dim=layer.dim_heads,
                 dtype=layer.c_attn.weight.dtype,
                 device=layer.c_attn.weight.device,
+                layer_idx=layer_idx,
             )
             layer.cache = cache
 
@@ -489,7 +498,7 @@ class MupGPT2(nn.Module):
         burnin_visual_tokens: Tensor,
         temperature: float = 1.0,
         topk_sampler: int = 1,
-        use_kv_cache: bool = False,
+        use_kv_cache: bool = True,
         verbose: int | bool = 0,
     ) -> Tensor:
         verbose = int(verbose)
@@ -526,8 +535,9 @@ class MupGPT2(nn.Module):
                 context = context[:, : (self.nb_timesteps - 1) * self.nb_tokens_per_timestep]
                 # because we use learned positional embeddings, we can not keep the context
                 # in cache and simply roll it. We need to recompute the whole cache.
-                self._reset_kv_cache()
-                kv_cache_was_reset = True
+                if use_kv_cache:
+                    self._reset_kv_cache()
+                    kv_cache_was_reset = True
 
             for _ in tqdm(
                 range(self.nb_tokens_per_timestep),
@@ -537,15 +547,14 @@ class MupGPT2(nn.Module):
                 position=1,
             ):
                 # Get next token
+                tokens_in_context = context.size(1)
+                tmp_ctx = context
+                tmp_spatial_positions = spatial_positions[:, :tokens_in_context]
+                tmp_temporal_positions = temporal_positions[:, :tokens_in_context]
                 if use_kv_cache and not kv_cache_was_reset:
-                    tmp_ctx = context[:, -1:]
-                    tmp_spatial_positions = spatial_positions[:, -1:]
-                    tmp_temporal_positions = temporal_positions[:, -1:]
-                else:
-                    tokens_in_context = context.size(1)
-                    tmp_ctx = context
-                    tmp_spatial_positions = spatial_positions[:, :tokens_in_context]
-                    tmp_temporal_positions = temporal_positions[:, :tokens_in_context]
+                    tmp_ctx = tmp_ctx[:, -1:]
+                    tmp_spatial_positions = tmp_spatial_positions[:, -1:]
+                    tmp_temporal_positions = tmp_temporal_positions[:, -1:]
 
                 logits = self.forward(
                     tmp_ctx,

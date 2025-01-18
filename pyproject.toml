@@ -19,8 +19,6 @@ classifiers = [
 
 dependencies = [
     "lightning",
-    "py-cpuinfo",
-    "deepspeed",
     "hydra-core",
     "hydra-colorlog",
     "mup @ git+https://github.com/microsoft/mup.git",

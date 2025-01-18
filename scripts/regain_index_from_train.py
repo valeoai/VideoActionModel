@@ -74,7 +74,7 @@ os.makedirs(args.outdir, exist_ok=True)
 if args.is_deepspeed:
     hp = convert_zero_checkpoint_to_fp32_state_dict(
         args.ckpt,
-        f"{args.outdir}/fused_ckpt.pt",
+        f"{args.outdir}/fused_ckpt_{args.name}.pt",
     )
 else:
     hp = torch.load(args.ckpt)
