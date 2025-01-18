@@ -11,7 +11,7 @@ from PIL import Image
 from torch import Tensor
 
 from world_model.gpt2 import Vai0rbis
-from world_model.opendv.transforms import CropAndResizeTransform
+from world_model.opendv.transforms import NeuroNCAPTransform
 
 NUSCENES_CAM_ORDER = [
     "CAM_FRONT",
@@ -90,9 +90,7 @@ class Vai0rbisRunner:
 
         self.device = device
         self.dtype = dtype
-        self.top_crop = self.inference_config.top_crop
-        self.scale_factor = self.inference_config.scale_factor
-        self.preproc_pipeline = CropAndResizeTransform(self.top_crop, self.scale_factor)
+        self.preproc_pipeline = NeuroNCAPTransform()
         self.reset()
 
     def reset(self) -> None:
@@ -101,8 +99,6 @@ class Vai0rbisRunner:
         self.prev_frame_info = {
             "scene_token": None,
             "prev_frames": None,
-            "prev_actions": None,
-            "prev_commands": None,
         }
 
     @torch.no_grad()
@@ -117,15 +113,12 @@ class Vai0rbisRunner:
             # first frame
             self.prev_frame_info["scene_token"] = self.scene_token
             self.prev_frame_info["prev_frames"] = preproc_output.unsqueeze(0)
-            self.prev_frame_info["prev_command"] = [input.command]
         else:
             # append the current frame to the previous frames
             self.prev_frame_info["prev_frames"] = torch.cat(
                 [self.prev_frame_info["prev_frames"], preproc_output.unsqueeze(0)],
                 dim=0,
             )[-self.nb_timesteps :]
-            self.prev_frame_info["prev_command"].append(input.command)
-            self.prev_frame_info["prev_command"] = self.prev_frame_info["prev_command"][-self.nb_timesteps :]
 
         # This should (T, c, h, w)
         # So here the temporal frames play the role of batch size
@@ -140,13 +133,6 @@ class Vai0rbisRunner:
         with torch.amp.autocast("cuda", dtype=self.dtype):
             trajectory = self.vai0rbis.forward_inference(visual_tokens, command_tokens, self.dtype)
 
-        if self.prev_frame_info["prev_actions"] is None:
-            self.prev_frame_info["prev_actions"] = trajectory
-        else:
-            self.prev_frame_info["prev_actions"] = torch.cat([self.prev_frame_info["prev_actions"], trajectory], dim=0)[
-                -self.nb_timesteps :
-            ]
-
         return Vai0rbisInferenceOutput(
             trajectory=_format_trajs(trajectory),
             aux_outputs=Vai0rbisAuxOutputs.empty(),
@@ -158,7 +144,7 @@ def _format_trajs(trajs: Tensor) -> Tensor:
     Transform the trajector from Vai0rbis to the format expected by the server.
     dummy function for now
     """
-    return rearrange(trajs.cpu().numpy(), "1 1 h a -> h a")
+    return rearrange(trajs.float().cpu().numpy(), "1 1 h a -> h a")
 
 
 if __name__ == "__main__":
@@ -203,10 +189,7 @@ if __name__ == "__main__":
     sample = nusc.get("sample", scene["first_sample_token"])
 
     inference_input = _get_sample_input(nusc, sample)
-    plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
-    plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
-    plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
+    for _ in range(20):
+        plan = runner.forward_inference(inference_input)
+        assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
     print("All tests passed!")

@@ -1,7 +1,7 @@
 # Request interactive session with 1 GPU
 # srun -A fzh@v100 -C v100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu-t3 --time=00:30:00 bash
 
-# srun -A ycy@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu_h100-dev --time=00:10:00 bash run_singularity_job.sh
+# srun -A ycy@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu_h100-dev --time=00:10:00 bash run_single_job.sh
 
 module purge
 module load singularity

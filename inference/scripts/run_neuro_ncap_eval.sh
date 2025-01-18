@@ -15,7 +15,7 @@ export MODEL_CHECKPOINT_PATH="null"
 export MODEL_CFG_PATH='configs/inference_ncap.yaml'
 export MODEL_IMAGE='ncap_vai0rbis.sif'
 export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/$MODEL_IMAGE
-## Tokenizer paths
+## Tokenizer path
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
 ## WM paths
 export WM_BASE_LOGDIR=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/Finetune_opendv_dim2048_part3_imitation_learning_nuscenes_2epoch_dropLR
@@ -28,7 +28,7 @@ export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/'neurad_70.sif'  # Changed c
 # NCAP related stuff
 export NCAP_FOLDER=$BASE_DIR/'neuro-ncap'
 export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/'ncap.sif'
-export LOG_DIR='logs/wm_ncap'  # this path is inside the container & binded to $NCAP_FOLDER
+export LOG_DIR='logs/vai0rbis_ncap'  # this path is inside the container & binded to $NCAP_FOLDER
 
 # Evaluation default values, set to lower for debugging
 export RUNS=50

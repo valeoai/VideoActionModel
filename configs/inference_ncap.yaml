@@ -7,10 +7,6 @@ defaults:
 
 name: "inference" # used by hydra in case of error looging
 
-# Image preprocessing
-top_crop: 0
-scale_factor: 3.125
-
 # Different checkpoints paths required for the model
 # Note that we start at /model since this will be run inside a docker / singularity container
 # mup_base_shapes_path: /model/mup_shapes/gpt2_24layers_nobias_basewidth128_with_commands.bsh
