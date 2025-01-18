@@ -16,8 +16,11 @@ MuSharedReadout
 normal_ init
 """
 
+import os
+from collections import OrderedDict
 from typing import Tuple
 
+import mup
 import torch
 import torch.nn as nn
 from einops import rearrange
@@ -574,9 +577,38 @@ class MupGPT2(nn.Module):
         return generated_frames
 
 
-if __name__ == "__main__":
-    import mup
+def load_pretrained_gpt(checkpoint_path: str) -> MupGPT2:
+    if os.path.isdir(checkpoint_path):
+        # This is a deepspeed checkpoint
+        import tempfile
 
+        from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            ckpt = convert_zero_checkpoint_to_fp32_state_dict(
+                checkpoint_path,
+                os.path.join(tmpdirname, "fused_ckpt.pt"),
+            )
+    else:
+        ckpt = torch.load(checkpoint_path, map_location="cpu")
+
+    config = ckpt["hyper_parameters"]["network"].copy()
+    config.pop("_target_")
+    gpt = MupGPT2(**config)
+    state_dict = OrderedDict()
+    for k, v in ckpt["state_dict"].items():
+        state_dict[k.replace("network.", "")] = v
+
+    gpt.load_state_dict(state_dict)
+    mup.set_base_shapes(gpt, ckpt["hyper_parameters"]["mup_base_shapes"], rescale_params=False)
+    _ = gpt.eval()
+    _ = gpt.to("cuda")
+    _ = gpt.requires_grad_(False)
+
+    return gpt
+
+
+if __name__ == "__main__":
     height, width = 8, 12
 
     model = MupGPT2(
