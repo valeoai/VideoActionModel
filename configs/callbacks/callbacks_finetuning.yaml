@@ -20,5 +20,6 @@ end_of_epoch_checkpoint:
   dirpath: "${paths.output_dir}/${name}/checkpoints/"
   filename: "end_of_epoch_{epoch:03d}_{step:010d}"
   save_last: True
-  every_n_train_steps: ???
+  #every_n_train_steps: ???
+  every_n_epochs: 1
   verbose: true
