@@ -53,7 +53,8 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         config.trainer.max_steps = pretrained_global_step + config.trainer.max_steps
 
         log.info(
-            f"Finetuning | past global_step = {pretrained_global_step}, incrementing trainer max_steps tp {config.trainer.max_steps}"
+            f"Finetuning | past global_step = {pretrained_global_step}, "
+            f"incrementing trainer max_steps tp {config.trainer.max_steps}"
         )
         log.info(
             f"Finetuning | scheduler.end_iter={config.scheduler.end_iter} ; scheduler.drop_iter={config.scheduler.drop_iter}"

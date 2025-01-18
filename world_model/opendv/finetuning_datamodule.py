@@ -124,7 +124,12 @@ class MixFinetuningDataModule(LightningDataModule):
     def train_dataloader(self) -> StatefulDataLoader:
         if not hasattr(self, "train_dataloader_"):
             self.train_dataloader_ = StatefulDataLoader(
-                self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers, pin_memory=True
+                self.train_dataset,
+                is_finetuning=True,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.num_workers,
+                pin_memory=True,
             )
         return self.train_dataloader_
 
