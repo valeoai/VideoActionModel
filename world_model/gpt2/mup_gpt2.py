@@ -408,6 +408,7 @@ class MupGPT2(nn.Module):
         seqlen = token_sequence.size(1)
         if inference and use_kv_cache:
             attn_mask = None
+            assert seqlen == 1, "inference with KV cache only supports single token forward"
         else:
             attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
 
@@ -430,8 +431,8 @@ class MupGPT2(nn.Module):
         KV Cache:
         - Stores the Key and Value projections for each token
         - Avoids recomputing these for previous tokens during generation
-        - Cache size matches max_context_size to align with rolling context
-        - Must be updated (rolled) when context is rolled
+        - Cache size matches max_context_size
+        - Must be reset when context is rolled
         """
         for block in self.transformer.h:
             layer = block.attn
@@ -455,7 +456,7 @@ class MupGPT2(nn.Module):
         for block in self.transformer.h:
             block.attn.cache = None
 
-    def _sample_next_token(self, logits: Tensor, temperature: float, topk_sampler: int) -> Tuple[Tensor, Tensor]:
+    def _sample_next_token(self, logits: Tensor, temperature: float, topk_sampler: int) -> Tensor:
         """
         Sample the next token from the logits using top-k sampling.
 
