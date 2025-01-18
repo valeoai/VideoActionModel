@@ -44,7 +44,7 @@ model:
     num_inference_steps: 10
     flow_sig_min: 0.001
     final_action_clip_value: null
-    gpt_mup_base_shapes: null
+    gpt_mup_base_shapes: ./mup_shapes/gpt2_24layers_basewidth256.bsh
     gpt_checkpoint_path: null
     gpt_config:
       _target_: world_model.gpt2.MupGPT2
@@ -56,7 +56,7 @@ model:
       nb_timesteps: 8  # this should be the one from pretraining != to the action learning one
       nb_tokens_per_timestep: 576 # 18*32 = 576 | h*w of visual tokens
       output_tied: True
-    action_mup_base_shapes: null
+    action_mup_base_shapes: ./mup_shapes/actionexpert_24layers_baseattentiondim256_baseembeddingdim64
     action_checkpoint_path: null
     action_config:
       _target_: world_model.gpt2.MupActionExpert
