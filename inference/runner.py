@@ -101,8 +101,6 @@ class Vai0rbisRunner:
         self.prev_frame_info = {
             "scene_token": None,
             "prev_frames": None,
-            "prev_actions": None,
-            "prev_commands": None,
         }
 
     @torch.no_grad()
@@ -117,15 +115,12 @@ class Vai0rbisRunner:
             # first frame
             self.prev_frame_info["scene_token"] = self.scene_token
             self.prev_frame_info["prev_frames"] = preproc_output.unsqueeze(0)
-            self.prev_frame_info["prev_command"] = [input.command]
         else:
             # append the current frame to the previous frames
             self.prev_frame_info["prev_frames"] = torch.cat(
                 [self.prev_frame_info["prev_frames"], preproc_output.unsqueeze(0)],
                 dim=0,
             )[-self.nb_timesteps :]
-            self.prev_frame_info["prev_command"].append(input.command)
-            self.prev_frame_info["prev_command"] = self.prev_frame_info["prev_command"][-self.nb_timesteps :]
 
         # This should (T, c, h, w)
         # So here the temporal frames play the role of batch size
@@ -139,13 +134,6 @@ class Vai0rbisRunner:
         # Get the trajectory
         with torch.amp.autocast("cuda", dtype=self.dtype):
             trajectory = self.vai0rbis.forward_inference(visual_tokens, command_tokens, self.dtype)
-
-        if self.prev_frame_info["prev_actions"] is None:
-            self.prev_frame_info["prev_actions"] = trajectory
-        else:
-            self.prev_frame_info["prev_actions"] = torch.cat([self.prev_frame_info["prev_actions"], trajectory], dim=0)[
-                -self.nb_timesteps :
-            ]
 
         return Vai0rbisInferenceOutput(
             trajectory=_format_trajs(trajectory),
@@ -203,10 +191,7 @@ if __name__ == "__main__":
     sample = nusc.get("sample", scene["first_sample_token"])
 
     inference_input = _get_sample_input(nusc, sample)
-    plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
-    plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
-    plan = runner.forward_inference(inference_input)
-    assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
+    for _ in range(20):
+        plan = runner.forward_inference(inference_input)
+        assert plan.trajectory.shape == (6, 2), plan.trajectory.shape
     print("All tests passed!")
