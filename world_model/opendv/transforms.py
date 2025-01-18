@@ -71,10 +71,8 @@ class SafeResize:
 
     def __call__(self, img: Tensor) -> Tensor:
         height, width = img.shape[1], img.shape[2]
-        print(f"size: {img.shape}")
         if (height != self.size[0]) or (width != self.size[1]):
             img = TF.resize(img, self.size, antialias=True)
-            print(f"Resized to: {img.shape}")
 
         new_width = int(img.shape[2] / self.resize_factor)
         new_height = int(img.shape[1] / self.resize_factor)
