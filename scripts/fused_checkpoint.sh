@@ -10,10 +10,15 @@ INPUT=$1
 OUTPUT=$2
 
 
-srun --qos=qos_gpu_h100-dev -A ycy@h100 -C h100 --time=00:30:00 --gres=gpu:1  --ntasks=1 --cpus-per-task=48 --pty \
+srun --qos=qos_gpu_h100-dev -A ycy@h100 -C h100 --time=00:30:00 --gres=gpu:1  --ntasks=1 --cpus-per-task=24 --pty \
 python $SCRIPT_DIR/fused_checkpoint.py --checkpoint $INPUT --output $OUTPUT
 
 # Example usage:
 # bash scripts/fused_checkpoint.sh \
-# $ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/grid_search/GS256024_Nodes6_BSperGPU16_totalBS384_dim256_std0.0056_lr0.0003_0115_1029_1736933366/csv/version_0/checkpoints/'epoch=0-step=15529.ckpt' \
-# $ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/'epoch=0-step=15529_fused.ckpt'
+# $ycy_ALL_CCFRSCRATCH/output_data/vaiorbis_grid_search/Vaiorbis_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192_0119_1044_1737279899/checkpoints/'before_drop_epoch=000_step=0000006525.ckpt' \
+# $ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
+
+
+python scripts/fused_checkpoint.py \
+--checkpoint $ycy_ALL_CCFRSCRATCH/output_data/vaiorbis_grid_search/Vaiorbis_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192_0119_1044_1737279899/checkpoints/'before_drop_epoch=000_step=0000006525.ckpt' \
+--output $ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt

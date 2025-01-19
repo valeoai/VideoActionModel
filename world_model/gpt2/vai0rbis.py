@@ -284,6 +284,43 @@ class Vai0rbisInference(Vai0rbis):
         return super().forward_inference(visual_tokens, high_level_command, dtype, verbose)
 
 
+def load_inference_vai0rbis(checkpoint_path: str, device: torch.dtype | str = "cuda") -> Vai0rbisInference:
+    if os.path.isdir(checkpoint_path):
+        # This is a deepspeed checkpoint
+        import tempfile
+
+        from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            ckpt = convert_zero_checkpoint_to_fp32_state_dict(
+                checkpoint_path,
+                os.path.join(tmpdirname, "fused_ckpt.pt"),
+            )
+    else:
+        ckpt = torch.load(checkpoint_path, map_location="cpu")
+
+    config = ckpt["hyper_parameters"]["vai0rbis_conf"].copy()
+    config.pop("_target_")
+    config.pop("_recursive_")
+    config.gpt_checkpoint_path = None
+    config.action_checkpoint_path = None
+    config.gpt_mup_base_shapes = None
+    config.action_mup_base_shapes = None
+    vai0rbis = Vai0rbisInference(**config)
+    state_dict = OrderedDict()
+    for k, v in ckpt["state_dict"].items():
+        state_dict[k.replace("vai0rbis.", "")] = v
+
+    vai0rbis.load_state_dict(state_dict)
+    mup.set_base_shapes(vai0rbis.gpt, ckpt["gpt_mup_base_shapes"], rescale_params=False)
+    mup.set_base_shapes(vai0rbis.action_expert, ckpt["action_mup_base_shapess"], rescale_params=False)
+
+    vai0rbis.requires_grad_(False)
+    vai0rbis.eval()
+    vai0rbis.to(device)
+    return vai0rbis
+
+
 if __name__ == "__main__":
     height, width = 8, 16
 
@@ -312,8 +349,10 @@ if __name__ == "__main__":
     vai0rbis = Vai0rbis(
         gpt_config=gpt_config,
         gpt_mup_base_shapes=None,
+        gpt_checkpoint_path=None,
         action_config=action_expert_config,
         action_mup_base_shapes=None,
+        action_checkpoint_path=None,
         finetuning_timesteps=gpt_config.nb_timesteps,
     )
 

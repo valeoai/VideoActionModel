@@ -27,9 +27,7 @@ echo "Scenario: $scenario"
 ## Tokenizer paths
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
 ## Vai0rbis paths
-export VAI0RBIS_BASE_LOGDIR=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/Finetune_opendv_dim2048_part3_imitation_learning_nuscenes_2epoch_dropLR
-export VAI0RBIS_CKPT_PATH=$VAI0RBIS_BASE_LOGDIR/"checkpoints/step=0000000056_fused.pt"
-export VAI0RBIS_CONFIG_PATH=$VAI0RBIS_BASE_LOGDIR/"checkpoints/hparams.yaml"
+export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
 
 export renderer_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
 export model_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
@@ -51,15 +49,16 @@ singularity exec --nv \
 
 singularity exec --nv \
     --bind $WORK/NextTokenPredictor:/model \
-    --bind $IMAGE_TOKENIZER_PATH:/model/weights/tokenizers/image_tokenizer.jit \
+    --bind $IMAGE_TOKENIZER_PATH:/model/weights/image_tokenizer.jit \
+    --bind $VAI0RBIS_CKPT_PATH:/model/weights/vai0rbis.pt \
     --pwd /model \
     --env PYTHONPATH=. \
 	--env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
     $MODEL_CONTAINER \
 	python -u inference/server.py \
     --port $model_port \
-    --config_path /model/configs/inference_ncap.yaml \
-    --checkpoint_path null \
+    --config_path /model/weights/image_tokenizer.jit \
+    --checkpoint_path /model/weights/vai0rbis.pt \
 	&
 
 singularity exec --nv \
