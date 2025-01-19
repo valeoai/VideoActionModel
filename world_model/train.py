@@ -51,6 +51,7 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         pretrained_global_step = pt["global_step"]
 
         config.scheduler.end_iter = pretrained_global_step + config.scheduler.end_iter
+        config.scheduler.num_iter = pretrained_global_step
 
         log.info(f"Finetuning | past global_step = {pretrained_global_step} ")
         log.info(
