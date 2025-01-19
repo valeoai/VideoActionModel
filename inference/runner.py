@@ -5,12 +5,10 @@ from typing import Any, Dict, List
 import numpy as np
 import torch
 from einops import rearrange
-from hydra.utils import instantiate
-from omegaconf import OmegaConf
 from PIL import Image
 from torch import Tensor
 
-from world_model.gpt2 import Vai0rbis
+from world_model.gpt2 import Vai0rbisInference, load_inference_vai0rbis
 from world_model.opendv.transforms import NeuroNCAPTransform
 
 NUSCENES_CAM_ORDER = [
@@ -72,21 +70,11 @@ class Vai0rbisInferenceOutput:
 class Vai0rbisRunner:
 
     def __init__(self, config_path: str, checkpoint_path: str, device: torch.device, dtype: torch.dtype) -> None:
-        self.inference_config = OmegaConf.load(config_path)
-
-        image_tokenizer_path = self.inference_config.image_tokenizer_path
-        self.image_tokenizer = torch.jit.load(image_tokenizer_path)
+        self.image_tokenizer = torch.jit.load(config_path)
         self.image_tokenizer.to(device)
 
-        self.vai0rbis_experiment_config = OmegaConf.load(self.inference_config.vai0rbis_experiment_config)
-        self.vai0rbis_experiment_config.model.vai0rbis_conf.gpt_checkpoint_path = self.inference_config.gpt_checkpoint_path
-        self.vai0rbis_experiment_config.model.vai0rbis_conf.action_checkpoint_path = (
-            self.inference_config.action_checkpoint_path
-        )
-        self.vai0rbis: Vai0rbis = instantiate(self.vai0rbis_experiment_config.model.vai0rbis_conf)
+        self.vai0rbis: Vai0rbisInference = load_inference_vai0rbis(checkpoint_path, device)
         self.nb_timesteps = self.vai0rbis.context_length
-        self.vai0rbis.to(device)
-        self.vai0rbis.requires_grad_(False)
 
         self.device = device
         self.dtype = dtype
@@ -131,7 +119,7 @@ class Vai0rbisRunner:
 
         # Get the trajectory
         with torch.amp.autocast("cuda", dtype=self.dtype):
-            trajectory = self.vai0rbis.forward_inference(visual_tokens, command_tokens, self.dtype)
+            trajectory = self.vai0rbis(visual_tokens, command_tokens, self.dtype)
 
         return Vai0rbisInferenceOutput(
             trajectory=_format_trajs(trajectory),
@@ -150,6 +138,8 @@ def _format_trajs(trajs: Tensor) -> Tensor:
 if __name__ == "__main__":
     # only load this for testing
     from nuscenes.nuscenes import NuScenes
+
+    from world_model.utils import expand_path
 
     def _get_sample_input(nusc: NuScenes, sample: Dict[str, Any]) -> Vai0rbisInferenceInput:
         timestamp = sample["timestamp"]
@@ -174,14 +164,20 @@ if __name__ == "__main__":
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     runner = Vai0rbisRunner(
-        config_path="configs/inference_ncap.yaml",
-        checkpoint_path=None,
+        # config_path=expand_path("~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit"),
+        config_path=expand_path("$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit"),
+        checkpoint_path=expand_path(
+            "$fzh_ALL_CCFRSCRATCH/output_data/vaiorbis_grid_search/"
+            "Vaiorbis_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192_0119_1044_1737279899/"
+            "checkpoints/before_drop_epoch=000_step=0000006525.ckpt"
+        ),
         device=torch.device(device),
         dtype=torch.float16,
     )
 
     # load the first surround-cam in nusc mini
-    nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
+    nusc = NuScenes(version="v1.0-mini", dataroot="/lustre/fsn1/projects/rech/ycy/commun/nuscenes_v2")
+    # nusc = NuScenes(version="v1.0-mini", dataroot="/datasets_local/nuscenes")
     # nusc = NuScenes(version="v1.0-mini", dataroot="/model/data/nuscenes")
     scene_name = "scene-0103"
     scene = [s for s in nusc.scene if s["name"] == scene_name][0]

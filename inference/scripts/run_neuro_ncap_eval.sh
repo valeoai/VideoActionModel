@@ -11,16 +11,12 @@ export NUSCENES_PATH=$ycy_ALL_CCFRSCRATCH/nuscenes_v2
 # Model related stuff
 export MODEL_NAME='NextTokenPredictor'
 export MODEL_FOLDER=$BASE_DIR/$MODEL_NAME
-export MODEL_CHECKPOINT_PATH="null"
-export MODEL_CFG_PATH='configs/inference_ncap.yaml'
 export MODEL_IMAGE='ncap_vai0rbis.sif'
 export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/$MODEL_IMAGE
 ## Tokenizer path
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
-## WM paths
-export WM_BASE_LOGDIR=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/Finetune_opendv_dim2048_part3_imitation_learning_nuscenes_2epoch_dropLR
-export WM_CKPT_PATH=$WM_BASE_LOGDIR/"checkpoints/step=0000000056_fused.pt"
-export WM_CONFIG_PATH=$WM_BASE_LOGDIR/"checkpoints/hparams.yaml"
+## Vai0rbis path
+export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
 # Rendering related stuff
 export RENDERING_FOLDER=$BASE_DIR/'neurad-studio'
 export RENDERING_CHECKPOITNS_PATH='checkpoints'
