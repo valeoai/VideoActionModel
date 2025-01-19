@@ -19,6 +19,6 @@ python $SCRIPT_DIR/fused_checkpoint.py --checkpoint $INPUT --output $OUTPUT
 # $ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
 
 
-python scripts/fused_checkpoint.py \
---checkpoint $ycy_ALL_CCFRSCRATCH/output_data/vaiorbis_grid_search/Vaiorbis_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192_0119_1044_1737279899/checkpoints/'before_drop_epoch=000_step=0000006525.ckpt' \
---output $ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
+# python scripts/fused_checkpoint.py \
+# --checkpoint $ycy_ALL_CCFRSCRATCH/output_data/vaiorbis_grid_search/Vaiorbis_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192_0119_1044_1737279899/checkpoints/'before_drop_epoch=000_step=0000006525.ckpt' \
+# --output $ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt

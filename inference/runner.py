@@ -119,7 +119,7 @@ class Vai0rbisRunner:
 
         # Get the trajectory
         with torch.amp.autocast("cuda", dtype=self.dtype):
-            trajectory = self.vai0rbis.forward_inference(visual_tokens, command_tokens, self.dtype)
+            trajectory = self.vai0rbis(visual_tokens, command_tokens, self.dtype)
 
         return Vai0rbisInferenceOutput(
             trajectory=_format_trajs(trajectory),
