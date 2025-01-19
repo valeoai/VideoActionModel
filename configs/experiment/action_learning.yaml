@@ -2,7 +2,7 @@
 
 defaults:
   - override /data: ego_trajectory_dataset
-  - override /callbacks: callbacks_opendv_training
+  - override /callbacks: callbacks_action_training
   - override /trainer: deepspeed2
   - override /logger: many_loggers
   - override /paths: jeanzay_nuplan
@@ -13,18 +13,22 @@ defaults:
 
 
 trainer:
-  max_epochs: 5
+  max_epochs: 1
   # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
   gradient_clip_val: 1.0
   accumulate_grad_batches: 1
   log_every_n_steps: 5
+  default_root_dir: ${paths.output_dir}/${name}/
 
 scheduler:
-  warmup_iter: 15529 # 1% ~ end_iter * 0.01
-  end_iter: 155293 # (len_dataset - 1) // BATCH_SIZE * nb_epochs = (59632706 - 1) // 384 * 1 = 155293
-  drop_iter: 0 # pretrain stage no annealing
+  warmup_iter: 75 # 1% ~ end_iter * 0.01
+  end_iter: 7250 # (len_dataset - 1) // BATCH_SIZE * nb_epochs = (59632706 - 1) // 384 * 1 = 155293
+  drop_iter: 725 # 10%
 
 data:
+  nuplan_tokens_rootdir: $ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens
+  nuplan_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_train_data_cleaned.pkl
+  nuplan_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl
   nuscenes_tokens_rootdir: $ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens
   nuscenes_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl
   nuscenes_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
@@ -34,7 +38,7 @@ data:
 model:
   _target_: world_model.gpt2.ActionLearning
   _recursive_: false
-  flow_sampling: uniform
+  flow_sampling: beta
   flow_alpha: 1.5
   flow_beta: 1.0
   vai0rbis_conf:
@@ -44,6 +48,7 @@ model:
     num_inference_steps: 10
     flow_sig_min: 0.001
     final_action_clip_value: null
+    action_scaling: 70.
     gpt_mup_base_shapes: ./mup_shapes/gpt2_24layers_basewidth256.bsh
     gpt_checkpoint_path: null
     gpt_config:
@@ -56,7 +61,7 @@ model:
       nb_timesteps: 8  # this should be the one from pretraining != to the action learning one
       nb_tokens_per_timestep: 576 # 18*32 = 576 | h*w of visual tokens
       output_tied: True
-    action_mup_base_shapes: ./mup_shapes/actionexpert_24layers_baseattentiondim256_baseembeddingdim64
+    action_mup_base_shapes: ./mup_shapes/actionexpert_24layers_baseattentiondim256_baseembeddingdim64.bsh
     action_checkpoint_path: null
     action_config:
       _target_: world_model.gpt2.MupActionExpert
