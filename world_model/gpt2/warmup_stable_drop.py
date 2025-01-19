@@ -11,6 +11,7 @@ class WarmupStableDrop:
         end_iter: int,
         drop_iter: int = 0,
         num_iter: int = 0,
+        is_finetuning: bool = False,
     ) -> None:
         self.warmup_iter = warmup_iter
         self.end_iter = end_iter
@@ -22,12 +23,15 @@ class WarmupStableDrop:
         for group in self.optimizer.param_groups:
             self.start_lr.append(group["lr"])
 
+        self.is_finetuning = is_finetuning
         self.step(self.num_iter)
 
     def state_dict(self) -> Dict[str, Any]:
         return {key: value for key, value in self.__dict__.items() if key != "optimizer"}
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        if self.is_finetuning:
+            return
         self.__dict__.update(state_dict)
 
     def get_lr_warmup(self, num_iter: int, base_lr: float, warmup_iter: int) -> float:
