@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from torch import BoolTensor, FloatTensor, LongTensor
+from torch import BoolTensor, LongTensor, Tensor
 from tqdm import tqdm
 
 from world_model.gpt2.joint_model import JointModel
@@ -38,6 +38,7 @@ class Vai0rbis(nn.Module):
         num_inference_steps: int = 10,
         flow_sig_min: float = 0.001,
         final_action_clip_value: float | None = None,
+        action_scaling: float = 1.0,
     ) -> None:
         super().__init__()
         # My parameters
@@ -45,6 +46,7 @@ class Vai0rbis(nn.Module):
         self.flow_sig_min = flow_sig_min
         self.final_action_clip_value = final_action_clip_value
         self.context_length = finetuning_timesteps
+        self.action_scaling = action_scaling
 
         # Load the models
         ## Video generation model
@@ -178,10 +180,10 @@ class Vai0rbis(nn.Module):
 
     def psi_t(
         self,
-        x: FloatTensor,
-        x1: FloatTensor,
-        t: FloatTensor,
-    ) -> FloatTensor:
+        x: Tensor,
+        x1: Tensor,
+        t: Tensor,
+    ) -> Tensor:
         """Conditional Flow"""
         t = t[:, :, None, None]  # (B, finetuning_timesteps, 1, 1)
         return (1 - (1 - self.flow_sig_min) * t) * x + t * x1
@@ -190,15 +192,15 @@ class Vai0rbis(nn.Module):
         self,
         visual_tokens: LongTensor,
         high_level_command: LongTensor,
-        actions: FloatTensor,
-        t: FloatTensor,
-    ) -> FloatTensor:
+        actions: Tensor,
+        t: Tensor,
+    ) -> Tensor:
         """Flow matching loss for action prediction"""
         # noisy action
         # [Batch_Size, finetuning_timesteps, Horizon_Steps, Action_Dim]
-        x0 = torch.randn_like(actions, device=t.device, dtype=t.dtype)
-        x1 = actions
-        psi_t = self.psi_t(x0, x1, t)
+        x0 = torch.randn_like(actions, device=actions.device)
+        x1 = actions / self.action_scaling
+        psi_t = self.psi_t(x0, x1, t).type_as(x1)
 
         v_psi = self.joint_model(
             attention_mask=self.attn_mask,
@@ -212,7 +214,7 @@ class Vai0rbis(nn.Module):
 
         # compare to true velocity
         d_psi = x1 - (1 - self.flow_sig_min) * x0
-        return torch.mean((v_psi - d_psi) ** 2)
+        return torch.mean((v_psi - d_psi) ** 2).type_as(x1)
 
     def forward_inference(
         self,
@@ -220,7 +222,7 @@ class Vai0rbis(nn.Module):
         high_level_command: LongTensor,
         dtype: torch.dtype,
         verbose: bool = False,
-    ) -> torch.FloatTensor:
+    ) -> torch.Tensor:
         """
         Inference for action prediction.
 
@@ -266,7 +268,7 @@ class Vai0rbis(nn.Module):
                 -self.final_action_clip_value,
                 self.final_action_clip_value,
             )
-        return action
+        return action * self.action_scaling
 
 
 class Vai0rbisInference(Vai0rbis):
@@ -278,7 +280,7 @@ class Vai0rbisInference(Vai0rbis):
         high_level_command: LongTensor,
         dtype: torch.dtype,
         verbose: bool = False,
-    ) -> torch.FloatTensor:
+    ) -> torch.Tensor:
         return super().forward_inference(visual_tokens, high_level_command, dtype, verbose)
 
 

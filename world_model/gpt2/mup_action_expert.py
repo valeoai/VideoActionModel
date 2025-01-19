@@ -93,6 +93,7 @@ class ActionEncoder(nn.Module):
         # high_level_command: [Batch_Size, context_length]
         # diffusion_step: [Batch_Size, context_length]
         bs, context_length, horizon, _ = actions.size()
+
         action_emb = self.linear_1(actions)  # [Batch_Size, context_length, Horizon_Steps, Action_Hidden_Dim]
         # embedd high level command
         command_emb = self.command_embedding(high_level_command)  # [Batch_Size, context_length, Action_Hidden_Dim]
@@ -111,7 +112,7 @@ class ActionEncoder(nn.Module):
             diffusion_step, self.max_period
         )  # [Batch_Size, context_length, Action_Hidden_Dim]
         diffusion_step_emb = rearrange(diffusion_step_emb, "(b t) d -> b t d", b=bs)
-        diffusion_step_emb = repeat(diffusion_step_emb, "b t d -> b t h d", h=horizon)
+        diffusion_step_emb = repeat(diffusion_step_emb, "b t d -> b t h d", h=horizon).type_as(action_emb)
 
         action_emb = torch.cat([diffusion_step_emb, action_emb], dim=-1)
         action_emb = self.nonlinearity(self.linear_2(action_emb))
