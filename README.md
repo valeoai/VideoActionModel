@@ -72,9 +72,9 @@ plot_images(pred_images, 2, 4)
 import pickle
 
 import torch
-import torch.nn.functional as F
-from einops import repeat
+from einops import rearrange, repeat
 
+from world_model.evaluation import min_ade
 from world_model.gpt2 import load_inference_vai0rbis
 from world_model.opendv import EgoTrajectoryDataset
 from world_model.utils import expand_path
@@ -100,9 +100,10 @@ with torch.amp.autocast("cuda", dtype=torch.bfloat16):
     trajectory = vai0rbis(visual_tokens, commands, torch.bfloat16)
 
 ground_truth = sample["positions"].to("cuda", non_blocking=True)[-1:]
-ground_truth = repeat(ground_truth, "t h w -> b t h w", b=num_sampling)
 
-loss = F.mse_loss(trajectory, ground_truth, reduction="none").mean(dim=(1, 2, 3)).min()
+ground_truth = sample["positions"].to("cuda", non_blocking=True)[-1:]
+trajectory = rearrange(trajectory, "s 1 t a -> 1 s t a")
+loss = min_ade(trajectory, ground_truth)
 print(loss)
 ```
 

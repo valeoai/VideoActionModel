@@ -43,7 +43,7 @@ def create_gif_from_folder(folder: str, task: str, outdir: str) -> str:
         "-f",
         "image2",
         "-framerate",
-        "3",
+        "2",
         "-pattern_type",
         "glob",
         "-i",
