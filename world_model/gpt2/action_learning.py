@@ -58,7 +58,7 @@ class ActionLearning(LightningModule):
         if self.flow_sampling == "beta":
             self.flow_alpha = flow_alpha
             self.flow_beta = flow_beta
-            self.flow_sig_min = vai0rbis_conf.flow_sig_min
+            self.flow_sig_min = self.vai0rbis.flow_sig_min
             self.flow_t_max = 1 - self.flow_sig_min
             self.flow_beta_dist = torch.distributions.Beta(flow_alpha, flow_beta)
 
@@ -168,7 +168,7 @@ class ActionLearning(LightningModule):
             # splitting the code into optimized and unoptimized parts.
             # fullgraph=True to force an error if there is a graph break in the model,
             # calling for manual optimization of the code to get it compiled.
-            self.net = torch.compile(self.network, fullgraph=True)
+            self.net = torch.compile(self.vai0rbis, fullgraph=True)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.

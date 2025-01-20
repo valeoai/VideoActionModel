@@ -198,7 +198,7 @@ class Vai0rbis(nn.Module):
         """Flow matching loss for action prediction"""
         # noisy action
         # [Batch_Size, finetuning_timesteps, Horizon_Steps, Action_Dim]
-        x0 = torch.randn_like(actions, device=actions.device)
+        x0 = torch.randn_like(actions, device=actions.device, dtype=actions.dtype)
         x1 = actions / self.action_scaling
         psi_t = self.psi_t(x0, x1, t).type_as(x1)
 
@@ -214,7 +214,7 @@ class Vai0rbis(nn.Module):
 
         # compare to true velocity
         d_psi = x1 - (1 - self.flow_sig_min) * x0
-        return torch.mean((v_psi - d_psi) ** 2).type_as(x1)
+        return torch.mean((v_psi - d_psi.type_as(x1)) ** 2)
 
     def forward_inference(
         self,

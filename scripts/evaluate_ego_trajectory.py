@@ -1,9 +1,9 @@
 import pickle
 
+import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
 from world_model.evaluation import min_ade
 from world_model.gpt2 import load_inference_vai0rbis

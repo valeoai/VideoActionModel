@@ -31,7 +31,7 @@ class SinusoidalPosEmb(nn.Module):
     ) -> Tensor:
         half_dim = self.dim // 2
         emb = math.log(max_period) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=t.device, dtype=t.dtype) * -emb)
+        emb = torch.exp(torch.arange(half_dim, device=t.device) * -emb).to(dtype=t.dtype)
         emb = t[:, None] * emb[None, :]
         emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
         return emb
@@ -104,7 +104,7 @@ class ActionEncoder(nn.Module):
         )  # [Horizon_Steps, Action_Hidden_Dim]
         action_pos_emb = repeat(action_pos_emb, "h d -> b t h d", b=bs, t=context_length)
         # Final timstep action embedding
-        action_emb = action_emb + command_emb + action_emb
+        action_emb = action_emb + command_emb + action_pos_emb
 
         # Pos embedding for diffusion step
         diffusion_step = rearrange(diffusion_step, "b t -> (b t)")
