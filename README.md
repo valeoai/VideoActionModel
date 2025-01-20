@@ -14,7 +14,7 @@ pip install -e .
 
 ## DATA
 
-Follow the instructions in the [opendv](opendv/README.md) folder.
+Follow the instructions in the [opendv](world_model/opendv/README.md) folder.
 
 ## Training
 
@@ -24,7 +24,7 @@ Follow the instructions in the [opendv](opendv/README.md) folder.
 
 ### Action learning
 
-## Evaluation
+## Inference
 
 ### Video generation
 
@@ -67,3 +67,49 @@ plot_images(pred_images, 2, 4)
 ```
 
 ### Action generation
+
+```python
+import pickle
+
+import torch
+import torch.nn.functional as F
+from einops import repeat
+
+from world_model.gpt2 import load_inference_vai0rbis
+from world_model.opendv import EgoTrajectoryDataset
+from world_model.utils import expand_path
+
+vai0rbis = load_inference_vai0rbis(expand_path("XXX"), "cuda")
+
+with open("XXX", "rb") as f:
+    nuscenes_pickle_data = pickle.load(f)
+
+dataset = EgoTrajectoryDataset(
+    pickle_data=nuscenes_pickle_data,
+    tokens_rootdir=expand_path("XXX"),
+)
+
+num_sampling = 5
+sample = dataset[0]
+visual_tokens = sample["visual_tokens"].to("cuda", non_blocking=True)
+visual_tokens = repeat(visual_tokens, "t h w -> b t h w", b=num_sampling)
+commands = sample["high_level_command"].to("cuda", non_blocking=True)[-1:]
+commands = repeat(commands, "t -> b t", b=num_sampling)
+
+with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+    trajectory = vai0rbis(visual_tokens, commands, torch.bfloat16)
+
+ground_truth = sample["positions"].to("cuda", non_blocking=True)[-1:]
+ground_truth = repeat(ground_truth, "t h w -> b t h w", b=num_sampling)
+
+loss = F.mse_loss(trajectory, ground_truth, reduction="none").mean(dim=(1, 2, 3)).min()
+print(loss)
+```
+
+## Evaluation
+
+### Neuro-NCAP
+
+Please follow instruction on: [Neuro-NCAP](inference/README.md).
+
+### Ego-trajectory forecasting

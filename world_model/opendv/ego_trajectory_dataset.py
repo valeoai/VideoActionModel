@@ -268,7 +268,7 @@ class EgoTrajectoryDataset(Dataset):
                 self.pickle_data[temporal_index + self.action_length][self.camera]["ego_to_world_tran"],
                 self.pickle_data[temporal_index + self.action_length][self.camera]["ego_to_world_rot"],
             )
-            data["high_level_commands"].append(high_level_command)
+            data["high_level_command"].append(high_level_command)
 
             relative_position, relative_rotation = self.sequence_of_positions_to_trajectory(positions, rotations)
 
@@ -285,7 +285,7 @@ class EgoTrajectoryDataset(Dataset):
             data["timestamps"] = torch.stack(data["timestamps"], dim=0)[: self.sequence_length]
             data["positions"] = torch.stack(data["positions"]).to(dtype=torch.float32)
             data["rotations"] = torch.stack(data["rotations"]).to(dtype=torch.float32)
-            data["high_level_command"] = torch.tensor(data["high_level_commands"], dtype=torch.int64)
+            data["high_level_command"] = torch.tensor(data["high_level_command"], dtype=torch.int64)
         if self.tokens_rootdir is not None:
             data["visual_tokens"] = torch.stack(data["visual_tokens"], dim=0)
         if self.with_yaw_rate:

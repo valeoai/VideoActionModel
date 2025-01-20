@@ -201,7 +201,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "result_path",
+        "--result_path",
         type=str,
         help="Path to the directory containing all result files (typically outputs/<date>)",
     )
