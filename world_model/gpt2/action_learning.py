@@ -5,6 +5,7 @@ import hydra
 import mup
 import torch
 from einops import rearrange
+import lightning as L
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from mup.optim import MuAdamW
@@ -35,6 +36,7 @@ class ActionLearning(LightningModule):
         flow_beta: float = 1,
         compile: bool = False,
         log_norm: bool = False,
+        grad_logging: int = 0,
     ) -> None:
         """
         Args:
@@ -42,7 +44,7 @@ class ActionLearning(LightningModule):
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
             compile: Compile model for faster training with pytorch 2.0, registered with save_hyperparameters
-            log_norm: log grad norm of model's parameters to loggers
+            grad_logging: if > 0, logs histograms of the network's gradients every `grad_logging` steps
         """
         super().__init__()
 
@@ -53,6 +55,7 @@ class ActionLearning(LightningModule):
         self.vai0rbis: Vai0rbis = hydra.utils.instantiate(vai0rbis_conf)
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
+        self.grad_logging = grad_logging
 
         self.flow_sampling = flow_sampling
         if self.flow_sampling == "beta":
@@ -68,6 +71,27 @@ class ActionLearning(LightningModule):
             # If using mixed precision, the gradients are already unscaled here
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
+            
+        if not hasattr(self.logger, 'experiment'):
+            return
+        
+        if self.grad_logging <= 0:
+            return
+        
+        for logger in self.loggers:
+            if not isinstance(logger, L.pytorch.loggers.TensorBoardLogger):
+                continue       
+        
+            # inspect gradient information in tensorboard
+            if self.global_step % self.grad_logging == 0:
+                for k, v in self.vai0rbis.joint_model.named_parameters():
+                    if v.grad is None:
+                        print(f'{k} requires grad', v.requires_grad)
+                        print(f"No grad for {k}")
+                        continue
+                    logger.experiment.add_histogram(
+                        tag=k, values=v.grad, global_step=self.global_step
+                    )
 
     def on_train_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""

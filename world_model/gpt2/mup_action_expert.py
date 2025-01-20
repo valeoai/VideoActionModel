@@ -104,7 +104,7 @@ class ActionEncoder(nn.Module):
         )  # [Horizon_Steps, Action_Hidden_Dim]
         action_pos_emb = repeat(action_pos_emb, "h d -> b t h d", b=bs, t=context_length)
         # Final timstep action embedding
-        action_emb = action_emb + command_emb + action_emb
+        action_emb = action_emb + command_emb + action_pos_emb
 
         # Pos embedding for diffusion step
         diffusion_step = rearrange(diffusion_step, "b t -> (b t)")

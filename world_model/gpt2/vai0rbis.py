@@ -53,6 +53,8 @@ class Vai0rbis(nn.Module):
         self.gpt: MupGPT2 = instantiate(gpt_config)
         self.gpt_mup_base_shapes = gpt_mup_base_shapes
         if gpt_checkpoint_path is not None:
+            print('*'*80)
+            print(f'LOADING GPT CKPT: {gpt_checkpoint_path}')
             gpt_state_dict = self._load_ckpt(gpt_checkpoint_path, key="network.")
             self.gpt.load_state_dict(gpt_state_dict)
             mup.set_base_shapes(self.gpt, gpt_mup_base_shapes, rescale_params=False)
@@ -64,6 +66,8 @@ class Vai0rbis(nn.Module):
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes
         if action_checkpoint_path is not None:
+            print('*'*80)
+            print(f'LOADING ACTION EXPERT CKPT: {gpt_checkpoint_path}')
             action_state_dict = self._load_ckpt(action_checkpoint_path)
             self.action_expert.load_state_dict(action_state_dict)
             mup.set_base_shapes(self.action_expert, action_mup_base_shapes, rescale_params=False)
