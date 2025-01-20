@@ -53,12 +53,13 @@ class Vai0rbis(nn.Module):
         self.gpt: MupGPT2 = instantiate(gpt_config)
         self.gpt_mup_base_shapes = gpt_mup_base_shapes
         if gpt_checkpoint_path is not None:
-            print('*'*80)
-            print(f'LOADING GPT CKPT: {gpt_checkpoint_path}')
+            print("*" * 80)
+            print(f"LOADING GPT CKPT: {gpt_checkpoint_path}")
             gpt_state_dict = self._load_ckpt(gpt_checkpoint_path, key="network.")
             self.gpt.load_state_dict(gpt_state_dict)
             mup.set_base_shapes(self.gpt, gpt_mup_base_shapes, rescale_params=False)
             self.gpt.requires_grad_(False)
+            print("-" * 80)
         else:
             mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
             self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
@@ -66,12 +67,13 @@ class Vai0rbis(nn.Module):
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes
         if action_checkpoint_path is not None:
-            print('*'*80)
-            print(f'LOADING ACTION EXPERT CKPT: {gpt_checkpoint_path}')
+            print("*" * 80)
+            print(f"LOADING ACTION EXPERT CKPT: {gpt_checkpoint_path}")
             action_state_dict = self._load_ckpt(action_checkpoint_path)
             self.action_expert.load_state_dict(action_state_dict)
             mup.set_base_shapes(self.action_expert, action_mup_base_shapes, rescale_params=False)
             self.action_expert.requires_grad_(False)
+            print("-" * 80)
         else:
             mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
             self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
@@ -202,9 +204,10 @@ class Vai0rbis(nn.Module):
         """Flow matching loss for action prediction"""
         # noisy action
         # [Batch_Size, finetuning_timesteps, Horizon_Steps, Action_Dim]
-        x0 = torch.randn_like(actions, device=actions.device)
+
+        x0 = torch.randn_like(actions)
         x1 = actions / self.action_scaling
-        psi_t = self.psi_t(x0, x1, t).type_as(x1)
+        psi_t = self.psi_t(x0, x1, t.type_as(x1))
 
         v_psi = self.joint_model(
             attention_mask=self.attn_mask,
@@ -218,7 +221,10 @@ class Vai0rbis(nn.Module):
 
         # compare to true velocity
         d_psi = x1 - (1 - self.flow_sig_min) * x0
-        return torch.mean((v_psi - d_psi) ** 2).type_as(x1)
+
+        loss = torch.mean((v_psi - d_psi.type_as(x1)) ** 2)
+
+        return loss
 
     def forward_inference(
         self,

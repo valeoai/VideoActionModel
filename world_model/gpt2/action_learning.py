@@ -2,10 +2,10 @@ from typing import Any, Dict, Optional, Tuple
 
 import git
 import hydra
+import lightning as L
 import mup
 import torch
 from einops import rearrange
-import lightning as L
 from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from mup.optim import MuAdamW
@@ -71,27 +71,22 @@ class ActionLearning(LightningModule):
             # If using mixed precision, the gradients are already unscaled here
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
-            
-        if not hasattr(self.logger, 'experiment'):
-            return
-        
+
         if self.grad_logging <= 0:
             return
-        
+
         for logger in self.loggers:
             if not isinstance(logger, L.pytorch.loggers.TensorBoardLogger):
-                continue       
-        
+                continue
+
             # inspect gradient information in tensorboard
             if self.global_step % self.grad_logging == 0:
-                for k, v in self.vai0rbis.joint_model.named_parameters():
+                for k, v in self.vai0rbis.action_expert.named_parameters():
                     if v.grad is None:
-                        print(f'{k} requires grad', v.requires_grad)
+                        print(f"{k} requires grad", v.requires_grad)
                         print(f"No grad for {k}")
-                        continue
-                    logger.experiment.add_histogram(
-                        tag=k, values=v.grad, global_step=self.global_step
-                    )
+                    else:
+                        logger.experiment.add_histogram(tag=k, values=v.grad, global_step=self.global_step)
 
     def on_train_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
@@ -116,7 +111,7 @@ class ActionLearning(LightningModule):
         t = rearrange(t, "(b c) -> b c", b=batch_size, c=context_length)
         return t.to(self.device, non_blocking=True)
 
-    def training_step(self, batch: Batch, batch_idx: int) -> Tensor:
+    def training_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
         """Perform a single training step on a batch of data from the training set.
 
         Args:
@@ -150,7 +145,7 @@ class ActionLearning(LightningModule):
         """Lightning hook that is called when training begins."""
         pass
 
-    def validation_step(self, batch: Batch, batch_idx: int) -> None:
+    def validation_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Perform a single validation step on a batch of data from the validation set.
 
         Args:
@@ -167,7 +162,7 @@ class ActionLearning(LightningModule):
         )
 
         # log losses
-        self.log("val/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
+        self.log(f"val/loss_{dataloader_idx}", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
 
         # return loss
         return loss
@@ -208,7 +203,8 @@ class ActionLearning(LightningModule):
         if not self.optimizer_conf:
             return None
 
-        optimizer = MuAdamW(params=self.vai0rbis.action_expert.parameters(), **self.optimizer_conf)
+        print("MuAdamW configured with:", self.optimizer_conf)
+        optimizer = MuAdamW(params=filter(lambda p: p.requires_grad == True, self.parameters()), **self.optimizer_conf)
 
         if not self.scheduler_conf:
             return {"optimizer": optimizer}
