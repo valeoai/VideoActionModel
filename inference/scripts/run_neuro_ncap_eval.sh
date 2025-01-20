@@ -36,6 +36,7 @@ export TIME_NOW=$(date +"%Y-%m-%d_%H-%M-%S")
 export ACCOUNT='ycy'  # fzh
 export GPU_TYPE='h100'  # v100
 export QOS='qos_gpu_h100-gc'  # qos_gpu-t3
+export WALL_TIME='02:00:00'
 export NUM_CPUS=16  # 10
 
 if [ ! -d $NCAP_FOLDER ]; then
@@ -83,7 +84,7 @@ for SCENARIO in "stationary" "frontal" "side"; do
         num_scenarios=5
     fi
 
-    target_file=$JOB_FOLDER/slurm_dispatch_scenario_${ACCOUNT}_${GPU_TYPE}_${SCENARIO}.slurm
+    target_file=$JOB_FOLDER/_dispatch_scenario_${ACCOUNT}_${GPU_TYPE}_${SCENARIO}.slurm
     stdout_file=$BASE_DIR/slurm_jobs_logs/ncap/$SCENARIO
     echo "Submitting the following job: $target_file"
     echo "stdout file: $stdout_file"
@@ -95,9 +96,10 @@ for SCENARIO in "stationary" "frontal" "side"; do
     -e 's|{{GPU_TYPE}}|'"$GPU_TYPE"'|g' \
     -e 's|{{NUM_CPUS}}|'"$NUM_CPUS"'|g' \
     -e 's|{{QOS}}|'"$QOS"'|g' \
+    -e 's|{{WALL_TIME}}|'"$WALL_TIME"'|g' \
     -e 's|{{STDOUT_FILE}}|'"$stdout_file"'|g' \
     -e 's|{{SINGULARITY_JOB_FILE}}|'"$SINGULARITY_JOB_FILE"'|g' \
-    < $JOB_FOLDER/slurm_dispatch_scenario.slurm > \
+    < $JOB_FOLDER/_dispatch_scenario.slurm > \
      $target_file
 
     sbatch $target_file $SCENARIO --runs $RUNS

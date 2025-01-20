@@ -1,7 +1,7 @@
 # Request interactive session with 1 GPU
 # srun -A fzh@v100 -C v100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu-t3 --time=00:30:00 bash
 
-# srun -A ycy@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu_h100-dev --time=00:10:00 bash run_single_job.sh
+# srun -A ycy@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu_h100-dev --time=01:00:00 bash run_single_job.sh
 
 module purge
 module load singularity
@@ -23,6 +23,9 @@ export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap.sif
 
 echo "Sequence: $seq"
 echo "Scenario: $scenario"
+
+export TIME_START=$(date +"%Y-%m-%d_%H-%M-%S")
+echo "Start time: $TIME_START"
 
 ## Tokenizer paths
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
@@ -77,3 +80,8 @@ singularity exec --nv \
   --engine.logger.log-dir /neuro_ncap/logdir/$seq \
   --scenario-category $scenario \
   --runs $runs \
+
+
+export TIME_END=$(date +"%Y-%m-%d_%H-%M-%S")
+echo "Start time: $TIME_START"
+echo "End time: $TIME_END"
