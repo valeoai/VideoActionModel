@@ -16,7 +16,7 @@ export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/$MODEL_IMAGE
 ## Tokenizer path
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
 ## Vai0rbis path
-export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
+export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/gpt_width768_action_dim192_fused.pt
 # Rendering related stuff
 export RENDERING_FOLDER=$BASE_DIR/'neurad-studio'
 export RENDERING_CHECKPOITNS_PATH='checkpoints'
@@ -24,7 +24,7 @@ export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/'neurad_70.sif'  # Changed c
 # NCAP related stuff
 export NCAP_FOLDER=$BASE_DIR/'neuro-ncap'
 export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/'ncap.sif'
-export LOG_DIR='logs/vai0rbis_ncap'  # this path is inside the container & binded to $NCAP_FOLDER
+export LOG_DIR='logs/vai0rbis_ncap_w768'  # this path is inside the container & binded to $NCAP_FOLDER
 
 # Evaluation default values, set to lower for debugging
 export RUNS=50
