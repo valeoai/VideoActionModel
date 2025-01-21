@@ -1,0 +1,4 @@
+trajectory_logging:
+  _target_:  world_model.gpt2.trajectory_logging.TrajectoryLoggingCallback
+  train_log_every_n_step: 150
+  num_trajs_to_log: 4
