@@ -49,14 +49,14 @@ def create_mp4_from_folder(folder: str, task: str, outdir: str) -> str:
         "-i",
         "*.{jpg,png}",
         "-c:v",
-        "libx264",         # Use H.264 codec
+        "libx264",  # Use H.264 codec
         "-pix_fmt",
-        "yuv420p",        # Standard pixel format for compatibility
+        "yuv420p",  # Standard pixel format for compatibility
         "-preset",
-        "medium",         # Encoding speed preset
+        "medium",  # Encoding speed preset
         "-crf",
-        "23",            # Quality setting (lower = better quality, 23 is default)
-        name
+        "23",  # Quality setting (lower = better quality, 23 is default)
+        name,
     ]
     subprocess.run(cmd, cwd=os.path.join(folder, task))
     return name
