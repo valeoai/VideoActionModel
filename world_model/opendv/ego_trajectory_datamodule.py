@@ -97,7 +97,7 @@ class EgoTrajectoryDataModule(LightningDataModule):
     def _collate_fn(self, batch: List[Dict[str, Any]]) -> Dict[str, Any]:
         if self.sub_batch_size is not None:
             # Take the `sub_batch_size` sample with the highest yaw_rate
-            batch = sorted(batch, key=lambda x: x["yaw_rate"], reverse=True)[: self.sub_batch_size]
+            batch = sorted(batch, key=lambda x: x["yaw_rate"].max(), reverse=True)[: self.sub_batch_size]
 
         return default_collate(batch)
 
