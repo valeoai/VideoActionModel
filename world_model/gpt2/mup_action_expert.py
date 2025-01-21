@@ -31,7 +31,7 @@ class SinusoidalPosEmb(nn.Module):
     ) -> Tensor:
         half_dim = self.dim // 2
         emb = math.log(max_period) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=t.device, dtype=t.dtype) * -emb)
+        emb = torch.exp(torch.arange(half_dim, device=t.device) * -emb).to(dtype=t.dtype)
         emb = t[:, None] * emb[None, :]
         emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
         return emb

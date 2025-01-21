@@ -187,6 +187,7 @@ def main(result_path: Path, no_check: bool = False) -> None:
 
 
 if __name__ == "__main__":
+    from world_model.utils import expand_path
 
     def boolean_flag(arg: Union[str, bool]) -> bool:
         """Add a boolean flag to argparse parser."""
@@ -201,8 +202,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "result_path",
-        type=str,
+        "--rootdir",
+        type=expand_path,
         help="Path to the directory containing all result files (typically outputs/<date>)",
     )
     parser.add_argument(
@@ -212,4 +213,4 @@ if __name__ == "__main__":
         help="Disable validity checks (for partial result while still running eval)",
     )
     args = parser.parse_args()
-    main(Path(args.result_path), args.no_check)
+    main(Path(args.rootdir), args.no_check)

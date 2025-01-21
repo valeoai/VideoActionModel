@@ -16,7 +16,7 @@ export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/$MODEL_IMAGE
 ## Tokenizer path
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
 ## Vai0rbis path
-export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
+export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/output_data/vaiorbis/Vaiorbis_pretrained0000077646_DDP_Nodes6_BSperGPU16_totalBS384_attdim1024_actdim256_0121_0052_1737417153/checkpoints/'end_of_epoch_epoch=000_step=0000007251.ckpt'
 # Rendering related stuff
 export RENDERING_FOLDER=$BASE_DIR/'neurad-studio'
 export RENDERING_CHECKPOITNS_PATH='checkpoints'
@@ -24,7 +24,7 @@ export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/'neurad_70.sif'  # Changed c
 # NCAP related stuff
 export NCAP_FOLDER=$BASE_DIR/'neuro-ncap'
 export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/'ncap.sif'
-export LOG_DIR='logs/vai0rbis_ncap'  # this path is inside the container & binded to $NCAP_FOLDER
+export LOG_DIR='logs/vai0rbis_ncap_w768'  # this path is inside the container & binded to $NCAP_FOLDER
 
 # Evaluation default values, set to lower for debugging
 export RUNS=50
@@ -36,6 +36,7 @@ export TIME_NOW=$(date +"%Y-%m-%d_%H-%M-%S")
 export ACCOUNT='ycy'  # fzh
 export GPU_TYPE='h100'  # v100
 export QOS='qos_gpu_h100-gc'  # qos_gpu-t3
+export WALL_TIME='02:00:00'
 export NUM_CPUS=16  # 10
 
 if [ ! -d $NCAP_FOLDER ]; then
@@ -83,7 +84,7 @@ for SCENARIO in "stationary" "frontal" "side"; do
         num_scenarios=5
     fi
 
-    target_file=$JOB_FOLDER/slurm_dispatch_scenario_${ACCOUNT}_${GPU_TYPE}_${SCENARIO}.slurm
+    target_file=$JOB_FOLDER/_dispatch_scenario_${ACCOUNT}_${GPU_TYPE}_${SCENARIO}.slurm
     stdout_file=$BASE_DIR/slurm_jobs_logs/ncap/$SCENARIO
     echo "Submitting the following job: $target_file"
     echo "stdout file: $stdout_file"
@@ -95,9 +96,10 @@ for SCENARIO in "stationary" "frontal" "side"; do
     -e 's|{{GPU_TYPE}}|'"$GPU_TYPE"'|g' \
     -e 's|{{NUM_CPUS}}|'"$NUM_CPUS"'|g' \
     -e 's|{{QOS}}|'"$QOS"'|g' \
+    -e 's|{{WALL_TIME}}|'"$WALL_TIME"'|g' \
     -e 's|{{STDOUT_FILE}}|'"$stdout_file"'|g' \
     -e 's|{{SINGULARITY_JOB_FILE}}|'"$SINGULARITY_JOB_FILE"'|g' \
-    < $JOB_FOLDER/slurm_dispatch_scenario.slurm > \
+    < $JOB_FOLDER/_dispatch_scenario.slurm > \
      $target_file
 
     sbatch $target_file $SCENARIO --runs $RUNS

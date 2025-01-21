@@ -1,29 +1,35 @@
+from typing import Any, Dict
+
 import lightning
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from lightning.pytorch.callbacks import Callback
+from lightning import Callback, LightningModule, Trainer
 from lightning.pytorch.utilities import move_data_to_device
-from torch.utils.data import default_collate
+from torch.utils.data import DataLoader, default_collate
 
 from world_model.utils import RankedLogger
+
+Batch = Dict[str, Any]
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
 
 class TrajectoryLoggingCallback(Callback):
-    def __init__(self, train_log_every_n_step: int, num_trajs_to_log: int):
+
+    def __init__(self, train_log_every_n_step: int, num_trajs_to_log: int) -> None:
         self.train_log_every_n_step = train_log_every_n_step
         self.num_trajs_to_log = num_trajs_to_log
 
-    def on_validation_epoch_end(self, trainer, pl_module, *args, **kwargs):
+    def on_validation_epoch_end(self, trainer: Trainer, pl_module: LightningModule, *args, **kwargs) -> None:
         # only log on first GPU
         if trainer.global_rank != 0:
             return
 
         if isinstance(trainer.val_dataloaders, list):
             log.warning(
-                "there are more than one val dataloader, logic for handling multiple val dataset no implemented, only logging val_dataloaders[0]"
+                "there are more than one val dataloader, logic for handling multiple val dataset no implemented, "
+                "only logging val_dataloaders[0]"
             )
             dataloader = trainer.val_dataloaders[0]
         else:
@@ -34,7 +40,7 @@ class TrajectoryLoggingCallback(Callback):
 
         self.common_logging("val", batch_to_log, trainer, pl_module, trainer.current_epoch)
 
-    def on_train_batch_end(self, trainer, pl_module, *args, **kwargs):
+    def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule, *args, **kwargs) -> None:
         if trainer.global_rank != 0:
             return
 
@@ -51,7 +57,7 @@ class TrajectoryLoggingCallback(Callback):
         self.common_logging("train", batch_to_log, trainer, pl_module, trainer.global_step)
         pl_module.vai0rbis.train()
 
-    def get_batch_to_log(self, dataloader):
+    def get_batch_to_log(self, dataloader: DataLoader) -> Batch:
         len_dataset = len(dataloader.dataset)
 
         if len_dataset >= self.num_trajs_to_log:
@@ -67,7 +73,7 @@ class TrajectoryLoggingCallback(Callback):
 
         return batch_to_log
 
-    def plot_trajectory_comparison(self, pred_traj, gt_traj):
+    def plot_trajectory_comparison(self, pred_traj: np.ndarray, gt_traj: np.ndarray) -> plt.Figure:
         """Create a comparison plot of predicted vs ground truth trajectory"""
         # Calculate data ranges to determine appropriate figure size
         x_range = max(np.ptp(pred_traj[:, 0]), np.ptp(gt_traj[:, 0]))
@@ -95,7 +101,9 @@ class TrajectoryLoggingCallback(Callback):
 
         return fig
 
-    def common_logging(self, phase, batch_to_log, trainer, pl_module, log_step=0):
+    def common_logging(
+        self, phase: str, batch_to_log: Batch, trainer: Trainer, pl_module: LightningModule, log_step: int = 0
+    ) -> None:
 
         for logger in trainer.loggers:
             if not isinstance(logger, lightning.pytorch.loggers.TensorBoardLogger):

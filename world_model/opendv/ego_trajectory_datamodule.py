@@ -3,6 +3,7 @@ import pickle
 from typing import Any, Dict, List, Optional
 
 from lightning import LightningDataModule
+from torch.utils.data import default_collate
 
 from world_model.opendv.data_mixing import combined_ego_trajectory_dataset
 from world_model.opendv.stateful_dataloader import StatefulDataLoader
@@ -41,6 +42,7 @@ class EgoTrajectoryDataModule(LightningDataModule):
         action_length: int = 6,
         batch_size: int = 32,
         num_workers: int = 4,
+        sub_batch_size: Optional[int] = None,
     ) -> None:
         super().__init__()
         self.nuplan_tokens_rootdir = _path(nuplan_tokens_rootdir)
@@ -53,6 +55,7 @@ class EgoTrajectoryDataModule(LightningDataModule):
         self.sequence_length = sequence_length
         self.action_length = action_length
         self.batch_size = batch_size
+        self.sub_batch_size = sub_batch_size
         self.num_workers = num_workers
 
     def setup(self, stage: Optional[str] = None) -> "EgoTrajectoryDataModule":
@@ -75,6 +78,7 @@ class EgoTrajectoryDataModule(LightningDataModule):
             self.train_dataset = combined_ego_trajectory_dataset(
                 nuplan_pickle_data=nuplan_train_data,
                 nuscenes_pickle_data=nuscenes_train_data,
+                with_yaw_rate=self.sub_batch_size is not None,
                 **kwargs,
             )
 
@@ -90,10 +94,22 @@ class EgoTrajectoryDataModule(LightningDataModule):
 
         return self
 
+    def _collate_fn(self, batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if self.sub_batch_size is not None:
+            # Take the `sub_batch_size` sample with the highest yaw_rate
+            batch = sorted(batch, key=lambda x: x["yaw_rate"].max(), reverse=True)[: self.sub_batch_size]
+
+        return default_collate(batch)
+
     def train_dataloader(self) -> StatefulDataLoader:
         if not hasattr(self, "train_dataloader_"):
             self.train_dataloader_ = StatefulDataLoader(
-                self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers, pin_memory=True
+                self.train_dataset,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.num_workers,
+                pin_memory=True,
+                collate_fn=self._collate_fn,
             )
         return self.train_dataloader_
 

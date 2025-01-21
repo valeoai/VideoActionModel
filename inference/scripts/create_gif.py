@@ -43,7 +43,7 @@ def create_gif_from_folder(folder: str, task: str, outdir: str) -> str:
         "-f",
         "image2",
         "-framerate",
-        "3",
+        "2",
         "-pattern_type",
         "glob",
         "-i",
@@ -66,12 +66,10 @@ def main(rootdir: str, task: str) -> None:
 
 
 if __name__ == "__main__":
-
-    def _path(p: str) -> str:
-        return os.path.expanduser(os.path.expandvars(p))
+    from world_model.utils import expand_path
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rootdir", type=_path)
+    parser.add_argument("--rootdir", type=expand_path)
     parser.add_argument("--task", type=str, choices=["CAM_FRONT", "FC_TRAJ", "COMBINED_OUTPUTS"], default="COMBINED_OUTPUTS")
     args = parser.parse_args()
     main(args.rootdir, args.task)
