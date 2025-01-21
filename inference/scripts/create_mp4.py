@@ -1,4 +1,4 @@
-"""Small script to create gifs from Neuro-NCAP logs."""
+"""Small script to create .mp4 from Neuro-NCAP logs."""
 
 import argparse
 import os
@@ -27,9 +27,9 @@ def get_all_folders(rootdir: str) -> List[str]:
     return all_folders
 
 
-def create_gif_from_folder(folder: str, task: str, outdir: str) -> str:
+def create_mp4_from_folder(folder: str, task: str, outdir: str) -> str:
     """Create a gif from a folder with image files."""
-    name = f"{folder.split('/')[-2]}_{folder.split('/')[-1]}.gif".replace("-", "_")
+    name = f"{folder.split('/')[-2]}_{folder.split('/')[-1]}.mp4".replace("-", "_")
     name = os.path.join(outdir, name)
     if os.path.exists(name):
         print(f"Skipping {name} as it already exists.")
@@ -48,21 +48,29 @@ def create_gif_from_folder(folder: str, task: str, outdir: str) -> str:
         "glob",
         "-i",
         "*.{jpg,png}",
-        name,
+        "-c:v",
+        "libx264",         # Use H.264 codec
+        "-pix_fmt",
+        "yuv420p",        # Standard pixel format for compatibility
+        "-preset",
+        "medium",         # Encoding speed preset
+        "-crf",
+        "23",            # Quality setting (lower = better quality, 23 is default)
+        name
     ]
     subprocess.run(cmd, cwd=os.path.join(folder, task))
     return name
 
 
 def main(rootdir: str, task: str) -> None:
-    """Create gifs for all folders in the rootdir."""
+    """Create .mp4 for all folders in the rootdir."""
     rootdir = os.path.expanduser(os.path.expandvars(rootdir))
-    outdir = os.path.join(rootdir, f"gifs_{task}")
+    outdir = os.path.join(rootdir, f"mp4_{task}")
     os.makedirs(outdir, exist_ok=True)
     folders = get_all_folders(rootdir)
-    print(f"Creating gifs for {len(folders)} folders.")
+    print(f"Creating .mp4 for {len(folders)} folders.")
     for folder in tqdm(folders):
-        create_gif_from_folder(folder, task, outdir)
+        create_mp4_from_folder(folder, task, outdir)
 
 
 if __name__ == "__main__":

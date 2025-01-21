@@ -92,7 +92,11 @@ class JointModel(nn.Module):
     @property
     def use_kv_cache(self) -> None:
         """The KV cache has been initialized and all its layers filled."""
-        return (self.kv_cache is not None) and self.kv_cache.filled
+        return (self.kv_cache is not None) and self.kv_cache.filled and (not self.training)
+
+    @property
+    def fill_kv_cache(self) -> None:
+        return (self.kv_cache is not None) and (not self.training)
 
     def _visual_tokens_to_embeds(self, visual_tokens: LongTensor) -> FloatTensor:
         """Visual token embedding of the GPT model (see mup_gpt2.py)."""
@@ -139,7 +143,7 @@ class JointModel(nn.Module):
                 n=3,
                 dim_heads=gpt_attention.dim_heads,
             )
-            if self.kv_cache is not None:
+            if self.fill_kv_cache:
                 # We are still building the cache
                 self.kv_cache.update(visual_k, visual_v, layer_idx)
 
