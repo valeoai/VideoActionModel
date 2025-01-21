@@ -1,6 +1,6 @@
 import os
 from collections import OrderedDict
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import mup
 import torch
@@ -13,6 +13,9 @@ from tqdm import tqdm
 from world_model.gpt2.joint_model import JointModel
 from world_model.gpt2.mup_action_expert import MupActionExpert
 from world_model.gpt2.mup_gpt2 import MupGPT2
+from world_model.utils import RankedLogger
+
+logger = RankedLogger(__name__, rank_zero_only=True)
 
 mupShapes = str | Dict[str, Tuple[int, ...]]
 
@@ -53,22 +56,28 @@ class Vai0rbis(nn.Module):
         self.gpt: MupGPT2 = instantiate(gpt_config)
         self.gpt_mup_base_shapes = gpt_mup_base_shapes
         if gpt_checkpoint_path is not None:
+            logger.info(f"Loading GPT2 checkpoint from {gpt_checkpoint_path}")
             gpt_state_dict = self._load_ckpt(gpt_checkpoint_path, key="network.")
             self.gpt.load_state_dict(gpt_state_dict)
+            logger.info(f"Setting base shapes for GPT2 with mup {gpt_mup_base_shapes}")
             mup.set_base_shapes(self.gpt, gpt_mup_base_shapes, rescale_params=False)
             self.gpt.requires_grad_(False)
         else:
+            logger.info(f"Initializing GPT2 from scratch, with mup {gpt_mup_base_shapes}")
             mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
             self.gpt.apply(self.gpt._init_weights)  # re-initialize after set_base_shapes
         ## Action model
         self.action_expert: MupActionExpert = instantiate(action_config)
         self.action_mup_base_shapes = action_mup_base_shapes
         if action_checkpoint_path is not None:
+            logger.info(f"Loading Action Expert checkpoint from {action_checkpoint_path}")
             action_state_dict = self._load_ckpt(action_checkpoint_path)
             self.action_expert.load_state_dict(action_state_dict)
+            logger.info(f"Setting base shapes for Action Expert with mup {action_mup_base_shapes}")
             mup.set_base_shapes(self.action_expert, action_mup_base_shapes, rescale_params=False)
             self.action_expert.requires_grad_(False)
         else:
+            logger.info(f"Initializing Action Expert from scratch, with mup {action_mup_base_shapes}")
             mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
             self.action_expert.apply(self.action_expert._init_weights)  # re-initialize after set_base_shapes
         ## Joint model
@@ -194,13 +203,14 @@ class Vai0rbis(nn.Module):
         high_level_command: LongTensor,
         actions: Tensor,
         t: Tensor,
+        return_gpt: bool = False,
     ) -> Tensor:
         """Flow matching loss for action prediction"""
         # noisy action
         # [Batch_Size, finetuning_timesteps, Horizon_Steps, Action_Dim]
         x0 = torch.randn_like(actions, device=actions.device, dtype=actions.dtype)
         x1 = actions / self.action_scaling
-        psi_t = self.psi_t(x0, x1, t).type_as(x1)
+        psi_t = self.psi_t(x0, x1, t.type_as(x1))
 
         v_psi = self.joint_model(
             attention_mask=self.attn_mask,
@@ -210,11 +220,12 @@ class Vai0rbis(nn.Module):
                 "high_level_command": high_level_command,
                 "diffusion_step": t,
             },
+            return_gpt=return_gpt,
         )["actions"]
 
         # compare to true velocity
         d_psi = x1 - (1 - self.flow_sig_min) * x0
-        return torch.mean((v_psi - d_psi.type_as(x1)) ** 2)
+        return torch.mean((v_psi - d_psi) ** 2)
 
     def forward_inference(
         self,
@@ -222,6 +233,7 @@ class Vai0rbis(nn.Module):
         high_level_command: LongTensor,
         dtype: torch.dtype,
         verbose: bool = False,
+        num_inference_steps: Optional[int] = None,
     ) -> torch.Tensor:
         """
         Inference for action prediction.
@@ -231,6 +243,7 @@ class Vai0rbis(nn.Module):
         device = visual_tokens.device
         bsz, context_length, *_ = visual_tokens.size()
         assert context_length <= self.context_length
+        num_inference_steps = num_inference_steps or self.num_inference_steps
 
         # sample pure action noise
         action = torch.randn((bsz, 1, self.action_horizon, self.action_dim), device=device, dtype=dtype)
@@ -242,9 +255,9 @@ class Vai0rbis(nn.Module):
         self.joint_model.init_kv_cache()
 
         # forward euler integration ---
-        delta_t = 1.0 / self.num_inference_steps
+        delta_t = 1.0 / num_inference_steps
         t = torch.zeros((bsz, 1), device=device, dtype=dtype)
-        for _ in tqdm(range(self.num_inference_steps), "Euler integration", disable=not verbose):
+        for _ in tqdm(range(num_inference_steps), "Euler integration", disable=not verbose):
             action_vel = self.joint_model(
                 attention_mask=attn_mask,
                 inputs_all={

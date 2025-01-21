@@ -16,7 +16,7 @@ export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/$MODEL_IMAGE
 ## Tokenizer path
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
 ## Vai0rbis path
-export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/gpt_width768_action_dim192_fused.pt
+export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/output_data/vaiorbis/Vaiorbis_pretrained0000077646_DDP_Nodes6_BSperGPU16_totalBS384_attdim1024_actdim256_0121_0052_1737417153/checkpoints/'end_of_epoch_epoch=000_step=0000007251.ckpt'
 # Rendering related stuff
 export RENDERING_FOLDER=$BASE_DIR/'neurad-studio'
 export RENDERING_CHECKPOITNS_PATH='checkpoints'

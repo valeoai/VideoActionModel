@@ -15,6 +15,7 @@ from world_model.gpt2.prepare_token_sequence import prepare_token_sequence
 
 EmbedsDict = Dict[str, FloatTensor]
 InputsDict = Dict[str, FloatTensor | LongTensor]
+OutputDict = Dict[str, FloatTensor]
 
 
 class KVCache:
@@ -225,7 +226,8 @@ class JointModel(nn.Module):
         self,
         attention_mask: BoolTensor,
         inputs_all: InputsDict,
-    ) -> FloatTensor:
+        return_gpt: bool = False,
+    ) -> OutputDict:
         """
         Perform the forward pass of the joint model for all layers.
 
@@ -257,7 +259,15 @@ class JointModel(nn.Module):
         # We rearrange the output to match the input shape, notable separating the time dimension
         denoised_actions = rearrange(denoised_actions, "b (t h) d -> b t h d", t=inputs_all["noisy_actions"].size(1))
         action_embeds = rearrange(action_embeds, "b (t h) d -> b t h d", t=inputs_all["noisy_actions"].size(1))
-        return {"actions": denoised_actions, "actions_embeds": action_embeds}
+        outputs = {"actions": denoised_actions, "actions_embeds": action_embeds}
+
+        if return_gpt:
+            visual_embeds = self.gpt.transformer.ln_f(embeds_all["visual_embeds"])
+            visual_logits = self.gpt.lm_head(visual_embeds)
+            outputs["visual_embeds"] = visual_embeds
+            outputs["visual_logits"] = visual_logits
+
+        return outputs
 
 
 if __name__ == "__main__":
