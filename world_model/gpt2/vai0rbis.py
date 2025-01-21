@@ -62,6 +62,7 @@ class Vai0rbis(nn.Module):
             logger.info(f"Setting base shapes for GPT2 with mup {gpt_mup_base_shapes}")
             mup.set_base_shapes(self.gpt, gpt_mup_base_shapes, rescale_params=False)
             self.gpt.requires_grad_(False)
+            print("-" * 80)
         else:
             logger.info(f"Initializing GPT2 from scratch, with mup {gpt_mup_base_shapes}")
             mup.set_base_shapes(self.gpt, gpt_mup_base_shapes)
@@ -76,6 +77,7 @@ class Vai0rbis(nn.Module):
             logger.info(f"Setting base shapes for Action Expert with mup {action_mup_base_shapes}")
             mup.set_base_shapes(self.action_expert, action_mup_base_shapes, rescale_params=False)
             self.action_expert.requires_grad_(False)
+            print("-" * 80)
         else:
             logger.info(f"Initializing Action Expert from scratch, with mup {action_mup_base_shapes}")
             mup.set_base_shapes(self.action_expert, action_mup_base_shapes)

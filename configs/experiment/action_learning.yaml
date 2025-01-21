@@ -22,7 +22,7 @@ trainer:
 
 scheduler:
   warmup_iter: 75 # 1% ~ end_iter * 0.01
-  end_iter: 7250 # (len_dataset - 1) // BATCH_SIZE * nb_epochs = (59632706 - 1) // 384 * 1 = 155293
+  end_iter: 7251 # (len_dataset - 1) // BATCH_SIZE * nb_epochs
   drop_iter: 725 # 10%
 
 data:

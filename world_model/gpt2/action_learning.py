@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import git
 import hydra
+import lightning as L
 import mup
 import torch
 from einops import rearrange
@@ -35,6 +36,7 @@ class ActionLearning(LightningModule):
         flow_beta: float = 1,
         compile: bool = False,
         log_norm: bool = False,
+        grad_logging: int = 0,
     ) -> None:
         """
         Args:
@@ -42,7 +44,7 @@ class ActionLearning(LightningModule):
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
             compile: Compile model for faster training with pytorch 2.0, registered with save_hyperparameters
-            log_norm: log grad norm of model's parameters to loggers
+            grad_logging: if > 0, logs histograms of the network's gradients every `grad_logging` steps
         """
         super().__init__()
 
@@ -53,6 +55,7 @@ class ActionLearning(LightningModule):
         self.vai0rbis: Vai0rbis = hydra.utils.instantiate(vai0rbis_conf)
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
+        self.grad_logging = grad_logging
 
         self.flow_sampling = flow_sampling
         if self.flow_sampling == "beta":
@@ -68,6 +71,22 @@ class ActionLearning(LightningModule):
             # If using mixed precision, the gradients are already unscaled here
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
+
+        if self.grad_logging <= 0:
+            return
+
+        for logger in self.loggers:
+            if not isinstance(logger, L.pytorch.loggers.TensorBoardLogger):
+                continue
+
+            # inspect gradient information in tensorboard
+            if self.global_step % self.grad_logging == 0:
+                for k, v in self.vai0rbis.action_expert.named_parameters():
+                    if v.grad is None:
+                        print(f"{k} requires grad", v.requires_grad)
+                        print(f"No grad for {k}")
+                    else:
+                        logger.experiment.add_histogram(tag=k, values=v.grad, global_step=self.global_step)
 
     def on_train_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
@@ -92,7 +111,7 @@ class ActionLearning(LightningModule):
         t = rearrange(t, "(b c) -> b c", b=batch_size, c=context_length)
         return t.to(self.device, non_blocking=True)
 
-    def training_step(self, batch: Batch, batch_idx: int) -> Tensor:
+    def training_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
         """Perform a single training step on a batch of data from the training set.
 
         Args:
@@ -126,7 +145,7 @@ class ActionLearning(LightningModule):
         """Lightning hook that is called when training begins."""
         pass
 
-    def validation_step(self, batch: Batch, batch_idx: int) -> None:
+    def validation_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> None:
         """Perform a single validation step on a batch of data from the validation set.
 
         Args:
@@ -143,7 +162,7 @@ class ActionLearning(LightningModule):
         )
 
         # log losses
-        self.log("val/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
+        self.log(f"val/loss_{dataloader_idx}", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
 
         # return loss
         return loss
@@ -184,7 +203,8 @@ class ActionLearning(LightningModule):
         if not self.optimizer_conf:
             return None
 
-        optimizer = MuAdamW(params=self.vai0rbis.action_expert.parameters(), **self.optimizer_conf)
+        print("MuAdamW configured with:", self.optimizer_conf)
+        optimizer = MuAdamW(params=filter(lambda p: p.requires_grad is True, self.parameters()), **self.optimizer_conf)
 
         if not self.scheduler_conf:
             return {"optimizer": optimizer}
