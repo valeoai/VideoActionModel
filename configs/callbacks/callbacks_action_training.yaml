@@ -3,6 +3,7 @@ defaults:
   - tqdm_progress_bar
   - learning_rate_monitor
   - device_stats_monitor
+  - trajectory_logging
   - _self_
 
 before_drop_checkpoint:
