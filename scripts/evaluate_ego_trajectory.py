@@ -1,3 +1,26 @@
+"""
+example usage:
+
+srun -A ycy@h100 -C h100 --pty \
+--nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --gres=gpu:1 --hint=nomultithread \
+--qos=qos_gpu_h100-dev --time=00:15:00 bash
+
+python scripts/evaluate_ego_trajectory.py \
+--vai0rbis_checkpoint_path xxx \
+--outdir ./tmp/ego_eval \
+--batch_size 64 \
+--num_workers 16
+
+srun -A ycy@h100 -C h100 --pty \
+--nodes=2 --ntasks-per-node=4 --cpus-per-task=24 --gres=gpu:4 --hint=nomultithread \
+--qos=qos_gpu_h100-dev --time=00:30:00 \
+python scripts/evaluate_ego_trajectory.py \
+--vai0rbis_checkpoint_path xxx \
+--outdir ./tmp/ego_eval_1024_77k \
+--batch_size 64 \
+--num_workers 24
+"""
+
 import argparse
 import json
 import os
@@ -49,23 +72,6 @@ def get_nuscenes() -> EgoTrajectoryDataset:
     )
 
 
-save_path = "tmp/action_expert_trajectory_nuscenses_val.png"
-
-vai0rbis = load_inference_vai0rbis(
-    expand_path("$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/gpt_width768_action_dim192_fused.pt"), "cuda"
-)
-
-with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl"), "rb") as f:
-    nuscenes_pickle_data = pickle.load(f)
-
-dataset = EgoTrajectoryDataset(
-    pickle_data=nuscenes_pickle_data,
-    tokens_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens"),
-)
-
-loader = DataLoader(dataset, batch_size=96, shuffle=False, num_workers=10, pin_memory=True)
-
-
 @torch.no_grad()
 def evaluate_loader(
     vai0rbis: Vai0rbisInference, loader: DataLoader, name: str, outdir: str, rank: int = 0, world_size: int = 1
@@ -79,7 +85,7 @@ def evaluate_loader(
     num_sampling = 10
 
     total_loss, total_samples = torch.tensor(0.0).cuda(), torch.tensor(0).cuda()
-    iterator = tqdm(loader, "Evaluating")
+    iterator = tqdm(loader, "Evaluating", disable=rank != 0)
     for batch in iterator:
         sampled_trajectory = []
         visual_tokens = batch["visual_tokens"].to("cuda", non_blocking=True)
@@ -95,7 +101,8 @@ def evaluate_loader(
         best_sampled_trajectory = sampled_trajectory[torch.arange(len(sampled_trajectory)), idx]
         total_loss += loss
         total_samples += len(ground_truth)
-        iterator.set_postfix(minADE=total_loss.item() / total_samples)
+        if rank == 0:
+            iterator.set_postfix(minADE=(total_loss / total_samples).item())
 
         if rank == 0:
             # Update plot boundaries
@@ -116,7 +123,7 @@ def evaluate_loader(
         # Add labels and title
         ax.set_xlabel("X Position")
         ax.set_ylabel("Y Position")
-        ax.set_title(f"Trajectory Plot (n={len(dataset)})\nColored by Average Yaw Rate")
+        ax.set_title(f"Trajectory Plot (n={len(loader.dataset)})\nColored by Average Yaw Rate")
 
         # Equal aspect ratio for proper visualization
         ax.set_aspect("equal")
@@ -156,7 +163,7 @@ def evaluate_datasets(
         return DataLoader(ds, batch_size=batch_size, pin_memory=True, num_workers=num_workers, sampler=sampler)
 
     return {
-        name: evaluate_loader(vai0rbis, _get_loader(ds), name, rank=rank, world_size=world_size)
+        name: evaluate_loader(vai0rbis, _get_loader(ds), name, outdir, rank=rank, world_size=world_size)
         for name, ds in datasets.items()
     }
 
@@ -174,7 +181,7 @@ if __name__ == "__main__":
         "nuscenes": get_nuscenes(),
     }
 
-    os.makedirs(args.outfile, exist_ok=True)
+    os.makedirs(args.outdir, exist_ok=True)
 
     world_size = int(os.environ["SLURM_NTASKS"])
     rank = 0
@@ -193,7 +200,7 @@ if __name__ == "__main__":
         torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
-    vai0rbis = load_inference_vai0rbis(args.vai0rbis_checkpoint_path, "cuda")
+    vai0rbis = load_inference_vai0rbis(args.vai0rbis_checkpoint_path, tempdir=os.environ["JOBSCRATCH"])
 
     metrics = evaluate_datasets(
         vai0rbis,
@@ -205,8 +212,9 @@ if __name__ == "__main__":
         world_size=world_size,
     )
     metrics["vai0rbis_checkpoint_path"] = args.vai0rbis_checkpoint_path
+    metrics["outdir"] = args.outdir
     print(metrics)
 
     if rank == 0:
-        with open(os.path.join(args.outfile, "metrics.json"), "w") as f:
+        with open(os.path.join(args.outdir, "metrics.json"), "w") as f:
             json.dump(metrics, f)

@@ -78,6 +78,7 @@ echo "Running neuro-ncap in foreground with ${NCAP_CONTAINER}..."
 singularity exec --nv \
   --bind $NCAP_FOLDER:/neuro_ncap \
   --bind $NUSCENES_PATH:/neuro_ncap/data/nuscenes \
+  --bind $LOG_DIR:/logs \
   --pwd /neuro_ncap \
   --env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
   $NCAP_CONTAINER \
@@ -87,6 +88,6 @@ singularity exec --nv \
   --engine.dataset.data_root /neuro_ncap/data/nuscenes \
   --engine.dataset.version v1.0-trainval \
   --engine.dataset.sequence $seq \
-  --engine.logger.log-dir /neuro_ncap/$LOG_DIR/$TIME_NOW/$output_name-$seq \
+  --engine.logger.log-dir /logs/$output_name-$seq \
   --scenario-category $SCENARIO \
   --runs $RUNS \

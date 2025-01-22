@@ -11,7 +11,7 @@
 #SBATCH --time=05:00:00
 #SBATCH --output=slurm_jobs_logs/stdout/nxt_eval/%A_%a.out
 #SBATCH --error=slurm_jobs_logs/stdout/nxt_eval/%A_%a.out
-#SBATCH --array=1-5
+#SBATCH --array=6-7
 
 mkdir -p slurm_jobs_logs/stdout/nxt_eval
 mkdir -p slurm_jobs_logs/files/nxt_eval
@@ -52,6 +52,14 @@ outfile[4]=./slurm_jobs_logs/files/nxt_eval/attndim1024_116k.json
 ckpt[5]=$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_2048_Nodes48_BSperGPU2_totalBS384_weight_decay1e-07_0118_0125_1737159936/checkpoints/before_drop_epoch=000_step=0000139763.ckpt
 batch_size[5]=96
 outfile[5]=./slurm_jobs_logs/files/nxt_eval/attndim2048_139k.json
+
+ckpt[6]=$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07_0116_1243_1737027800/checkpoints/quarters_epoch=000_step=0000077646.ckpt
+batch_size[6]=128
+outfile[6]=./slurm_jobs_logs/files/nxt_eval/attndim768_77k.json
+
+ckpt[7]=$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_1024_Nodes32_BSperGPU3_totalBS384_weight_decay1e-07_0118_0114_1737159286/checkpoints/quarters_epoch=000_step=0000077646.ckpt
+batch_size[7]=128
+outfile[7]=./slurm_jobs_logs/files/nxt_eval/attndim1024_77k.json
 
 
 srun python scripts/nxt_evaluation.py \

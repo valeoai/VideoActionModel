@@ -18,7 +18,7 @@ normal_ init
 
 import os
 from collections import OrderedDict
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import mup
 import torch
@@ -577,7 +577,7 @@ class MupGPT2(nn.Module):
         return generated_frames
 
 
-def load_pretrained_gpt(checkpoint_path: str, tempdir: Optional[str] = None) -> MupGPT2:
+def load_pretrained_gpt(checkpoint_path: str, device: torch.device | str = "cuda", tempdir: Optional[str] = None) -> MupGPT2:
     if os.path.isdir(checkpoint_path):
         # This is a deepspeed checkpoint
         import tempfile
@@ -602,7 +602,7 @@ def load_pretrained_gpt(checkpoint_path: str, tempdir: Optional[str] = None) -> 
     gpt.load_state_dict(state_dict)
     mup.set_base_shapes(gpt, ckpt["hyper_parameters"]["mup_base_shapes"], rescale_params=False)
     _ = gpt.eval()
-    _ = gpt.to("cuda")
+    _ = gpt.to(device)
     _ = gpt.requires_grad_(False)
 
     return gpt

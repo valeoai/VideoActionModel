@@ -303,14 +303,16 @@ class Vai0rbisInference(Vai0rbis):
         return super().forward_inference(visual_tokens, high_level_command, dtype, verbose)
 
 
-def load_inference_vai0rbis(checkpoint_path: str, device: torch.dtype | str = "cuda") -> Vai0rbisInference:
+def load_inference_vai0rbis(
+    checkpoint_path: str, device: torch.device | str = "cuda", tempdir: Optional[str] = None
+) -> Vai0rbisInference:
     if os.path.isdir(checkpoint_path):
         # This is a deepspeed checkpoint
         import tempfile
 
         from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 
-        with tempfile.TemporaryDirectory() as tmpdirname:
+        with tempfile.TemporaryDirectory(dir=tempdir) as tmpdirname:
             ckpt = convert_zero_checkpoint_to_fp32_state_dict(
                 checkpoint_path,
                 os.path.join(tmpdirname, "fused_ckpt.pt"),

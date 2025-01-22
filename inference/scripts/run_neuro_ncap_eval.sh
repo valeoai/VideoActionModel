@@ -24,7 +24,7 @@ export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/'neurad_70.sif'  # Changed c
 # NCAP related stuff
 export NCAP_FOLDER=$BASE_DIR/'neuro-ncap'
 export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/'ncap.sif'
-export LOG_DIR=$2  # this path is inside the container & binded to $NCAP_FOLDER
+export RUN_NAME=$2  # this path is inside the container & binded to $NCAP_FOLDER
 
 # Evaluation default values, set to lower for debugging
 export RUNS=50
@@ -68,8 +68,9 @@ if [ ! -f $NCAP_CONTAINER ]; then
     exit 1
 fi
 
-TOTAL_LOG_DIR=$NCAP_FOLDER/$LOG_DIR/$TIME_NOW
-mkdir -p $TOTAL_LOG_DIR/slurm_files
+export LOG_DIR="${ycy_ALL_CCFRSCRATCH}/ncap_eval/${RUN_NAME}/${TIME_NOW}"
+mkdir -p $LOG_DIR/slurm_files
+mkdir -p $LOG_DIR/slurm_logs
 
 # echo the absolute path of this file
 JOB_FOLDER=$(dirname $(realpath $0))
@@ -85,8 +86,8 @@ for SCENARIO in "stationary" "frontal" "side"; do
         num_scenarios=5
     fi
 
-    target_file=$TOTAL_LOG_DIR/slurm_files/_dispatch_scenario_${ACCOUNT}_${GPU_TYPE}_${SCENARIO}.slurm
-    stdout_file=$BASE_DIR/slurm_jobs_logs/ncap/$SCENARIO
+    target_file=$LOG_DIR/slurm_files/_dispatch_scenario_${ACCOUNT}_${GPU_TYPE}_${SCENARIO}.slurm
+    stdout_file=$LOG_DIR/slurm_logs/$SCENARIO
     echo "Submitting the following job: $target_file"
     echo "stdout file: $stdout_file"
 
