@@ -15,13 +15,13 @@ python scripts/nxt_evaluation.py \
 --batch_size 128
 
 srun -A ycy@h100 -C h100 --pty \
---nodes=1 --ntasks-per-node=1 --cpus-per-task=24 --gres=gpu:1 --hint=nomultithread \
+--nodes=1 --ntasks-per-node=4 --cpus-per-task=16 --gres=gpu:4 --hint=nomultithread \
 --qos=qos_gpu_h100-dev --time=00:30:00 \
 python scripts/nxt_evaluation.py \
 --gpt_checkpoint_path xxx \
 --outfile ./tmp/test_fn.json \
---num_workers 24 \
---batch_size 128
+--num_workers 16 \
+--batch_size 96
 """
 
 import argparse
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
-    gpt = load_pretrained_gpt(args.gpt_checkpoint_path)
+    gpt = load_pretrained_gpt(args.gpt_checkpoint_path, tempdir=os.environ["JOBSCRATCH"])
     metrics = evaluate_datasets(gpt, dts, batch_size=args.batch_size, num_workers=args.num_workers, world_size=world_size)
     metrics["gpt_checkpoint_path"] = args.gpt_checkpoint_path
     print(metrics)

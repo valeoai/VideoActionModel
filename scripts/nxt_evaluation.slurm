@@ -2,13 +2,13 @@
 #SBATCH --job-name=nxt_eval
 #SBATCH -A ycy@h100
 #SBATCH -C h100
-#SBATCH --nodes=8
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=24
 #SBATCH --gres=gpu:4
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-gc
-#SBATCH --time=20:00:00
+#SBATCH --time=05:00:00
 #SBATCH --output=slurm_jobs_logs/stdout/nxt_eval/%A_%a.out
 #SBATCH --error=slurm_jobs_logs/stdout/nxt_eval/%A_%a.out
 #SBATCH --array=1-5
