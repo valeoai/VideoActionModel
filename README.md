@@ -1,4 +1,4 @@
-# Vai0rbis
+# Video Action Model
 
 ## Install
 
@@ -14,7 +14,7 @@ pip install -e .
 
 ## DATA
 
-Follow the instructions in the [opendv](world_model/datalib/README.md) folder.
+Follow the instructions in the [opendv](vam/datalib/README.md) folder.
 
 ## Training
 
@@ -31,9 +31,9 @@ Follow the instructions in the [opendv](world_model/datalib/README.md) folder.
 ```python
 import torch
 
-from world_model.video_pretraining import load_pretrained_gpt
-from world_model.utils import expand_path, plot_images
-from world_model.datalib import OpenDVTokensDataset, torch_image_to_plot
+from vam.video_pretraining import load_pretrained_gpt
+from vam.utils import expand_path, plot_images
+from vam.datalib import OpenDVTokensDataset, torch_image_to_plot
 
 # Load the pretrained model and the tokenizer decoder.
 gpt = load_pretrained_gpt(expand_path("XXX"))
@@ -74,12 +74,12 @@ import pickle
 import torch
 from einops import rearrange, repeat
 
-from world_model.evaluation import min_ade
-from world_model.action_expert import load_inference_vai0rbis
-from world_model.datalib import EgoTrajectoryDataset
-from world_model.utils import expand_path
+from vam.evaluation import min_ade
+from vam.action_expert import load_inference_VAM
+from vam.datalib import EgoTrajectoryDataset
+from vam.utils import expand_path
 
-vai0rbis = load_inference_vai0rbis(expand_path("XXX"), "cuda")
+vam = load_inference_VAM(expand_path("XXX"), "cuda")
 
 with open("XXX", "rb") as f:
     nuscenes_pickle_data = pickle.load(f)
@@ -97,7 +97,7 @@ commands = sample["high_level_command"].to("cuda", non_blocking=True)[-1:]
 commands = repeat(commands, "t -> b t", b=num_sampling)
 
 with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-    trajectory = vai0rbis(visual_tokens, commands, torch.bfloat16)
+    trajectory = vam(visual_tokens, commands, torch.bfloat16)
 
 ground_truth = sample["positions"].to("cuda", non_blocking=True)[-1:]
 
@@ -107,12 +107,8 @@ loss = min_ade(trajectory, ground_truth)
 print(loss)
 ```
 
-## Evaluation
-
 ### Neuro-NCAP
 
 Please follow instruction on: [Neuro-NCAP](inference/README.md).
 
 ![teaser](.github/ressources/frontal_0103_run_45.gif)
-
-### Ego-trajectory forecasting

@@ -11,12 +11,12 @@ export NUSCENES_PATH=$ycy_ALL_CCFRSCRATCH/nuscenes_v2
 # Model related stuff
 export MODEL_NAME='NextTokenPredictor'
 export MODEL_FOLDER=$BASE_DIR/$MODEL_NAME
-export MODEL_IMAGE='ncap_vai0rbis.sif'
+export MODEL_IMAGE='ncap_vam.sif'
 export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/$MODEL_IMAGE
 ## Tokenizer path
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
-## Vai0rbis path
-export VAI0RBIS_CKPT_PATH=$1
+## Video action model path
+export VAM_CKPT_PATH=$1
 # Rendering related stuff
 export RENDERING_FOLDER=$BASE_DIR/'neurad-studio'
 export RENDERING_CHECKPOITNS_PATH='checkpoints'

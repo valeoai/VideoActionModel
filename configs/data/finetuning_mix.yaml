@@ -1,4 +1,4 @@
-_target_: world_model.datalib.finetuning_datamodule.MixFinetuningDataModule
+_target_: vam.datalib.finetuning_datamodule.MixFinetuningDataModule
 opendv_tokens_rootdir: null
 opendv_video_list_path: null
 opendv_val_video_list_path: null

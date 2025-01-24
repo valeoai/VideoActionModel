@@ -18,8 +18,7 @@ from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp3
 from torch.utils.data import DistributedSampler
 from tqdm import tqdm
 
-from world_model.datalib.opendv_tokens_dataset import OpenDVTokensDataset
-from world_model.datalib.stateful_dataloader import StatefulDataLoader
+from vam.datalib import OpenDVTokensDataset, StatefulDataLoader
 
 StateDict = Dict[str, Any]
 

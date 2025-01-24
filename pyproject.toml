@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "world_model"
+name = "vam"
 version = "0.0.1"
 description = ""
 readme = "README.md"
@@ -39,7 +39,6 @@ dev = [
     "flake8-bugbear",
     "flake8-comprehensions",
     "flake8-simplify",
-    "pytest",
     "isort",
     "black",
 ]
@@ -64,4 +63,3 @@ atomic = true
 profile = "black"
 line_length = 127
 skip_gitignore = true
-# sort_reexports = true

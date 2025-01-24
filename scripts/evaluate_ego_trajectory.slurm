@@ -59,7 +59,7 @@ outdir[5]=action_expert_139k_attndim2048_actdim512
 
 
 srun python scripts/nxt_evaluation.py \
---vai0rbis_checkpoint_path ${ckpt[${SLURM_ARRAY_TASK_ID}]} \
+--vam_checkpoint_path ${ckpt[${SLURM_ARRAY_TASK_ID}]} \
 --outdir slurm_jobs_logs/files/ego_eval/${outdir[${SLURM_ARRAY_TASK_ID}]} \
 --num_workers 24 \
 --batch_size ${batch_size[${SLURM_ARRAY_TASK_ID}]} \

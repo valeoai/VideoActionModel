@@ -1,4 +1,4 @@
-_target_: world_model.datalib.EgoTrajectoryDataModule
+_target_: vam.datalib.EgoTrajectoryDataModule
 nuplan_tokens_rootdir: null
 nuscenes_tokens_rootdir: null
 nuplan_train_pickle_path: null

@@ -37,9 +37,9 @@ from einops import rearrange
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from tqdm import tqdm
 
-from world_model.datalib import EgoTrajectoryDataset, OpenDVTokensDataset
-from world_model.utils import expand_path
-from world_model.video_pretraining import MupGPT2, load_pretrained_gpt, prepare_AR_token_sequences
+from vam.datalib import EgoTrajectoryDataset, OpenDVTokensDataset
+from vam.utils import expand_path
+from vam.video_pretraining import MupGPT2, load_pretrained_gpt, prepare_AR_token_sequences
 
 
 def get_opendv() -> OpenDVTokensDataset:

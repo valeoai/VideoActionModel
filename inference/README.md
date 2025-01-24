@@ -39,12 +39,12 @@ docker build -t neurad:latest -f Dockerfile
 docker save -o neurad.docker.tar.gz neurad:latest
 ```
 
-Vai0rbis:
+Video Action Model:
 
 ```bash
 cd $BASE_REPO/NextTokenPredictor
-docker build -t ncap_vai0rbis:latest -f docker/Dockerfile .
-docker save -o ncap_vai0rbis.docker.tar.gz ncap_vai0rbis:latest
+docker build -t ncap_vam:latest -f docker/Dockerfile .
+docker save -o ncap_vam.docker.tar.gz ncap_vam:latest
 ```
 
 Then send them all to JZ.
@@ -53,7 +53,7 @@ Then send them all to JZ.
 export $DOCKER_JZ_FOLDER=$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file  # you need to define this
 scp $BASE_REPO/neuro-ncap/ncap.docker.tar.gz jz:$DOCKER_JZ_FOLDER
 scp $BASE_REPO/neurad-studio/rendering.docker.tar.gz jz:$DOCKER_JZ_FOLDER
-scp $BASE_REPO/NextTokenPredictor/ncap_vai0rbis.docker.tar.gz jz:$DOCKER_JZ_FOLDER
+scp $BASE_REPO/NextTokenPredictor/ncap_vam.docker.tar.gz jz:$DOCKER_JZ_FOLDER
 ```
 
 ## Jean-Zay install part

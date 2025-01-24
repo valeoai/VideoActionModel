@@ -74,7 +74,7 @@ def main(rootdir: str, task: str) -> None:
 
 
 if __name__ == "__main__":
-    from world_model.utils import expand_path
+    from vam.utils import expand_path
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--rootdir", type=expand_path)
