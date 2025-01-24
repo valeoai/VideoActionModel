@@ -10,7 +10,7 @@ from colorlog import ColoredFormatter
 from hyperqueue import Client, Job
 from hyperqueue.ffi.protocol import ResourceRequest
 
-from world_model.opendv import create_tokens
+from world_model.datalib import create_tokens
 
 
 def setup_logger(logdir: Optional[str] = None) -> None:

@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from lightning import LightningDataModule
 
-from world_model.opendv.data_mixing import all_token_datasets
-from world_model.opendv.stateful_dataloader import StatefulDataLoader
+from world_model.datalib.data_mixing import all_token_datasets
+from world_model.datalib.stateful_dataloader import StatefulDataLoader
 
 StateDict = Dict[str, Any]
 

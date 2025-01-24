@@ -5,8 +5,8 @@ from typing import List, Optional
 
 from torch.utils.data import ConcatDataset, Dataset, Subset
 
-from world_model.opendv.ego_trajectory_dataset import EgoTrajectoryDataset
-from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
+from world_model.datalib.ego_trajectory_dataset import EgoTrajectoryDataset
+from world_model.datalib.opendv_tokens_dataset import OpenDVTokensDataset
 
 
 def _subsample_dataset(dataset: Dataset, n_samples: int, seed: int = 0) -> Subset:
@@ -63,7 +63,7 @@ def all_token_datasets(
     total_number_of_samples: Optional[int] = None,
     seed: int = 0,
 ) -> ConcatDataset:
-    opendv_dataset = RandomTokenizedSequenceOpenDVDataset(
+    opendv_dataset = OpenDVTokensDataset(
         data_root_dir=opendv_data_rootdir,
         video_list=opendv_video_list,
         sequence_length=sequence_length,

@@ -8,7 +8,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 
 
-class RandomTokenizedSequenceOpenDVDataset(Dataset):
+class OpenDVTokensDataset(Dataset):
     """
     Args:
         data_root_dir: The root directory where the tokens are stored.
@@ -82,7 +82,7 @@ if __name__ == "__main__":
         with open(video_list_file, "r") as f:
             video_list = json.load(f)
 
-        dataset = RandomTokenizedSequenceOpenDVDataset(
+        dataset = OpenDVTokensDataset(
             data_root_dir=data_root_dir,
             video_list=video_list,
             sequence_length=sequence_length,

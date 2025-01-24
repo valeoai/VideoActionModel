@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from lightning import LightningDataModule
 from lightning_utilities.core.rank_zero import rank_zero_only
 
-from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
-from world_model.opendv.stateful_dataloader import StatefulDataLoader
+from world_model.datalib.opendv_tokens_dataset import OpenDVTokensDataset
+from world_model.datalib.stateful_dataloader import StatefulDataLoader
 from world_model.utils import RankedLogger
 
 logger = RankedLogger(__name__, rank_zero_only=True)
@@ -19,7 +19,7 @@ def _path(path: str) -> str:
     return path
 
 
-class TokenizedSequenceOpenDVDataModule(LightningDataModule):
+class OpenDVTokensDataModule(LightningDataModule):
     def __init__(
         self,
         data_root_dir: str,
@@ -59,7 +59,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
         else:
             logger.info("All video folders exist.")
 
-    def setup(self, stage: Optional[str] = None) -> "TokenizedSequenceOpenDVDataModule":
+    def setup(self, stage: Optional[str] = None) -> "OpenDVTokensDataModule":
         if hasattr(self, "train_dataset"):
             return
 
@@ -71,7 +71,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
 
         # Create datasets
         if stage == "fit" or stage is None:
-            self.train_dataset = RandomTokenizedSequenceOpenDVDataset(
+            self.train_dataset = OpenDVTokensDataset(
                 self.data_root_dir, self.video_list, self.sequence_length, self.subsampling_factor
             )
 
@@ -81,7 +81,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
                 self.val_video_list, missing_val_videos = self.check_video_existence(val_video_list)
                 self.print_missing_videos(missing_val_videos)
 
-                self.val_dataset = RandomTokenizedSequenceOpenDVDataset(
+                self.val_dataset = OpenDVTokensDataset(
                     self.data_root_dir, self.val_video_list, self.sequence_length, self.subsampling_factor
                 )
 
@@ -137,7 +137,7 @@ class TokenizedSequenceOpenDVDataModule(LightningDataModule):
 
 #     from load_vq_model import VQModel
 
-#     dm = TokenizedSequenceOpenDVDataModule(
+#     dm = OpenDVTokensDataModule(
 #         data_root_dir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
 #         video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/train.json",
 #         val_video_list_path="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json",

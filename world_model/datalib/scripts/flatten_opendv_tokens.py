@@ -1,7 +1,7 @@
 """
 Example usage.
 
-python world_model/opendv/scripts/flatten_opendv_tokens.py \
+python world_model/datalib/scripts/flatten_opendv_tokens.py \
 --rootdir $fzh_ALL_CCFRSCRATCH/OpenDV_processed/tokens \
 --outdir $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
 """

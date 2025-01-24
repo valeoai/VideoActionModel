@@ -14,7 +14,7 @@ pip install -e .
 
 ## DATA
 
-Follow the instructions in the [opendv](world_model/opendv/README.md) folder.
+Follow the instructions in the [opendv](world_model/datalib/README.md) folder.
 
 ## Training
 
@@ -33,14 +33,14 @@ import torch
 
 from world_model.gpt2 import load_pretrained_gpt
 from world_model.utils import expand_path, plot_images
-from world_model.opendv import RandomTokenizedSequenceOpenDVDataset, torch_image_to_plot
+from world_model.datalib import OpenDVTokensDataset, torch_image_to_plot
 
 # Load the pretrained model and the tokenizer decoder.
 gpt = load_pretrained_gpt(expand_path("XXX"))
 image_detokenizer = torch.jit.load(expand_path("XXXX")).to("cuda")
 
 # Load the dataset.
-dts = RandomTokenizedSequenceOpenDVDataset(
+dts = OpenDVTokensDataset(
     data_root_dir="XXXX",
     video_list=["5pAf38x5z9Q"],  # This is one of the validation video from OpenDV
     sequence_length=8,
@@ -76,7 +76,7 @@ from einops import rearrange, repeat
 
 from world_model.evaluation import min_ade
 from world_model.gpt2 import load_inference_vai0rbis
-from world_model.opendv import EgoTrajectoryDataset
+from world_model.datalib import EgoTrajectoryDataset
 from world_model.utils import expand_path
 
 vai0rbis = load_inference_vai0rbis(expand_path("XXX"), "cuda")
