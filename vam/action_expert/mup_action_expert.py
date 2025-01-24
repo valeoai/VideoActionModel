@@ -429,12 +429,14 @@ class MupActionExpert(nn.Module):
 if __name__ == "__main__":
     import mup
 
-    dit = MupActionExpert()
+    action_expert = MupActionExpert()
 
     # set base shapes
-    base = mup.set_base_shapes(dit)
+    base = mup.set_base_shapes(action_expert, None)
 
     bs = 3
-    tens = torch.randn(bs, 6, 2)
-    diffusion_step = torch.randint(0, 100, (bs,))
-    high_level_command = torch.randint(0, 3, (bs,))
+    noisy_actions = torch.randn(bs, 8, 6, 2)
+    high_level_command = torch.randint(0, 3, (bs, 8))
+    t = torch.rand(bs, 8)
+    denoised_actions = action_expert(noisy_actions, high_level_command, t)
+    print(denoised_actions.shape)

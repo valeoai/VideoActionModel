@@ -4,11 +4,10 @@ import lightning
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from lightning import Callback, Trainer
+from lightning import Callback, LightningModule, Trainer
 from lightning.pytorch.utilities import move_data_to_device
 from torch.utils.data import DataLoader, default_collate
 
-from vam.action_expert import ActionLearning
 from vam.utils.cmd_line_logging import RankedLogger
 
 Batch = Dict[str, Any]
@@ -22,7 +21,7 @@ class TrajectoryLoggingCallback(Callback):
         self.train_log_every_n_step = train_log_every_n_step
         self.num_trajs_to_log = num_trajs_to_log
 
-    def on_validation_epoch_end(self, trainer: Trainer, pl_module: ActionLearning, *args, **kwargs) -> None:
+    def on_validation_epoch_end(self, trainer: Trainer, pl_module: LightningModule, *args, **kwargs) -> None:
         # only log on first GPU
         if trainer.global_rank != 0:
             return
@@ -41,7 +40,7 @@ class TrajectoryLoggingCallback(Callback):
 
         self.common_logging("val", batch_to_log, trainer, pl_module, trainer.current_epoch)
 
-    def on_train_batch_end(self, trainer: Trainer, pl_module: ActionLearning, *args, **kwargs) -> None:
+    def on_train_batch_end(self, trainer: Trainer, pl_module: LightningModule, *args, **kwargs) -> None:
         if trainer.global_rank != 0:
             return
 
@@ -103,7 +102,7 @@ class TrajectoryLoggingCallback(Callback):
         return fig
 
     def common_logging(
-        self, phase: str, batch_to_log: Batch, trainer: Trainer, pl_module: ActionLearning, log_step: int = 0
+        self, phase: str, batch_to_log: Batch, trainer: Trainer, pl_module: LightningModule, log_step: int = 0
     ) -> None:
 
         for logger in trainer.loggers:
