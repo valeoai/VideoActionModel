@@ -1,4 +1,4 @@
-# World model
+# Vai0rbis
 
 ## Install
 
@@ -112,5 +112,7 @@ print(loss)
 ### Neuro-NCAP
 
 Please follow instruction on: [Neuro-NCAP](inference/README.md).
+
+![teaser](.github/ressources/frontal_0103_run_45.gif)
 
 ### Ego-trajectory forecasting

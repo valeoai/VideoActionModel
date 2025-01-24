@@ -214,6 +214,7 @@ class Vai0rbis(nn.Module):
         x1 = actions / self.action_scaling
         psi_t = self.psi_t(x0, x1, t.type_as(x1))
 
+        self.joint_model.train()
         v_psi = self.joint_model(
             attention_mask=self.attn_mask,
             inputs_all={
@@ -236,6 +237,7 @@ class Vai0rbis(nn.Module):
         dtype: torch.dtype,
         verbose: bool = False,
         num_inference_steps: Optional[int] = None,
+        final_action_clip_value: Optional[float] = None,
     ) -> torch.Tensor:
         """
         Inference for action prediction.
@@ -246,6 +248,7 @@ class Vai0rbis(nn.Module):
         bsz, context_length, *_ = visual_tokens.size()
         assert context_length <= self.context_length
         num_inference_steps = num_inference_steps or self.num_inference_steps
+        final_action_clip_value = final_action_clip_value or self.final_action_clip_value
 
         # sample pure action noise
         action = torch.randn((bsz, 1, self.action_horizon, self.action_dim), device=device, dtype=dtype)
@@ -254,6 +257,7 @@ class Vai0rbis(nn.Module):
         attn_mask = self.build_inference_attention_mask(context_length, device=device)
 
         # Init KV cache
+        self.joint_model.eval()
         self.joint_model.init_kv_cache()
 
         # forward euler integration ---
@@ -277,11 +281,11 @@ class Vai0rbis(nn.Module):
         self.joint_model.cleanup_kv_cache()
 
         # clamp final output if specified
-        if self.final_action_clip_value is not None:
+        if final_action_clip_value is not None:
             action = torch.clamp(
                 action,
-                -self.final_action_clip_value,
-                self.final_action_clip_value,
+                -final_action_clip_value,
+                final_action_clip_value,
             )
         return action * self.action_scaling
 
@@ -299,14 +303,16 @@ class Vai0rbisInference(Vai0rbis):
         return super().forward_inference(visual_tokens, high_level_command, dtype, verbose)
 
 
-def load_inference_vai0rbis(checkpoint_path: str, device: torch.dtype | str = "cuda") -> Vai0rbisInference:
+def load_inference_vai0rbis(
+    checkpoint_path: str, device: torch.device | str = "cuda", tempdir: Optional[str] = None
+) -> Vai0rbisInference:
     if os.path.isdir(checkpoint_path):
         # This is a deepspeed checkpoint
         import tempfile
 
         from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 
-        with tempfile.TemporaryDirectory() as tmpdirname:
+        with tempfile.TemporaryDirectory(dir=tempdir) as tmpdirname:
             ckpt = convert_zero_checkpoint_to_fp32_state_dict(
                 checkpoint_path,
                 os.path.join(tmpdirname, "fused_ckpt.pt"),
