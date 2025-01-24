@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import git
 import hydra
+import lightning as L
 import mup
 import torch
 from einops import rearrange
@@ -9,29 +10,17 @@ from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from mup.optim import MuAdamW
 from omegaconf import DictConfig
+from torch import Tensor
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 
-from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
+from world_model.action_expert.vai0rbis import Vai0rbis
 
-
-def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
-    """Remove prefix from keys in state_dict."""
-    result = {}
-    for k, v in state_dict.items():
-        tokens = k.split(".")
-        if tokens[0] == prefix:
-            tokens = tokens[1:]
-            key = ".".join(tokens)
-            result[key] = v
-    return result
-
-
-Batch = Dict[str, torch.Tensor]
+Batch = Dict[str, Tensor]
 mupShapes = Dict[str, Tuple[int, ...]]
 
 
-class NextTokenPredictor(LightningModule):
+class ActionLearning(LightningModule):
     """
     LightningModule docs:
         https://lightning.ai/docs/pytorch/latest/common/lightning_module.html
@@ -39,22 +28,23 @@ class NextTokenPredictor(LightningModule):
 
     def __init__(
         self,
-        network: DictConfig,
+        vai0rbis_conf: DictConfig,
         optimizer_conf: Optional[DictConfig] = None,
         scheduler_conf: Optional[DictConfig] = None,
+        flow_sampling: str = "uniform",
+        flow_alpha: float = 1.5,
+        flow_beta: float = 1,
         compile: bool = False,
         log_norm: bool = False,
-        mup_base_shapes: mupShapes = None,
-        statedict_ckpt_path: str = None,
-        is_finetuning: bool = False,
+        grad_logging: int = 0,
     ) -> None:
         """
         Args:
-            network: The configuration of the model to train.
+            vai0rbis_conf: The configuration for the Vai0rbis model.
             optimizer_conf: The optimizer to use for training.
             scheduler_conf: The learning rate scheduler to use for training.
             compile: Compile model for faster training with pytorch 2.0, registered with save_hyperparameters
-            log_norm: log grad norm of model's parameters to loggers
+            grad_logging: if > 0, logs histograms of the network's gradients every `grad_logging` steps
         """
         super().__init__()
 
@@ -62,31 +52,18 @@ class NextTokenPredictor(LightningModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
-        self.is_finetuning = is_finetuning
-
+        self.vai0rbis: Vai0rbis = hydra.utils.instantiate(vai0rbis_conf)
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
-        self.network = hydra.utils.instantiate(network)
-        self.mup_base_shapes = mup_base_shapes
+        self.grad_logging = grad_logging
 
-        load_pretrained_network = statedict_ckpt_path is not None
-        if load_pretrained_network:
-            checkpoint_data = torch.load(statedict_ckpt_path, map_location=self.device)
-            network_state_dict = remove_prefix(checkpoint_data["state_dict"], "network")
-            self.network.load_state_dict(network_state_dict)
-
-        if mup_base_shapes is not None:
-            print("mup_base_shapes configured")
-            if is_finetuning or load_pretrained_network:
-                mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=False)
-            else:
-                mup.set_base_shapes(self.network, mup_base_shapes, rescale_params=True)
-                # re-initialize after set_base_shapes for proper std_init with mup.init._normal
-                self.network.apply(self.network._init_weights)
-        else:
-            print("Network NOT mu-Parametrized")
-
-        self.cross_entropy_loss = torch.nn.CrossEntropyLoss()
+        self.flow_sampling = flow_sampling
+        if self.flow_sampling == "beta":
+            self.flow_alpha = flow_alpha
+            self.flow_beta = flow_beta
+            self.flow_sig_min = self.vai0rbis.flow_sig_min
+            self.flow_t_max = 1 - self.flow_sig_min
+            self.flow_beta_dist = torch.distributions.Beta(flow_alpha, flow_beta)
 
     def on_before_optimizer_step(self, optimizer: Optional[Optimizer]) -> None:
         if self.hparams.log_norm:
@@ -95,11 +72,46 @@ class NextTokenPredictor(LightningModule):
             norms = grad_norm(self, norm_type=2)
             self.log_dict(norms)
 
+        if self.grad_logging <= 0:
+            return
+
+        for logger in self.loggers:
+            if not isinstance(logger, L.pytorch.loggers.TensorBoardLogger):
+                continue
+
+            # inspect gradient information in tensorboard
+            if self.global_step % self.grad_logging == 0:
+                for k, v in self.vai0rbis.action_expert.named_parameters():
+                    if v.grad is None:
+                        print(f"{k} requires grad", v.requires_grad)
+                        print(f"No grad for {k}")
+                    else:
+                        logger.experiment.add_histogram(tag=k, values=v.grad, global_step=self.global_step)
+
     def on_train_epoch_start(self) -> None:
         """Lightning hook that is called when training begins."""
         pass
 
-    def training_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> torch.Tensor:
+    def noise_schedule(self, batch: Batch) -> Tensor:
+        """
+        Adapted from:
+        https://github.com/allenzren/open-pi-zero/blob/main/src/agent/train.py
+        """
+        batch_size, context_length, *_ = batch["visual_tokens"].size()
+        bsz = batch_size * context_length
+
+        if self.flow_sampling == "uniform":  # uniform between 0 and 1
+            """https://github.com/gle-bellier/flow-matching/blob/main/Flow_Matching.ipynb"""
+            eps = 1e-5
+            t = (torch.rand(1) + torch.arange(bsz) / bsz) % (1 - eps)
+        elif self.flow_sampling == "beta":  # from pi0 paper
+            z = self.flow_beta_dist.sample((bsz,))
+            t = self.flow_t_max * (1 - z)  # flip and shift
+
+        t = rearrange(t, "(b c) -> b c", b=batch_size, c=context_length)
+        return t.to(self.device, non_blocking=True)
+
+    def training_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
         """Perform a single training step on a batch of data from the training set.
 
         Args:
@@ -110,12 +122,14 @@ class NextTokenPredictor(LightningModule):
          A tensor of losses between model predictions and targets.
         """
 
-        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
+        diffusion_step = self.noise_schedule(batch)
 
-        logits_sequence = self.network(**input_data)
-        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
-
-        loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
+        loss = self.vai0rbis(
+            visual_tokens=batch["visual_tokens"],
+            high_level_command=batch["high_level_command"],
+            actions=batch["positions"],
+            t=diffusion_step,
+        )
 
         # log losses
         self.log("train/loss", loss, on_step=True, on_epoch=False, logger=True, prog_bar=True)
@@ -138,17 +152,19 @@ class NextTokenPredictor(LightningModule):
             batch: A batch of data.
             batch_idx: The index of the current batch.
         """
-        input_data, target_data = prepare_AR_token_sequences(batch["visual_tokens"])
+        diffusion_step = self.noise_schedule(batch)
 
-        logits_sequence = self.network(**input_data)
-        logits_sequence = rearrange(logits_sequence, "b ... d -> b d ...")
+        loss = self.vai0rbis(
+            visual_tokens=batch["visual_tokens"],
+            high_level_command=batch["high_level_command"],
+            actions=batch["positions"],
+            t=diffusion_step,
+        )
 
-        loss = self.cross_entropy_loss(logits_sequence, target_data["token_sequence"])
-
-        # log losses at the end of epoch, rest is automatic
+        # log losses
         self.log(f"val/loss_{dataloader_idx}", loss, on_step=False, on_epoch=True, logger=True, prog_bar=True)
 
-        # return loss to apply backpropagation
+        # return loss
         return loss
 
     def on_validation_epoch_end(self) -> None:
@@ -171,7 +187,7 @@ class NextTokenPredictor(LightningModule):
             # splitting the code into optimized and unoptimized parts.
             # fullgraph=True to force an error if there is a graph break in the model,
             # calling for manual optimization of the code to get it compiled.
-            self.net = torch.compile(self.network, fullgraph=True)
+            self.net = torch.compile(self.vai0rbis, fullgraph=True)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
@@ -187,7 +203,8 @@ class NextTokenPredictor(LightningModule):
         if not self.optimizer_conf:
             return None
 
-        optimizer = MuAdamW(params=self.parameters(), **self.optimizer_conf)
+        print("MuAdamW configured with:", self.optimizer_conf)
+        optimizer = MuAdamW(params=filter(lambda p: p.requires_grad is True, self.parameters()), **self.optimizer_conf)
 
         if not self.scheduler_conf:
             return {"optimizer": optimizer}
@@ -241,5 +258,43 @@ class NextTokenPredictor(LightningModule):
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
 
-        if self.mup_base_shapes is not None:
-            checkpoint["mup_base_shapes"] = mup.shape._extract_shapes(self.mup_base_shapes)
+        if self.vai0rbis.gpt_mup_base_shapes is not None:
+            checkpoint["gpt_mup_base_shapes"] = mup.shape._extract_shapes(self.vai0rbis.gpt_mup_base_shapes)
+        if self.vai0rbis.action_mup_base_shapes is not None:
+            checkpoint["action_mup_base_shapess"] = mup.shape._extract_shapes(self.vai0rbis.action_mup_base_shapes)
+
+
+if __name__ == "__main__":
+    from omegaconf import OmegaConf
+
+    config = OmegaConf.load("configs/experiment/action_learning.yaml")
+    data_config = OmegaConf.load("configs/data/ego_trajectory_dataset.yaml")
+
+    vai0rbis_conf = config.model.vai0rbis_conf
+    optimizer_conf = config.model.optimizer_conf
+
+    vai0rbis_conf.finetuning_timesteps = 8
+    vai0rbis_conf.action_config.action_horizon = 6
+
+    model = ActionLearning(vai0rbis_conf, optimizer_conf)
+    model.to("cuda")
+
+    data_config.nuscenes_tokens_rootdir = config.data.nuscenes_tokens_rootdir
+    data_config.nuscenes_train_pickle_path = config.data.nuscenes_train_pickle_path
+    data_config.nuscenes_val_pickle_path = config.data.nuscenes_val_pickle_path
+
+    dm = hydra.utils.instantiate(data_config)
+    dm = dm.setup("fit")
+    train_loader = dm.train_dataloader()
+
+    batch = next(iter(train_loader))
+
+    def _to(v: Tensor | list) -> Tensor | list:
+        if isinstance(v, Tensor):
+            return v.to(model.device)
+
+        return v
+
+    batch = {k: _to(v) for k, v in batch.items()}
+
+    model.training_step(batch, 0)

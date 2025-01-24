@@ -5,6 +5,8 @@ from world_model.utils.info_printing import print_config_tree
 from world_model.utils.instantiators import instantiate_callbacks, instantiate_loggers
 from world_model.utils.plot_utils import plot_multiple_images
 from world_model.utils.task_utils import extras, get_metric_value, task_wrapper
+from world_model.utils.trajectory_logging import TrajectoryLoggingCallback
+from world_model.utils.warmup_stable_drop import WarmupStableDrop
 
 __all__ = [
     "RankedLogger",
@@ -17,4 +19,6 @@ __all__ = [
     "extras",
     "get_metric_value",
     "task_wrapper",
+    "TrajectoryLoggingCallback",
+    "WarmupStableDrop",
 ]

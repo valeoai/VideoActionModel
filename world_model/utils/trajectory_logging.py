@@ -8,7 +8,7 @@ from lightning import Callback, LightningModule, Trainer
 from lightning.pytorch.utilities import move_data_to_device
 from torch.utils.data import DataLoader, default_collate
 
-from world_model.utils import RankedLogger
+from world_model.utils.cmd_line_logging import RankedLogger
 
 Batch = Dict[str, Any]
 

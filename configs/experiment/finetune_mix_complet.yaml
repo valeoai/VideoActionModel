@@ -47,13 +47,13 @@ data:
 
 # VQ_ds16_16384_llamagen/metadata.json indicates 18x32 quantized image features for nuplan
 model:
-  _target_: world_model.gpt2.NextTokenPredictor
+  _target_: world_model.video_pretraining.NextTokenPredictor
   compile: False # compile model for faster training with pytorch 2.0
   log_norm: False # For debuging purposes, log gradients norm to loggers
   mup_base_shapes: ./mup_shapes/gpt2_24layers_basewidth256.bsh
   is_finetuning: ${is_finetuning}
   network:
-    _target_: world_model.gpt2.mup_gpt2.MupGPT2
+    _target_: world_model.video_pretraining.mup_gpt2.MupGPT2
     embedding_dim: 256
     dim_heads: 128
     nb_layers: 24

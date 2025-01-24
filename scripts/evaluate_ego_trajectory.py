@@ -33,9 +33,9 @@ import torch
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from tqdm import tqdm
 
+from world_model.action_expert import Vai0rbisInference, load_inference_vai0rbis
 from world_model.datalib import EgoTrajectoryDataset
 from world_model.evaluation import min_ade
-from world_model.gpt2 import Vai0rbisInference, load_inference_vai0rbis
 from world_model.utils import expand_path
 
 plt.style.use("default")

@@ -10,10 +10,10 @@ from omegaconf import OmegaConf
 from torch import BoolTensor, LongTensor, Tensor
 from tqdm import tqdm
 
-from world_model.gpt2.joint_model import JointModel
-from world_model.gpt2.mup_action_expert import MupActionExpert
-from world_model.gpt2.mup_gpt2 import MupGPT2
+from world_model.action_expert.joint_model import JointModel
+from world_model.action_expert.mup_action_expert import MupActionExpert
 from world_model.utils import RankedLogger
+from world_model.video_pretraining import MupGPT2
 
 logger = RankedLogger(__name__, rank_zero_only=True)
 
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     height, width = 8, 16
 
     gpt_config = {
-        "_target_": "world_model.gpt2.mup_gpt2.MupGPT2",
+        "_target_": "world_model.video_pretraining.mup_gpt2.MupGPT2",
         "embedding_dim": 128,
         "nb_layers": 12,
         "dim_heads": 16,
@@ -355,7 +355,7 @@ if __name__ == "__main__":
         "nb_tokens_per_timestep": height * width,
     }
     action_expert_config = {
-        "_target_": "world_model.gpt2.mup_action_expert.MupActionExpert",
+        "_target_": "world_model.action_expert.mup_action_expert.MupActionExpert",
         "embedding_dim": 64,
         "attention_dim": 128,
         "action_dim": 2,

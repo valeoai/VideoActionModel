@@ -5,13 +5,13 @@ import torch.nn as nn
 from einops import rearrange
 from torch import BoolTensor, FloatTensor, LongTensor
 
-from world_model.gpt2.mup_action_expert import Block as ActionBlock
-from world_model.gpt2.mup_action_expert import MupActionExpert
-from world_model.gpt2.mup_action_expert import SelfAttention as ActionAttention
-from world_model.gpt2.mup_gpt2 import Block as GPTBlock
-from world_model.gpt2.mup_gpt2 import CausalSelfAttention as GPTAttention
-from world_model.gpt2.mup_gpt2 import MupGPT2
-from world_model.gpt2.prepare_token_sequence import prepare_token_sequence
+from world_model.action_expert.mup_action_expert import Block as ActionBlock
+from world_model.action_expert.mup_action_expert import MupActionExpert
+from world_model.action_expert.mup_action_expert import SelfAttention as ActionAttention
+from world_model.video_pretraining.mup_gpt2 import Block as GPTBlock
+from world_model.video_pretraining.mup_gpt2 import CausalSelfAttention as GPTAttention
+from world_model.video_pretraining.mup_gpt2 import MupGPT2
+from world_model.video_pretraining.prepare_token_sequence import prepare_token_sequence
 
 EmbedsDict = Dict[str, FloatTensor]
 InputsDict = Dict[str, FloatTensor | LongTensor]

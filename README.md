@@ -31,7 +31,7 @@ Follow the instructions in the [opendv](world_model/datalib/README.md) folder.
 ```python
 import torch
 
-from world_model.gpt2 import load_pretrained_gpt
+from world_model.video_pretraining import load_pretrained_gpt
 from world_model.utils import expand_path, plot_images
 from world_model.datalib import OpenDVTokensDataset, torch_image_to_plot
 
@@ -75,7 +75,7 @@ import torch
 from einops import rearrange, repeat
 
 from world_model.evaluation import min_ade
-from world_model.gpt2 import load_inference_vai0rbis
+from world_model.action_expert import load_inference_vai0rbis
 from world_model.datalib import EgoTrajectoryDataset
 from world_model.utils import expand_path
 

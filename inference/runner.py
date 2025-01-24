@@ -8,8 +8,8 @@ from einops import rearrange
 from PIL import Image
 from torch import Tensor
 
+from world_model.action_expert import Vai0rbisInference, load_inference_vai0rbis
 from world_model.datalib.transforms import NeuroNCAPTransform
-from world_model.gpt2 import Vai0rbisInference, load_inference_vai0rbis
 
 NUSCENES_CAM_ORDER = [
     "CAM_FRONT",

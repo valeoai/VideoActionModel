@@ -28,7 +28,7 @@ from mup import MuReadout, MuSharedReadout, normal_
 from torch import Tensor
 from tqdm import tqdm
 
-from world_model.gpt2.prepare_token_sequence import compute_position_indices
+from world_model.video_pretraining.prepare_token_sequence import compute_position_indices
 
 
 class KVCache(nn.Module):

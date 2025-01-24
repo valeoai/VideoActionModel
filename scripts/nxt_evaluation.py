@@ -38,9 +38,8 @@ from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from tqdm import tqdm
 
 from world_model.datalib import EgoTrajectoryDataset, OpenDVTokensDataset
-from world_model.gpt2 import MupGPT2, load_pretrained_gpt
-from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
 from world_model.utils import expand_path
+from world_model.video_pretraining import MupGPT2, load_pretrained_gpt, prepare_AR_token_sequences
 
 
 def get_opendv() -> OpenDVTokensDataset:
