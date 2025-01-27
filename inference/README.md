@@ -109,8 +109,8 @@ You can then get the results by running the following command:
 python scripts/evaluate_results.py --result_path /path/to/logs
 ```
 
-(Optional) You can create the GIF for qualitative results by running the following command:
+(Optional) You can create videos for qualitative results by running the following command:
 
 ```bash
-python scripts/create_gif.py ----rootdir /path/to/logs
+python scripts/create_gif.py --rootdir /path/to/logs
 ```
