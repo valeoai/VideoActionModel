@@ -385,6 +385,50 @@ class MupGPT2(nn.Module):
         elif isinstance(module, MLP):
             self._init_c_proj_residual(module)
 
+    def _get_emb(self, token_sequence: Tensor, spatial_positions: Tensor, temporal_positions: Tensor) -> Tensor:
+        assert (
+            spatial_positions.max() < self.nb_tokens_per_timestep
+        ), f"spatial_positions.max()={spatial_positions.max()} >= self.nb_tokens_per_timestep={self.nb_tokens_per_timestep}"
+        assert (
+            temporal_positions.max() < self.nb_timesteps
+        ), f"temporal_positions.max()={temporal_positions.max()} >= self.nb_timesteps={self.nb_timesteps}"
+
+        # compute spatio-temporal position embeddings
+        spatial_pos_emb = self.transformer.wse(spatial_positions)
+        temporal_pos_emb = self.transformer.wte(temporal_positions)
+
+        tok_emb = self.transformer.wie(token_sequence)
+
+        return tok_emb + temporal_pos_emb + spatial_pos_emb
+
+    @torch.no_grad()
+    def get_intermediate_layers(
+        self,
+        token_sequence: Tensor,
+        stop_layer_idx: int,
+    ) -> Tensor:
+        # cut the token_sequence to the maximum context size
+        token_sequence = token_sequence[:, -self.block_size :]
+        bs, context_timesteps, height, width = token_sequence.shape
+        token_sequence = rearrange(token_sequence, "b t h w -> b (t h w)")
+
+        positions = compute_position_indices(bs, context_timesteps, height, width)
+        spatial_positions = positions["spatial_positions"]
+        temporal_positions = positions["temporal_positions"]
+
+        x = self._get_emb(token_sequence, spatial_positions, temporal_positions)
+
+        seqlen = token_sequence.size(1)
+        attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
+
+        # forward world embeddings to the transformer
+        for layer_idx, block in enumerate(self.transformer.h):
+            x = block(x, attn_mask)
+            if layer_idx == stop_layer_idx:
+                return x
+        emb_out = self.transformer.ln_f(x)
+        return emb_out
+
     def forward(
         self,
         token_sequence: Tensor,
@@ -401,20 +445,7 @@ class MupGPT2(nn.Module):
             temporal_positions: A tensor indicating the temporal position of each token in the sequence.
                 example: [0,0,0,0,1,1,1,1]
         """
-        assert (
-            spatial_positions.max() < self.nb_tokens_per_timestep
-        ), f"spatial_positions.max()={spatial_positions.max()} >= self.nb_tokens_per_timestep={self.nb_tokens_per_timestep}"
-        assert (
-            temporal_positions.max() < self.nb_timesteps
-        ), f"temporal_positions.max()={temporal_positions.max()} >= self.nb_timesteps={self.nb_timesteps}"
-
-        # compute spatio-temporal position embeddings
-        spatial_pos_emb = self.transformer.wse(spatial_positions)
-        temporal_pos_emb = self.transformer.wte(temporal_positions)
-
-        tok_emb = self.transformer.wie(token_sequence)
-
-        x = tok_emb + temporal_pos_emb + spatial_pos_emb
+        x = self._get_emb(token_sequence, spatial_positions, temporal_positions)
 
         seqlen = token_sequence.size(1)
         if inference and use_kv_cache:
@@ -495,6 +526,7 @@ class MupGPT2(nn.Module):
         frame = rearrange(frame, "b (h w) -> b h w", h=height, w=width)
         return frame
 
+    @torch.no_grad()
     def forward_inference(
         self,
         number_of_future_frames: int,
