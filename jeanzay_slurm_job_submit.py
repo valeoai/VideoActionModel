@@ -62,6 +62,7 @@ if __name__ == "__main__":
         "module load pytorch-gpu/py3/2.4.0",
         f"export PYTHONUSERBASE={WORK_DIR}/python_envs/worldmodel",
         "export MPICH_GPU_SUPPORT_ENABLED=1",
+        "export TMPDIR=$JOBSCRATCH",
         # "export NCCL_DEBUG=INFO",
         "export CUDA_LAUNCH_BLOCKING=1",
         "export HYDRA_FULL_ERROR=1",
@@ -71,7 +72,7 @@ if __name__ == "__main__":
         f"export TRITON_CACHE_DIR={SCRATCH_DIR}/.triton",
         "# echo of launched commands",
         "set -x",
-        f"srun python {REPO_DIR}/world_model/{args.file_to_run}.py {args.python_cmd}  {devices_args}  name={run_name}",
+        f"srun python {REPO_DIR}/vam/{args.file_to_run}.py {args.python_cmd}  {devices_args}  name={run_name}",
     ]
 
     slurm_cmd = "\n".join(slurm_cmd)

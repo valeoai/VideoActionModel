@@ -8,7 +8,7 @@ import uvicorn  # type: ignore
 from fastapi import FastAPI  # type: ignore
 from pydantic import Base64Bytes, BaseModel  # type: ignore
 
-from inference.runner import NUSCENES_CAM_ORDER, Vai0rbisInferenceInput, Vai0rbisRunner
+from inference.runner import NUSCENES_CAM_ORDER, VAMInferenceInput, VAMRunner
 
 app = FastAPI()
 
@@ -64,23 +64,23 @@ async def alive() -> bool:
 
 @app.post("/infer")
 async def infer(data: InferenceInputs) -> InferenceOutputs:
-    vai0rbis_input = _build_vai0rbis_input(data)
-    vai0rbis_output = vai0rbis_runner.forward_inference(vai0rbis_input)
+    vam_input = _build_vam_input(data)
+    vam_output = vam_runner.forward_inference(vam_input)
     return InferenceOutputs(
-        trajectory=vai0rbis_output.trajectory.tolist(),
-        aux_outputs=(InferenceAuxOutputs(**vai0rbis_output.aux_outputs.to_json())),
+        trajectory=vam_output.trajectory.tolist(),
+        aux_outputs=(InferenceAuxOutputs(**vam_output.aux_outputs.to_json())),
     )
 
 
 @app.post("/reset")
 async def reset_runner() -> bool:
-    vai0rbis_runner.reset()
+    vam_runner.reset()
     return True
 
 
-def _build_vai0rbis_input(data: InferenceInputs) -> Vai0rbisInferenceInput:
+def _build_vam_input(data: InferenceInputs) -> VAMInferenceInput:
     imgs = _bytestr_to_numpy([data.images[c] for c in NUSCENES_CAM_ORDER])
-    return Vai0rbisInferenceInput(
+    return VAMInferenceInput(
         imgs=imgs,
         timestamp=data.timestamp / 1e6,  # convert to seconds
         command=data.command,
@@ -112,6 +112,6 @@ if __name__ == "__main__":
 
     dtype = {"bf16": torch.bfloat16, "fp32": torch.float32, "fp16": torch.float16}[args.dtype]
 
-    vai0rbis_runner = Vai0rbisRunner(args.config_path, args.checkpoint_path, device, dtype)
+    vam_runner = VAMRunner(args.config_path, args.checkpoint_path, device, dtype)
 
     uvicorn.run(app, host=args.host, port=args.port)

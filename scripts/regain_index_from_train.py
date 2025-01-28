@@ -18,8 +18,7 @@ from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp3
 from torch.utils.data import DistributedSampler
 from tqdm import tqdm
 
-from world_model.opendv.random_tokenized_sequence_opendv import RandomTokenizedSequenceOpenDVDataset
-from world_model.opendv.stateful_dataloader import StatefulDataLoader
+from vam.datalib import OpenDVTokensDataset, StatefulDataLoader
 
 StateDict = Dict[str, Any]
 
@@ -29,13 +28,13 @@ def _path(path: str) -> str:
     return path
 
 
-def main(name: str, outdir: str, train_dataset: RandomTokenizedSequenceOpenDVDataset, rank: int, hp: dict) -> None:
+def main(name: str, outdir: str, train_dataset: OpenDVTokensDataset, rank: int, hp: dict) -> None:
     ckpt = hp["loops"]["fit_loop"]["state_dict"]["combined_loader"][0]
     world_size = len(ckpt)
 
     train_dataloader = StatefulDataLoader(
         train_dataset,
-        batch_size=hp["TokenizedSequenceOpenDVDataModule"]["batch_size"],
+        batch_size=hp["OpenDVTokensDataModule"]["batch_size"],
         shuffle=False,
         num_workers=ckpt[rank]["_snapshot"]["_main_snapshot"]["_num_workers"],
         pin_memory=True,
@@ -84,17 +83,17 @@ ckpt = hp["loops"]["fit_loop"]["state_dict"]["combined_loader"][0]
 world_size = len(ckpt)
 
 # we should be able to get paths from the checkpoint
-data_root_dir = _path(hp["TokenizedSequenceOpenDVDataModule"]["data_root_dir"])
-with open(_path(hp["TokenizedSequenceOpenDVDataModule"]["video_list_path"]), "r") as f:
+data_root_dir = _path(hp["OpenDVTokensDataModule"]["data_root_dir"])
+with open(_path(hp["OpenDVTokensDataModule"]["video_list_path"]), "r") as f:
     video_list = json.load(f)
 video_list = [os.path.join(data_root_dir, video) for video in video_list]
 
 # Create datasets
-train_dataset = RandomTokenizedSequenceOpenDVDataset(
+train_dataset = OpenDVTokensDataset(
     data_root_dir,
     video_list,
-    hp["TokenizedSequenceOpenDVDataModule"]["sequence_length"],
-    hp["TokenizedSequenceOpenDVDataModule"]["subsampling_factor"],
+    hp["OpenDVTokensDataModule"]["sequence_length"],
+    hp["OpenDVTokensDataModule"]["subsampling_factor"],
 )
 train_dataset._idx_only = True
 

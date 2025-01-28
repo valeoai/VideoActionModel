@@ -1,4 +1,4 @@
-# Vai0rbis
+# Video Action Model
 
 ## Install
 
@@ -14,15 +14,40 @@ pip install -e .
 
 ## DATA
 
-Follow the instructions in the [opendv](world_model/opendv/README.md) folder.
+Follow the instructions in the [opendv](vam/datalib/README.md) folder.
 
 ## Training
 
 ### Pre-training
 
+```bash
+python jeanzay_slurm_job_submit.py \
+-n GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07 \
+--gpus_per_node 4 --nodes 16 \
+-wt 20:00:00 \
+-p 'experiment=video_pretraining_GPT2_llamagen_ds16_16384_opendv data.batch_size=6 paths.output_dir=$ycy_ALL_CCFRSCRATCH/VAM_test model.network.embedding_dim=768 callbacks=callbacks_opendv_training model.optimizer_conf.weight_decay=1e-07 model.network.init_std=0.0289 model.optimizer_conf.lr=0.0041 data.num_workers=6 ++trainer.max_epochs=1 ++trainer.val_check_interval=0.25'
+```
+
 ### Fine-tuning
 
+```bash
+python jeanzay_slurm_job_submit.py \
+-n Finetuned_0000038823_mixOpendvNuplanNuscenes_GPT2_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07 \
+--gpus_per_node 4 --nodes 16 \
+-wt 02:30:00 \
+-p 'experiment=finetune_mix_complet data.batch_size=6 paths.output_dir=$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned  model.network.embedding_dim=768 model.optimizer_conf.weight_decay=1e-07 model.optimizer_conf.lr=0.0041  data.num_workers=6 ckpt_path="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_1024_Nodes32_BSperGPU3_totalBS384_weight_decay1e-07_0118_0114_1737159286/checkpoints/quarters_epoch\=000_step\=0000038823.ckpt"'
+```
+
 ### Action learning
+
+```bash
+python jeanzay_slurm_job_submit.py \
+-n VAM_pretrained0000038823_DDP_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192 \
+--gpus_per_node 4 \
+--nodes 6 \
+-wt 10:00:00 \
+-p 'experiment=action_learning data.batch_size=16 model.vam_conf.gpt_config.embedding_dim=768  model.vam_conf.action_config.embedding_dim=192 model.vam_conf.action_config.init_std=0.0086 model.optimizer_conf.lr=0.0194  model.optimizer_conf.weight_decay=1e-07 paths.output_dir=$ycy_ALL_CCFRSCRATCH/output_data/VAM ++trainer.max_epochs=1 data.num_workers=6 model.vam_conf.gpt_checkpoint_path="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned/Finetuned_0000038823_mixOpendvNuplanNuscenes_GPT2_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07_0119_1726_1737303976/checkpoints/end_of_epoch_epoch\=001_step\=0000054354_fused.pt" trainer.strategy=ddp +model.grad_logging=100'
+```
 
 ## Inference
 
@@ -31,16 +56,16 @@ Follow the instructions in the [opendv](world_model/opendv/README.md) folder.
 ```python
 import torch
 
-from world_model.gpt2 import load_pretrained_gpt
-from world_model.utils import expand_path, plot_images
-from world_model.opendv import RandomTokenizedSequenceOpenDVDataset, torch_image_to_plot
+from vam.video_pretraining import load_pretrained_gpt
+from vam.utils import expand_path, plot_images
+from vam.datalib import OpenDVTokensDataset, torch_image_to_plot
 
 # Load the pretrained model and the tokenizer decoder.
 gpt = load_pretrained_gpt(expand_path("XXX"))
 image_detokenizer = torch.jit.load(expand_path("XXXX")).to("cuda")
 
 # Load the dataset.
-dts = RandomTokenizedSequenceOpenDVDataset(
+dts = OpenDVTokensDataset(
     data_root_dir="XXXX",
     video_list=["5pAf38x5z9Q"],  # This is one of the validation video from OpenDV
     sequence_length=8,
@@ -74,12 +99,12 @@ import pickle
 import torch
 from einops import rearrange, repeat
 
-from world_model.evaluation import min_ade
-from world_model.gpt2 import load_inference_vai0rbis
-from world_model.opendv import EgoTrajectoryDataset
-from world_model.utils import expand_path
+from vam.evaluation import min_ade
+from vam.action_expert import load_inference_VAM
+from vam.datalib import EgoTrajectoryDataset
+from vam.utils import expand_path
 
-vai0rbis = load_inference_vai0rbis(expand_path("XXX"), "cuda")
+vam = load_inference_VAM(expand_path("XXX"), "cuda")
 
 with open("XXX", "rb") as f:
     nuscenes_pickle_data = pickle.load(f)
@@ -97,7 +122,7 @@ commands = sample["high_level_command"].to("cuda", non_blocking=True)[-1:]
 commands = repeat(commands, "t -> b t", b=num_sampling)
 
 with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-    trajectory = vai0rbis(visual_tokens, commands, torch.bfloat16)
+    trajectory = vam(visual_tokens, commands, torch.bfloat16)
 
 ground_truth = sample["positions"].to("cuda", non_blocking=True)[-1:]
 
@@ -107,12 +132,8 @@ loss = min_ade(trajectory, ground_truth)
 print(loss)
 ```
 
-## Evaluation
-
 ### Neuro-NCAP
 
 Please follow instruction on: [Neuro-NCAP](inference/README.md).
 
 ![teaser](.github/ressources/frontal_0103_run_45.gif)
-
-### Ego-trajectory forecasting

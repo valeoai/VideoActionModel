@@ -6,7 +6,7 @@ srun -A ycy@h100 -C h100 --pty \
 --qos=qos_gpu_h100-dev --time=00:15:00 bash
 
 python scripts/evaluate_ego_trajectory.py \
---vai0rbis_checkpoint_path xxx \
+--vam_checkpoint_path xxx \
 --outdir ./tmp/ego_eval \
 --batch_size 64 \
 --num_workers 16
@@ -15,7 +15,7 @@ srun -A ycy@h100 -C h100 --pty \
 --nodes=2 --ntasks-per-node=4 --cpus-per-task=24 --gres=gpu:4 --hint=nomultithread \
 --qos=qos_gpu_h100-dev --time=00:30:00 \
 python scripts/evaluate_ego_trajectory.py \
---vai0rbis_checkpoint_path xxx \
+--vam_checkpoint_path xxx \
 --outdir ./tmp/ego_eval_1024_77k \
 --batch_size 64 \
 --num_workers 24
@@ -33,10 +33,10 @@ import torch
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from tqdm import tqdm
 
-from world_model.evaluation import min_ade
-from world_model.gpt2 import Vai0rbisInference, load_inference_vai0rbis
-from world_model.opendv import EgoTrajectoryDataset
-from world_model.utils import expand_path
+from vam.action_expert import VideoActionModelInference, load_inference_VAM
+from vam.datalib import EgoTrajectoryDataset
+from vam.evaluation import min_ade
+from vam.utils import expand_path
 
 plt.style.use("default")
 plt.rcParams.update(
@@ -74,7 +74,7 @@ def get_nuscenes() -> EgoTrajectoryDataset:
 
 @torch.no_grad()
 def evaluate_loader(
-    vai0rbis: Vai0rbisInference, loader: DataLoader, name: str, outdir: str, rank: int = 0, world_size: int = 1
+    vam: VideoActionModelInference, loader: DataLoader, name: str, outdir: str, rank: int = 0, world_size: int = 1
 ) -> float:
     _, ax = plt.subplots(figsize=(12, 8))
     ax.set_facecolor("white")
@@ -92,7 +92,7 @@ def evaluate_loader(
         commands = batch["high_level_command"].to("cuda", non_blocking=True)[:, -1:]
         for _ in range(num_sampling):
             with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-                trajectory = vai0rbis(visual_tokens, commands, torch.bfloat16)
+                trajectory = vam(visual_tokens, commands, torch.bfloat16)
             sampled_trajectory.append(trajectory)
 
         sampled_trajectory = torch.cat(sampled_trajectory, dim=1)
@@ -148,7 +148,7 @@ def evaluate_loader(
 
 
 def evaluate_datasets(
-    vai0rbis: Vai0rbisInference,
+    vam: VideoActionModelInference,
     datasets: Dict[str, Dataset],
     outdir: str,
     batch_size: int = 4,
@@ -163,14 +163,14 @@ def evaluate_datasets(
         return DataLoader(ds, batch_size=batch_size, pin_memory=True, num_workers=num_workers, sampler=sampler)
 
     return {
-        name: evaluate_loader(vai0rbis, _get_loader(ds), name, outdir, rank=rank, world_size=world_size)
+        name: evaluate_loader(vam, _get_loader(ds), name, outdir, rank=rank, world_size=world_size)
         for name, ds in datasets.items()
     }
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--vai0rbis_checkpoint_path", type=expand_path, required=True)
+    parser.add_argument("--vam_checkpoint_path", type=expand_path, required=True)
     parser.add_argument("--outdir", type=expand_path, required=True)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=16)
@@ -200,10 +200,10 @@ if __name__ == "__main__":
         torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
-    vai0rbis = load_inference_vai0rbis(args.vai0rbis_checkpoint_path, tempdir=os.environ["JOBSCRATCH"])
+    vam = load_inference_VAM(args.vam_checkpoint_path, tempdir=os.environ["JOBSCRATCH"])
 
     metrics = evaluate_datasets(
-        vai0rbis,
+        vam,
         dts,
         outdir=args.outdir,
         batch_size=args.batch_size,
@@ -211,7 +211,7 @@ if __name__ == "__main__":
         rank=rank,
         world_size=world_size,
     )
-    metrics["vai0rbis_checkpoint_path"] = args.vai0rbis_checkpoint_path
+    metrics["vam_checkpoint_path"] = args.vam_checkpoint_path
     metrics["outdir"] = args.outdir
     print(metrics)
 

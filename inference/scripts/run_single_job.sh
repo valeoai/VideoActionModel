@@ -17,7 +17,7 @@ export BASE_DIR=$WORK
 export RENDERING_FOLDER=$BASE_DIR/neurad-studio
 export RENDERING_CHECKPOITNS_PATH=/neurad_studio/checkpoints
 export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/neurad_70.sif
-export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap_vai0rbis.sif
+export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap_vam.sif
 export NCAP_FOLDER=$BASE_DIR/neuro-ncap
 export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap.sif
 
@@ -29,8 +29,8 @@ echo "Start time: $TIME_START"
 
 ## Tokenizer paths
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
-## Vai0rbis paths
-export VAI0RBIS_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
+## VAM paths
+export VAM_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
 
 export renderer_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
 export model_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
@@ -53,7 +53,7 @@ singularity exec --nv \
 singularity exec --nv \
     --bind $WORK/NextTokenPredictor:/model \
     --bind $IMAGE_TOKENIZER_PATH:/model/weights/image_tokenizer.jit \
-    --bind $VAI0RBIS_CKPT_PATH:/model/weights/vai0rbis.pt \
+    --bind $VAM_CKPT_PATH:/model/weights/vam.pt \
     --pwd /model \
     --env PYTHONPATH=. \
 	--env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
@@ -61,7 +61,7 @@ singularity exec --nv \
 	python -u inference/server.py \
     --port $model_port \
     --config_path /model/weights/image_tokenizer.jit \
-    --checkpoint_path /model/weights/vai0rbis.pt \
+    --checkpoint_path /model/weights/vam.pt \
 	&
 
 singularity exec --nv \

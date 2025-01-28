@@ -8,8 +8,8 @@ from einops import rearrange
 from PIL import Image
 from torch import Tensor
 
-from world_model.gpt2 import Vai0rbisInference, load_inference_vai0rbis
-from world_model.opendv.transforms import NeuroNCAPTransform
+from vam.action_expert import VideoActionModelInference, load_inference_VAM
+from vam.datalib.transforms import NeuroNCAPTransform
 
 NUSCENES_CAM_ORDER = [
     "CAM_FRONT",
@@ -22,7 +22,7 @@ NUSCENES_CAM_ORDER = [
 
 
 @dataclass
-class Vai0rbisInferenceInput:
+class VAMInferenceInput:
     imgs: List[np.ndarray]
     """shape: (n-cams (1), h (900), w (1600) c (3)) | images without any preprocessing. should be in RGB order as uint8"""
     timestamp: float
@@ -32,7 +32,7 @@ class Vai0rbisInferenceInput:
 
 
 @dataclass
-class Vai0rbisAuxOutputs:
+class VAMAuxOutputs:
     objects_in_bev: np.ndarray  # N x [x, y, width, height, yaw]
     object_classes: List[str]  # (N, )
     object_scores: np.ndarray  # (N, )
@@ -50,7 +50,7 @@ class Vai0rbisAuxOutputs:
         }
 
     @classmethod
-    def empty(cls: "Vai0rbisAuxOutputs") -> "Vai0rbisAuxOutputs":
+    def empty(cls: "VAMAuxOutputs") -> "VAMAuxOutputs":
         return cls(
             objects_in_bev=np.zeros((0, 5)),
             object_classes=[],
@@ -61,20 +61,20 @@ class Vai0rbisAuxOutputs:
 
 
 @dataclass
-class Vai0rbisInferenceOutput:
+class VAMInferenceOutput:
     trajectory: np.ndarray
     """shape: (n-future (6), 2) | predicted trajectory in the ego-frame @ 2Hz"""
-    aux_outputs: Vai0rbisAuxOutputs
+    aux_outputs: VAMAuxOutputs
 
 
-class Vai0rbisRunner:
+class VAMRunner:
 
     def __init__(self, config_path: str, checkpoint_path: str, device: torch.device, dtype: torch.dtype) -> None:
         self.image_tokenizer = torch.jit.load(config_path)
         self.image_tokenizer.to(device)
 
-        self.vai0rbis: Vai0rbisInference = load_inference_vai0rbis(checkpoint_path, device)
-        self.nb_timesteps = self.vai0rbis.context_length
+        self.vam: VideoActionModelInference = load_inference_VAM(checkpoint_path, device)
+        self.nb_timesteps = self.vam.context_length
 
         self.device = device
         self.dtype = dtype
@@ -90,7 +90,7 @@ class Vai0rbisRunner:
         }
 
     @torch.no_grad()
-    def forward_inference(self, input: Vai0rbisInferenceInput) -> Vai0rbisInferenceOutput:
+    def forward_inference(self, input: VAMInferenceInput) -> VAMInferenceOutput:
         """Run inference without all the preprocessed dataset stuff."""
         # For now we only do single cam
         preproc_output = self.preproc_pipeline(input.imgs[0])
@@ -119,17 +119,17 @@ class Vai0rbisRunner:
 
         # Get the trajectory
         with torch.amp.autocast("cuda", dtype=self.dtype):
-            trajectory = self.vai0rbis(visual_tokens, command_tokens, self.dtype)
+            trajectory = self.vam(visual_tokens, command_tokens, self.dtype)
 
-        return Vai0rbisInferenceOutput(
+        return VAMInferenceOutput(
             trajectory=_format_trajs(trajectory),
-            aux_outputs=Vai0rbisAuxOutputs.empty(),
+            aux_outputs=VAMAuxOutputs.empty(),
         )
 
 
 def _format_trajs(trajs: Tensor) -> Tensor:
     """
-    Transform the trajector from Vai0rbis to the format expected by the server.
+    Transform the trajector from the video action model to the format expected by the server.
     dummy function for now
     """
     return rearrange(trajs.float().cpu().numpy(), "1 1 h a -> h a")
@@ -139,9 +139,9 @@ if __name__ == "__main__":
     # only load this for testing
     from nuscenes.nuscenes import NuScenes
 
-    from world_model.utils import expand_path
+    from vam.utils import expand_path
 
-    def _get_sample_input(nusc: NuScenes, sample: Dict[str, Any]) -> Vai0rbisInferenceInput:
+    def _get_sample_input(nusc: NuScenes, sample: Dict[str, Any]) -> VAMInferenceInput:
         timestamp = sample["timestamp"]
 
         # get cameras
@@ -156,14 +156,14 @@ if __name__ == "__main__":
             images.append(img)
         images = np.array(images)
 
-        return Vai0rbisInferenceInput(
+        return VAMInferenceInput(
             imgs=images,
             timestamp=timestamp,
             command=0,  # right
         )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    runner = Vai0rbisRunner(
+    runner = VAMRunner(
         # config_path=expand_path("~/iveco/scratch_iveco/world_model_JZGC4/jit_models/VQ_ds16_16384_llamagen.jit"),
         config_path=expand_path("$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit"),
         checkpoint_path=expand_path(

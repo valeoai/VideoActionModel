@@ -25,8 +25,8 @@ TARGET_SINGULARITY_IMAGE[0]=$DOCKER_JZ_FOLDER/neurad.sif
 TARGET_DOCKER_IMAGE[1]=$DOCKER_JZ_FOLDER/ncap.docker.tar.gz
 TARGET_SINGULARITY_IMAGE[1]=$DOCKER_JZ_FOLDER/ncap.sif
 
-TARGET_DOCKER_IMAGE[2]=$DOCKER_JZ_FOLDER/ncap_vai0rbis.docker.tar.gz
-TARGET_SINGULARITY_IMAGE[2]=$DOCKER_JZ_FOLDER/ncap_vai0rbis.sif
+TARGET_DOCKER_IMAGE[2]=$DOCKER_JZ_FOLDER/ncap_vam.docker.tar.gz
+TARGET_SINGULARITY_IMAGE[2]=$DOCKER_JZ_FOLDER/ncap_vam.sif
 
 # very important as singularity uses /tmp a lot
 export TMPDIR=$JOBSCRATCH
@@ -49,14 +49,3 @@ singularity build \
 # $SINGULARITY_ALLOWED_DIR
 # that is only accessible when loading the singularity module
 idrcontmgr cp ${TARGET_SINGULARITY_IMAGE[$SLURM_ARRAY_TASK_ID]}
-
-srun -A fzh@v100 -C v100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:0 --hint=nomultithread --qos=qos_gpu-dev --time=02:00:00 bash
-module purge
-module load singularity
-export TMPDIR=$JOBSCRATCH
-export SINGULARITY_CACHEDIR=$JOBSCRATCH
-singularity version
-singularity build \
-$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.sif \
-docker-archive://$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.docker.tar.gz
-idrcontmgr cp $ycy_ALL_CCFRSCRATCH/neuroncap_docker_file/ncap_vai0rbis.sif

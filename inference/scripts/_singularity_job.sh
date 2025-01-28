@@ -62,7 +62,7 @@ if [ $SHOULD_START_MODEL == true ]; then
   singularity exec --nv \
     --bind $MODEL_FOLDER:/model \
     --bind $IMAGE_TOKENIZER_PATH:/model/weights/image_tokenizer.jit \
-    --bind $VAI0RBIS_CKPT_PATH:/model/weights/vai0rbis.pt \
+    --bind $VAM_CKPT_PATH:/model/weights/vam.pt \
     --pwd /model \
     --env PYTHONPATH=. \
     --env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
@@ -70,7 +70,7 @@ if [ $SHOULD_START_MODEL == true ]; then
     python -u inference/server.py \
     --port $model_port \
     --config_path /model/weights/image_tokenizer.jit \
-    --checkpoint_path /model/weights/vai0rbis.pt \
+    --checkpoint_path /model/weights/vam.pt \
     &
 fi
 

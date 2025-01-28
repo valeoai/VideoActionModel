@@ -187,7 +187,7 @@ def main(result_path: Path, no_check: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    from world_model.utils import expand_path
+    from vam.utils import expand_path
 
     def boolean_flag(arg: Union[str, bool]) -> bool:
         """Add a boolean flag to argparse parser."""

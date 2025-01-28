@@ -37,17 +37,16 @@ from einops import rearrange
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from tqdm import tqdm
 
-from world_model.gpt2 import MupGPT2, load_pretrained_gpt
-from world_model.gpt2.prepare_token_sequence import prepare_AR_token_sequences
-from world_model.opendv import EgoTrajectoryDataset, RandomTokenizedSequenceOpenDVDataset
-from world_model.utils import expand_path
+from vam.datalib import EgoTrajectoryDataset, OpenDVTokensDataset
+from vam.utils import expand_path
+from vam.video_pretraining import MupGPT2, load_pretrained_gpt, prepare_AR_token_sequences
 
 
-def get_opendv() -> RandomTokenizedSequenceOpenDVDataset:
+def get_opendv() -> OpenDVTokensDataset:
     with open(expand_path("$fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json")) as f:
         val_videos = json.load(f)
 
-    return RandomTokenizedSequenceOpenDVDataset(
+    return OpenDVTokensDataset(
         data_root_dir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
         video_list=val_videos,
         sequence_length=8,

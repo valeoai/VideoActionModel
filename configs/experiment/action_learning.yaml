@@ -36,13 +36,13 @@ data:
   action_length: 6
 
 model:
-  _target_: world_model.gpt2.ActionLearning
+  _target_: vam.action_expert.ActionLearning
   _recursive_: false
   flow_sampling: beta
   flow_alpha: 1.5
   flow_beta: 1.0
-  vai0rbis_conf:
-    _target_: world_model.gpt2.Vai0rbis
+  vam_conf:
+    _target_: vam.action_expert.VideoActionModel
     _recursive_: false
     finetuning_timesteps: ${data.sequence_length}
     num_inference_steps: 10
@@ -52,7 +52,7 @@ model:
     gpt_mup_base_shapes: ./mup_shapes/gpt2_24layers_basewidth256.bsh
     gpt_checkpoint_path: null
     gpt_config:
-      _target_: world_model.gpt2.MupGPT2
+      _target_: vam.video_pretraining.MupGPT2
       embedding_dim: 256
       dim_heads: 128
       nb_layers: 24
@@ -64,14 +64,14 @@ model:
     action_mup_base_shapes: ./mup_shapes/actionexpert_24layers_baseattentiondim256_baseembeddingdim64.bsh
     action_checkpoint_path: null
     action_config:
-      _target_: world_model.gpt2.MupActionExpert
+      _target_: vam.action_expert.MupActionExpert
       embedding_dim: 64
-      attention_dim: ${model.vai0rbis_conf.gpt_config.embedding_dim}
+      attention_dim: ${model.vam_conf.gpt_config.embedding_dim}
       action_dim: 2
       action_horizon: ${data.action_length}
       number_high_level_command: 3
-      dim_heads: ${model.vai0rbis_conf.gpt_config.dim_heads}
-      nb_layers: ${model.vai0rbis_conf.gpt_config.nb_layers}
+      dim_heads: ${model.vam_conf.gpt_config.dim_heads}
+      nb_layers: ${model.vam_conf.gpt_config.nb_layers}
       init_std: 0.01
   optimizer_conf:
     lr: 0.0001
