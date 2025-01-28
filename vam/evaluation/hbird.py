@@ -530,7 +530,7 @@ if __name__ == "__main__":
             return vision_encoder.get_intermediate_layers(scale(x))[0][:, 1:]
 
     elif DINOV == "v2":
-        vision_encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg')
+        vision_encoder = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14_reg")
         patch_size = 14
         target_size = ((target_size[0] // 14) * 14, (target_size[1] // 14) * 14)
 

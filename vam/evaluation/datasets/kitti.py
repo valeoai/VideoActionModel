@@ -39,7 +39,7 @@ class KITTIDataset(GenericVideoDataset):
         self,
         root: str,
         split: str,
-        window_size: int,
+        window_size: int = 8,
         frame_stride: int = 1,
         target_size: Optional[Tuple[int, int]] = None,
         pseudo_depth: Optional[str] = None,
@@ -180,50 +180,3 @@ class KITTIDataset(GenericVideoDataset):
     def get_unique_identifier_from_path(self, path: str) -> str:
         id_ = f"{os.path.basename(os.path.dirname(path))}_{os.path.basename(path)}"
         return id_
-
-
-if __name__ == "__main__":
-    # from torch.utils.data import DataLoader
-    # from tqdm import tqdm
-
-    train_dataset = KITTIDataset(
-        Path("/datasets_local/KITTI_STEP").expanduser(),
-        split="train",
-        window_size=30,
-        frame_stride=1,
-    )
-
-    val_dataset = KITTIDataset(
-        Path("/datasets_local/KITTI_STEP").expanduser(),
-        split="val",
-        window_size=30,
-        frame_stride=1,
-    )
-
-    print(f"Number of training samples: {len(train_dataset)}")
-    print(f"Number of validation samples: {len(val_dataset)}")
-
-    # all_used_paths = []
-    # for dts in [train_dataset, val_dataset]:
-    #     flatten = lambda l: [item for sublist in l for item in sublist]
-    #     all_used_paths.extend(flatten(dts.frames_paths))
-    #     all_used_paths.extend(flatten(dts.masks_paths))
-    # with open('tmp/kitti_paths.txt', 'w') as f:
-    #     for pth in all_used_paths:
-    #         pth = str(pth)
-    #         pth = pth.replace(os.path.expanduser('~/scania/datasets_scania_raw/'), '')
-    #         f.write(f"{pth}\n")
-    # # used to rsync with:
-    # # rsync --stats -aviur --files-from=tmp/kitti_paths.txt ~/scania/datasets_scania_raw/ jz:xxx
-
-    # uniques = set()
-    # print(len(train_dataset))
-    # # print(train_dataset[0]['image'].shape)
-
-    # loader = DataLoader(train_dataset, batch_size=16, shuffle=False, num_workers=8)
-
-    # for batch in tqdm(loader):
-    #     uniques.update(set(batch['mask'].view(-1).unique().tolist()))
-
-    # print(f"Unique classes: {sorted(uniques)}")
-    # print(f"Number of unique classes: {len(uniques)}")
