@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from torch import Tensor
 
@@ -8,17 +8,18 @@ from vam.evaluation.datasets.base_dataset import GenericDataset, load_depthMaps
 
 class CityscapesDataset(GenericDataset):
     _NUM_CLASSES = 19
-    _TOP_CROP_SIZE = 0
-    _RESIZE_FACTOR = 4
-    _IMAGE_SIZE = (256, 512)
+    _TOP_CROP_SIZE = 16
+    _RESIZE_FACTOR = 3.5
+    _IMAGE_SIZE = (288, 512)
 
     def __init__(
         self,
         root: str = "cityscapes",
         split: str = "train",
         pseudo_depth: Optional[str] = None,
-        top_crop_size: int = None,
-        resize_factor: float = None,
+        top_crop_size: Optional[int] = None,
+        resize_factor: Optional[float] = None,
+        target_size: Optional[Tuple[int, int]] = None,
         **kwargs,
     ) -> None:
         self.root = root
@@ -87,6 +88,7 @@ class CityscapesDataset(GenericDataset):
             depth_paths=all_depth_paths,
             top_crop_size=top_crop_size or self._TOP_CROP_SIZE,
             resize_factor=resize_factor or self._RESIZE_FACTOR,
+            target_size=target_size or self._IMAGE_SIZE,
             **kwargs,
         )
 

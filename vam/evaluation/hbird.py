@@ -55,7 +55,7 @@ class HbirdEvaluation:
         num_neighbour: int,
         augmentation_epoch: int,
         device: str = "cuda",
-        dtype: str = "fp16",
+        dtype: str = "bf16",
         evaluation_task: str = "segmentation",
         num_bins: int = 255,
         is_distributed: bool = False,
@@ -443,7 +443,8 @@ def hbird_evaluation(
     batch_size: int = 64,
     batch_size_eval: int = 64,
     augmentation_epoch: int = 1,
-    device: str = "cpu",
+    device: str = "cuda",
+    dtype: str = "bf16",
     is_distributed: bool = False,
     num_workers: int = 8,
     return_labels: bool = False,
@@ -499,6 +500,7 @@ def hbird_evaluation(
         evaluation_task=evaluation_task,
         num_bins=num_bins,
         device=device,
+        dtype=dtype,
         is_distributed=is_distributed,
         nn_params=nn_params,
         memory_size=memory_size,
@@ -510,27 +512,48 @@ def hbird_evaluation(
 
 
 if __name__ == "__main__":
+    import torch
     from torchvision.transforms import Normalize
 
-    from vam.evaluation.datasets.cityscapes import CityscapesDataset
+    from vam.evaluation.datasets import CityscapesDataset, KITTIDataset
 
-    import torch
-    vision_encoder = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
+    DINOV = "v2"
+    DTS = "cityscapes"
+    scale = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # images are normalized to [-1, 1]
+
+    target_size = (288, 512)
+    if DINOV == "v1":
+        vision_encoder = torch.hub.load("facebookresearch/dino:main", "dino_vitb16")
+        patch_size = 16
+
+        def fwd(x: Tensor, inference: bool) -> Tensor:
+            return vision_encoder.get_intermediate_layers(scale(x))[0][:, 1:]
+
+    elif DINOV == "v2":
+        vision_encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg')
+        patch_size = 14
+        target_size = ((target_size[0] // 14) * 14, (target_size[1] // 14) * 14)
+
+        def fwd(x: Tensor, inference: bool) -> Tensor:
+            return vision_encoder(scale(x), is_training=True)["x_norm_patchtokens"]
+
+    n_params = sum(p.numel() for p in vision_encoder.parameters())
+    print("number of non-embedding parameters: %.2fM" % (n_params / 1e6,))
     vision_encoder = vision_encoder.to("cuda")
     vision_encoder = vision_encoder.eval()
     vision_encoder = vision_encoder.requires_grad_(False)
     model_info = {
-        "patch_size": 16,
+        "patch_size": patch_size,
         "d_model": 768,
     }
 
-    scale = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # images are normalized to [-1, 1]
+    if DTS == "kitti":
+        train_dts = KITTIDataset(root="/datasets_local/KITTI_STEP", split="train", target_size=target_size, window_size=1)
+        val_dts = KITTIDataset(root="/datasets_local/KITTI_STEP", split="val", target_size=target_size, window_size=1)
+    elif DTS == "cityscapes":
+        train_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="train", target_size=target_size)
+        val_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="val", target_size=target_size)
 
-    def fwd(x: Tensor, inference: bool) -> Tensor:
-        return vision_encoder.get_intermediate_layers(scale(x))[0][:, 1:]
-
-    train_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="train")
-    val_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="val")
     dataset_info = {
         "dataset_size": len(train_dts),
         "num_classes": train_dts.get_num_classes(),
@@ -544,8 +567,8 @@ if __name__ == "__main__":
         train_dataset=train_dts,
         val_dataset=val_dts,
         dataset_info=dataset_info,
-        batch_size=64,
-        batch_size_eval=64,
+        batch_size=16,
+        batch_size_eval=16,
         augmentation_epoch=1,
         device="cuda",
         return_labels=False,

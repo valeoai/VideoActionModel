@@ -132,8 +132,62 @@ loss = min_ade(trajectory, ground_truth)
 print(loss)
 ```
 
+## Evaluation
+
 ### Neuro-NCAP
 
 Please follow instruction on: [Neuro-NCAP](inference/README.md).
 
 ![teaser](.github/ressources/frontal_0103_run_45.gif)
+
+### Humming bird
+
+```python
+from vam.video_pretraining import load_pretrained_gpt
+from vam.utils import expand_path
+from vam.evaluation.hbird import hbird_evaluation
+from vam.evaluation.datasets import CityscapesDataset
+
+
+gpt = load_pretrained_gpt(expand_path("xxx"))
+image_tokenizer = torch.jit.load(expand_path("xxx")).to("cuda")
+model_info = {
+    "patch_size": 16,
+    "d_model": 768,
+}
+
+def forward_fn(x: Tensor, inference: bool) -> Tensor:
+    x = image_tokenizer(x)
+    x = gpt.get_intermediate_layers(x.unsqueeze(1), 22)
+    return x
+
+train_dts = CityscapesDataset(root="xxx", split="train")
+val_dts = CityscapesDataset(root="xxx", split="val")
+dataset_info = {
+    "dataset_size": len(train_dts),
+    "num_classes": train_dts.get_num_classes(),
+    "window_size": train_dts.get_window_size(),
+    "input_size": train_dts.get_image_size(),
+}
+
+logs, preds = hbird_evaluation(
+    ftr_extr_fn=forward_fn,
+    model_info=model_info,
+    train_dataset=train_dts,
+    val_dataset=val_dts,
+    dataset_info=dataset_info,
+    batch_size=16,
+    batch_size_eval=16,
+    augmentation_epoch=1,
+    device="cuda",
+    dtype="fp16",
+    return_labels=False,
+    num_neighbour=30,
+    nn_params=None,
+    memory_size="x10",  # you can set this to reduce memory size
+    f_mem_p=None,
+    l_mem_p=None,
+)
+
+print(logs["IoU"], logs["mIoU"])
+```
