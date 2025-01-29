@@ -424,10 +424,12 @@ class MupGPT2(nn.Module):
         # forward world embeddings to the transformer
         for layer_idx, block in enumerate(self.transformer.h):
             x = block(x, attn_mask)
+            if layer_idx == len(self.transformer.h) - 1:
+                x = self.transformer.ln_f(x)
             if layer_idx == stop_layer_idx:
-                return x
-        emb_out = self.transformer.ln_f(x)
-        return emb_out
+                break
+
+        return rearrange(x, "b (t h w) d -> b t h w d", t=context_timesteps, h=height, w=width)
 
     def forward(
         self,

@@ -7,13 +7,14 @@ export PYTHONUSERBASE=$WORK/python_envs/world_model
 
 srun -A ycy@h100 -C h100 --pty \
 --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --gres=gpu:1 --hint=nomultithread \
---qos=qos_gpu_h100-dev --time=00:25:00 bash
+--qos=qos_gpu_h100-dev --time=00:40:00 bash
 
 python scripts/hbird_eval.py \
 --gpt_checkpoint_path xxx \
 --tokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
 --outfile ./tmp/test_fn.json \
---num_workers 10
+--num_workers 16 \
+--batch_size 16
 
 srun -A ycy@h100 -C h100 --pty \
 --nodes=8 --ntasks-per-node=4 --cpus-per-task=24 --gres=gpu:4 --hint=nomultithread \
@@ -65,6 +66,17 @@ def get_kitti() -> Tuple[KITTIDataset, ...]:
     )
 
 
+def get_kitti_video() -> Tuple[KITTIDataset, ...]:
+    return (
+        KITTIDataset(
+            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="train", window_size=8, frame_stride=5, eval_on_last_frame=True
+        ),
+        KITTIDataset(
+            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="val", window_size=8, frame_stride=5, eval_on_last_frame=True
+        ),
+    )
+
+
 def evaluate_datasets(
     gpt: MupGPT2,
     image_tokenizer: nn.Module,
@@ -80,12 +92,13 @@ def evaluate_datasets(
     def _forward_fn(x: Tensor, inference: bool) -> Tensor:
         time = 1
         if x.ndim == 5:
+            # Our tokenizer does not handle video
             time = x.size(1)
             x = rearrange(x, "b t c h w -> (b t) c h w")
-
         x = image_tokenizer(x)
-        x = rearrange(x, "(b t) c h w -> b t c h w", t=time)
+        x = rearrange(x, "(b t) h w -> b t h w", t=time)
         x = gpt.get_intermediate_layers(x, 22)
+        x = rearrange(x[:, -1], "b h w d -> b (h w) d")
         return x
 
     def _get_hbird_score(dts: Tuple[CityscapesDataset | KITTIDataset, ...]) -> Dict[str, float | List[float]]:
@@ -97,8 +110,8 @@ def evaluate_datasets(
             },
             train_dataset=dts[0],
             val_dataset=dts[1],
-            batch_size=batch_size,
-            batch_size_eval=batch_size_eval or batch_size,
+            batch_size=batch_size // dts[0].get_window_size(),
+            batch_size_eval=(batch_size_eval or batch_size) // dts[0].get_window_size(),
             num_workers=num_workers,
             augmentation_epoch=1,
             device="cuda",
@@ -129,8 +142,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     all_datasets = {
-        # "cityscapes": get_cityscapes(),
-        "kitti": get_kitti(),
+        "cityscapes": get_cityscapes(),
+        # "kitti": get_kitti(),
+        # "kitti_video": get_kitti_video(),
     }
 
     world_size = int(os.environ["SLURM_NTASKS"])

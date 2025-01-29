@@ -4,8 +4,6 @@ from typing import Callable, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import torchvision.transforms.v2.functional as TF
-
-# from torchvision.tv_tensors._image import Image as TVImage
 from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
@@ -158,6 +156,7 @@ class GenericVideoDataset(GenericDataset):
         top_crop_size: int = 0,
         resize_factor: float = 1.0,
         target_size: Optional[Tuple[int]] = None,
+        eval_on_last_frame: bool = False,
     ) -> None:
         super().__init__(
             top_crop_size=top_crop_size,
@@ -168,6 +167,8 @@ class GenericVideoDataset(GenericDataset):
         self.tokens_paths = tokens_paths
         self.masks_paths = masks_paths
         self.depth_paths = depth_paths
+
+        self.eval_on_last_frame = eval_on_last_frame
 
         self._length = len(self.windows_paths)
         self.window_size = len(self.windows_paths[0])
@@ -182,12 +183,20 @@ class GenericVideoDataset(GenericDataset):
 
         if self.depth_paths is not None:
             depth_paths = self.depth_paths[idx]
-            out_dict["depth"] = torch.stack(([self.load_depthMaps(f) for f in depth_paths]), dim=0)
-            out_dict["depth_path"] = list(map(str, depth_paths))
+            if self.eval_on_last_frame:
+                out_dict["depth"] = self.load_depthMaps(depth_paths[-1])
+                out_dict["depth_path"] = [str(depth_paths[-1])]
+            else:
+                out_dict["depth"] = torch.stack(([self.load_depthMaps(f) for f in depth_paths]), dim=0)
+                out_dict["depth_path"] = list(map(str, depth_paths))
 
         if self.masks_paths is not None:
             masks_paths = self.masks_paths[idx]
-            out_dict["mask"] = torch.stack([self.load_masks(f) for f in masks_paths], dim=0)
-            out_dict["mask_path"] = list(map(str, masks_paths))
+            if self.eval_on_last_frame:
+                out_dict["mask"] = self.load_masks(masks_paths[-1])
+                out_dict["mask_path"] = [str(masks_paths[-1])]
+            else:
+                out_dict["mask"] = torch.stack([self.load_masks(f) for f in masks_paths], dim=0)
+                out_dict["mask_path"] = list(map(str, masks_paths))
 
         return self.post_process(out_dict)

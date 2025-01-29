@@ -1,6 +1,12 @@
 """
 Adapted from:
 https://github.com/vpariza/open-hummingbird-eval
+
+Main changes:
+- Batch operations, which speeds up the evaluation.
+- Compute metrics online to save memory.
+- Added support for depth evaluation.
+- Added support for distributed training.
 """
 
 import os
@@ -95,15 +101,14 @@ class HbirdEvaluation:
 
         if not self.load_memory():
             dataset_size = dataset_info["dataset_size"]
-            window_size = dataset_info["window_size"]
             patch_size = model_info["patch_size"]
             d_model = model_info["d_model"]
 
             if self.memory_size is not None:
                 assert (
-                    self.memory_size % (dataset_size * self.augmentation_epoch * window_size) == 0
+                    self.memory_size % (dataset_size * self.augmentation_epoch) == 0
                 ), "Memory size should be multiple of dataset size"
-                self.num_sampled_features = self.memory_size // (dataset_size * self.augmentation_epoch * window_size)
+                self.num_sampled_features = self.memory_size // (dataset_size * self.augmentation_epoch)
                 print("Number of sampled features: ", self.num_sampled_features)
                 ## create memory of specific size
                 self.feature_memory = torch.zeros((self.memory_size, d_model))
@@ -183,12 +188,12 @@ class HbirdEvaluation:
             for _, batch in enumerate(tqdm(train_loader, desc="Memory Creation loop")):
                 x, y = batch["image"], batch[self.gt_key]
 
-                if x.ndim == 5:
+                if y.ndim == 5:
                     # the model should handle the temporal dimension
                     y = rearrange(y, "b t c h w -> (b t) c h w")
 
-                x = x.to(self.device)
-                y = y.to(self.device)
+                x = x.to(self.device, non_blocking=True)
+                y = y.to(self.device, non_blocking=True)
                 with torch.amp.autocast(self.device, dtype=self.dtype):
                     features = self.ftr_extr_fn(x, inference=False)
                 features = features.float()
@@ -359,18 +364,17 @@ class HbirdEvaluation:
         for _, batch in enumerate(tqdm(val_loader, desc="Evaluation loop")):
             x, y = batch["image"], batch[self.gt_key]
 
-            if x.ndim == 5:
+            if y.ndim == 5:
                 # the model should handle the temporal dimension
                 num_frames = y.shape[1]
                 y = rearrange(y, "b t c h w -> (b t) c h w")
 
-            x = x.to(self.device)
+            x = x.to(self.device, non_blocking=True)
+            y = y.to(self.device, non_blocking=True)
             *_, h, w = x.shape
             with torch.amp.autocast(self.device, dtype=self.dtype):
                 features = self.ftr_extr_fn(x.to(self.device), inference=True)
             features = features.float()
-            features = features.to(self.device)
-            y = y.to(self.device)
             if self.evaluation_task == "segmentation":
                 y = y.long()
             elif self.evaluation_task == "depth":
@@ -485,7 +489,7 @@ def hbird_evaluation(
 
     if isinstance(memory_size, str):
         assert memory_size[0] == "x", "Memory size should be a string starting with x"
-        memory_size = int(memory_size[1:]) * dataset_size * augmentation_epoch * window_size
+        memory_size = int(memory_size[1:]) * dataset_size * augmentation_epoch
 
     train_sampler = None if not is_distributed else DistributedSampler(train_dataset, shuffle=True)
     val_sampler = None if not is_distributed else DistributedSampler(val_dataset, shuffle=False)
@@ -538,6 +542,8 @@ if __name__ == "__main__":
         patch_size = 16
 
         def fwd(x: Tensor, inference: bool) -> Tensor:
+            if x.ndim == 5:
+                x = x[:, -1]
             return vision_encoder.get_intermediate_layers(scale(x))[0][:, 1:]
 
     elif DINOV == "v2":
@@ -546,6 +552,8 @@ if __name__ == "__main__":
         target_size = ((target_size[0] // 14) * 14, (target_size[1] // 14) * 14)
 
         def fwd(x: Tensor, inference: bool) -> Tensor:
+            if x.ndim == 5:
+                x = x[:, -1]
             return vision_encoder(scale(x), is_training=True)["x_norm_patchtokens"]
 
     n_params = sum(p.numel() for p in vision_encoder.parameters())
@@ -561,6 +569,13 @@ if __name__ == "__main__":
     if DTS == "kitti":
         train_dts = KITTIDataset(root="/datasets_local/KITTI_STEP", split="train", target_size=target_size, window_size=1)
         val_dts = KITTIDataset(root="/datasets_local/KITTI_STEP", split="val", target_size=target_size, window_size=1)
+    elif DTS == "kitti_video":
+        train_dts = KITTIDataset(
+            root="/datasets_local/KITTI_STEP", split="train", window_size=8, frame_stride=5, eval_on_last_frame=True
+        )
+        val_dts = KITTIDataset(
+            root="/datasets_local/KITTI_STEP", split="val", window_size=8, frame_stride=5, eval_on_last_frame=True
+        )
     elif DTS == "cityscapes":
         train_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="train", target_size=target_size)
         val_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="val", target_size=target_size)
