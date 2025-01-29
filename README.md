@@ -191,3 +191,14 @@ logs, preds = hbird_evaluation(
 
 print(logs["mIoU"], logs["IoU"])
 ```
+
+### Humming bird depth
+
+You can generate the pseudo-depth map using the following code:
+
+```bash
+python scripts/depth_anything_a_dataset.py --dataset_name cityscapes
+python scripts/depth_anything_a_dataset.py --dataset_name cityscapes --compute_only_issues
+```
+
+This should be a standalone script. It was not exstensively tested.

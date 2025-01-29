@@ -535,9 +535,9 @@ if __name__ == "__main__":
     export PYTHONUSERBASE=$WORK/python_envs/world_model
 
     srun -A ycy@h100 -C h100 --pty \
-    --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --gres=gpu:1 --hint=nomultithread \
+    --nodes=1 --ntasks-per-node=1 --cpus-per-task=24 --gres=gpu:1 --hint=nomultithread \
     --qos=qos_gpu_h100-gc --time=05:00:00 \
-    python vam/evaluation/hbird_eval.py
+    python vam/evaluation/hbird.py
     """
     import json
     from collections import defaultdict
@@ -549,9 +549,10 @@ if __name__ == "__main__":
 
     os.environ["TMPDIR"] = os.environ.get("JOBSCRATCH", "/tmp")
 
-    BATCH_SIZE = 128
-    METRICS = {}
-    DINOV = ["v2g", "v1", "v2b", "v2l"]
+    BATCH_SIZE = 64
+    BATCH_SIZE = 16
+    METRICS = defaultdict(dict)
+    DINOV = ["v2l", "v2g", "v1", "v2b"]
     scale = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # images are normalized to [-1, 1]
 
     iterator_dino = tqdm(DINOV, desc="DINOv models")
@@ -592,13 +593,22 @@ if __name__ == "__main__":
 
         DTS = defaultdict(dict)
         DTS["kitti"]["train"] = KITTIDataset(
-            root="/datasets_local/KITTI_STEP", split="train", target_size=target_size, window_size=1
+            root="/datasets_local/KITTI_STEP",
+            split="train",
+            target_size=target_size,
+            window_size=1,
+            # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="train", target_size=target_size, window_size=1
         )
         DTS["kitti"]["val"] = KITTIDataset(
-            root="/datasets_local/KITTI_STEP", split="val", target_size=target_size, window_size=1
+            root="/datasets_local/KITTI_STEP",
+            split="val",
+            target_size=target_size,
+            window_size=1,
+            # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="val", target_size=target_size, window_size=1
         )
         DTS["kitti_video"]["train"] = KITTIDataset(
-            root="/datasets_local/KITTI_STEP",
+            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
             split="train",
             window_size=8,
             frame_stride=5,
@@ -606,7 +616,8 @@ if __name__ == "__main__":
             target_size=target_size,
         )
         DTS["kitti_video"]["val"] = KITTIDataset(
-            root="/datasets_local/KITTI_STEP",
+            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
             split="val",
             window_size=8,
             frame_stride=5,
@@ -614,9 +625,17 @@ if __name__ == "__main__":
             target_size=target_size,
         )
         DTS["cityscapes"]["train"] = CityscapesDataset(
-            root="/datasets_local/cityscapes", split="train", target_size=target_size
+            root="/datasets_local/cityscapes",
+            split="train",
+            target_size=target_size,
+            # root="$ycy_ALL_CCFRSCRATCH/cityscapes", split="train", target_size=target_size
         )
-        DTS["cityscapes"]["val"] = CityscapesDataset(root="/datasets_local/cityscapes", split="val", target_size=target_size)
+        DTS["cityscapes"]["val"] = CityscapesDataset(
+            root="/datasets_local/cityscapes",
+            split="val",
+            target_size=target_size,
+            # root="$ycy_ALL_CCFRSCRATCH/cityscapes", split="val", target_size=target_size
+        )
 
         iterator_dts = tqdm(DTS, desc=f"Datasets for {dinov}", position=1, leave=False)
         for dts_name, the_dts in DTS.items():
@@ -638,12 +657,13 @@ if __name__ == "__main__":
                 return_labels=False,
                 num_neighbour=30,
                 nn_params=None,
-                num_workers=16,
+                num_workers=10,
                 memory_size="x10",  # you can set this to reduce memory size
                 f_mem_p=None,
                 l_mem_p=None,
             )
 
-            METRICS[dts_name] = logs
+            print(f"{dinov} {dts_name} {logs['mIoU']:.2f}")
+            METRICS[dinov][dts_name] = logs
             with open("metrics.json", "w") as f:
                 json.dump(METRICS, f, indent=4)

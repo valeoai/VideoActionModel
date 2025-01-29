@@ -56,6 +56,7 @@ if not os.path.exists("~/.cache/torch/hub/facebookresearch_dinov2_main"):
 # make a symlink between ~/.cache/torch/hub and torchhub
 if not os.path.exists("torchhub"):
     os.makedirs("torchhub", exist_ok=True)
+    # there is a typo in the depth anything code, so we need to create a symlink
     os.system("ln -s ~/.cache/torch/hub/facebookresearch_dinov2_main torchhub/")
 
 
