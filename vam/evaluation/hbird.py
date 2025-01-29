@@ -527,74 +527,123 @@ def hbird_evaluation(
 
 
 if __name__ == "__main__":
+    """
+    example usage:
+    module purge
+    module load arch/h100
+    module load pytorch-gpu/py3/2.4.0
+    export PYTHONUSERBASE=$WORK/python_envs/world_model
+
+    srun -A ycy@h100 -C h100 --pty \
+    --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --gres=gpu:1 --hint=nomultithread \
+    --qos=qos_gpu_h100-gc --time=05:00:00 \
+    python vam/evaluation/hbird_eval.py
+    """
+    import json
+    from collections import defaultdict
+
     import torch
     from torchvision.transforms import Normalize
 
     from vam.evaluation.datasets import CityscapesDataset, KITTIDataset
 
-    DINOV = "v2"
-    DTS = "cityscapes"
+    os.environ["TMPDIR"] = os.environ.get("JOBSCRATCH", "/tmp")
+
+    BATCH_SIZE = 128
+    METRICS = {}
+    DINOV = ["v2g", "v1", "v2b", "v2l"]
     scale = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # images are normalized to [-1, 1]
 
-    target_size = (288, 512)
-    if DINOV == "v1":
-        vision_encoder = torch.hub.load("facebookresearch/dino:main", "dino_vitb16")
-        patch_size = 16
+    iterator_dino = tqdm(DINOV, desc="DINOv models")
+    for dinov in iterator_dino:
+        target_size = (288, 512)
+        if dinov == "v1":
+            vision_encoder = torch.hub.load("facebookresearch/dino:main", "dino_vitb16")
+            patch_size = 16
+            d_model = 768
 
-        def fwd(x: Tensor, inference: bool) -> Tensor:
-            if x.ndim == 5:
-                x = x[:, -1]
-            return vision_encoder.get_intermediate_layers(scale(x))[0][:, 1:]
+            def fwd(x: Tensor, inference: bool) -> Tensor:
+                if x.ndim == 5:
+                    x = x[:, -1]
+                return vision_encoder.get_intermediate_layers(scale(x))[0][:, 1:]  # noqa: B023
 
-    elif DINOV == "v2":
-        vision_encoder = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14_reg")
-        patch_size = 14
-        target_size = ((target_size[0] // 14) * 14, (target_size[1] // 14) * 14)
+        elif dinov.startswith("v2"):
+            model_size = dinov[-1]
+            assert model_size in ["b", "l", "g"], "Dinov2 model size should be one of 'b', 'l', 'g'"
+            vision_encoder = torch.hub.load("facebookresearch/dinov2", f"dinov2_vit{model_size}14_reg")
+            d_model = {"b": 768, "l": 1024, "g": 1536}[model_size]
+            patch_size = 14
+            target_size = ((target_size[0] // 14) * 14, (target_size[1] // 14) * 14)
 
-        def fwd(x: Tensor, inference: bool) -> Tensor:
-            if x.ndim == 5:
-                x = x[:, -1]
-            return vision_encoder(scale(x), is_training=True)["x_norm_patchtokens"]
+            def fwd(x: Tensor, inference: bool) -> Tensor:
+                if x.ndim == 5:
+                    x = x[:, -1]
+                return vision_encoder(scale(x), is_training=True)["x_norm_patchtokens"]  # noqa: B023
 
-    n_params = sum(p.numel() for p in vision_encoder.parameters())
-    print("number of non-embedding parameters: %.2fM" % (n_params / 1e6,))
-    vision_encoder = vision_encoder.to("cuda")
-    vision_encoder = vision_encoder.eval()
-    vision_encoder = vision_encoder.requires_grad_(False)
-    model_info = {
-        "patch_size": patch_size,
-        "d_model": 768,
-    }
+        n_params = sum(p.numel() for p in vision_encoder.parameters())
+        print("number of non-embedding parameters: %.2fM" % (n_params / 1e6,))
+        vision_encoder = vision_encoder.to("cuda")
+        vision_encoder = vision_encoder.eval()
+        vision_encoder = vision_encoder.requires_grad_(False)
+        model_info = {
+            "patch_size": patch_size,
+            "d_model": d_model,
+        }
 
-    if DTS == "kitti":
-        train_dts = KITTIDataset(root="/datasets_local/KITTI_STEP", split="train", target_size=target_size, window_size=1)
-        val_dts = KITTIDataset(root="/datasets_local/KITTI_STEP", split="val", target_size=target_size, window_size=1)
-    elif DTS == "kitti_video":
-        train_dts = KITTIDataset(
-            root="/datasets_local/KITTI_STEP", split="train", window_size=8, frame_stride=5, eval_on_last_frame=True
+        DTS = defaultdict(dict)
+        DTS["kitti"]["train"] = KITTIDataset(
+            root="/datasets_local/KITTI_STEP", split="train", target_size=target_size, window_size=1
         )
-        val_dts = KITTIDataset(
-            root="/datasets_local/KITTI_STEP", split="val", window_size=8, frame_stride=5, eval_on_last_frame=True
+        DTS["kitti"]["val"] = KITTIDataset(
+            root="/datasets_local/KITTI_STEP", split="val", target_size=target_size, window_size=1
         )
-    elif DTS == "cityscapes":
-        train_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="train", target_size=target_size)
-        val_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="val", target_size=target_size)
+        DTS["kitti_video"]["train"] = KITTIDataset(
+            root="/datasets_local/KITTI_STEP",
+            split="train",
+            window_size=8,
+            frame_stride=5,
+            eval_on_last_frame=True,
+            target_size=target_size,
+        )
+        DTS["kitti_video"]["val"] = KITTIDataset(
+            root="/datasets_local/KITTI_STEP",
+            split="val",
+            window_size=8,
+            frame_stride=5,
+            eval_on_last_frame=True,
+            target_size=target_size,
+        )
+        DTS["cityscapes"]["train"] = CityscapesDataset(
+            root="/datasets_local/cityscapes", split="train", target_size=target_size
+        )
+        DTS["cityscapes"]["val"] = CityscapesDataset(root="/datasets_local/cityscapes", split="val", target_size=target_size)
 
-    logs, preds = hbird_evaluation(
-        ftr_extr_fn=fwd,
-        model_info=model_info,
-        train_dataset=train_dts,
-        val_dataset=val_dts,
-        batch_size=16,
-        batch_size_eval=16,
-        augmentation_epoch=1,
-        device="cuda",
-        return_labels=False,
-        num_neighbour=30,
-        nn_params=None,
-        memory_size="x10",  # you can set this to reduce memory size
-        f_mem_p=None,
-        l_mem_p=None,
-    )
+        iterator_dts = tqdm(DTS, desc=f"Datasets for {dinov}", position=1, leave=False)
+        for dts_name, the_dts in DTS.items():
+            train_dataset = the_dts["train"]
+            val_dataset = the_dts["val"]
+            train_dataset.target_size = target_size
+            val_dataset.target_size = target_size
 
-    print(logs["IoU"], logs["mIoU"])
+            logs, preds = hbird_evaluation(
+                ftr_extr_fn=fwd,
+                model_info=model_info,
+                train_dataset=train_dataset,
+                val_dataset=val_dataset,
+                batch_size=BATCH_SIZE,
+                batch_size_eval=BATCH_SIZE,
+                augmentation_epoch=1,
+                device="cuda",
+                dtype="bf16",
+                return_labels=False,
+                num_neighbour=30,
+                nn_params=None,
+                num_workers=16,
+                memory_size="x10",  # you can set this to reduce memory size
+                f_mem_p=None,
+                l_mem_p=None,
+            )
+
+            METRICS[dts_name] = logs
+            with open("metrics.json", "w") as f:
+                json.dump(METRICS, f, indent=4)
