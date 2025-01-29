@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 from torch import Tensor
 
 from vam.evaluation.datasets.base_dataset import GenericDataset, load_depthMaps
+from vam.utils import expand_path
 
 
 class CityscapesDataset(GenericDataset):
@@ -22,7 +23,7 @@ class CityscapesDataset(GenericDataset):
         target_size: Optional[Tuple[int, int]] = None,
         **kwargs,
     ) -> None:
-        self.root = root
+        self.root = expand_path(root)
         self.split = split
         self.files = {}
 

@@ -1,3 +1,8 @@
+"""
+Adapted from:
+https://github.com/vpariza/open-hummingbird-eval
+"""
+
 import os
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
@@ -309,9 +314,9 @@ class HbirdEvaluation:
     def cross_attention(self, q: Tensor, k: Tensor, v: Tensor, beta: float = 0.02) -> Tensor:
         """
         Args:
-            q (torch.Tensor): query tensor of shape (bs, num_patches, d_k)
-            k (torch.Tensor): key tensor of shape (bs, num_patches,  NN, d_k)
-            v (torch.Tensor): value tensor of shape (bs, num_patches, NN, label_dim)
+            q (Tensor): query tensor of shape (bs, num_patches, d_k)
+            k (Tensor): key tensor of shape (bs, num_patches,  NN, d_k)
+            v (Tensor): value tensor of shape (bs, num_patches, NN, label_dim)
         """
         # d_k = q.size(-1)
         q = F.normalize(q, dim=-1)
@@ -437,7 +442,6 @@ def hbird_evaluation(
     model_info: Info,
     train_dataset: Dataset,
     val_dataset: Dataset,
-    dataset_info: Info,
     evaluation_task: str = "segmentation",
     num_bins: int = 255,
     batch_size: int = 64,
@@ -454,6 +458,13 @@ def hbird_evaluation(
     f_mem_p: Optional[str] = None,
     l_mem_p: Optional[str] = None,
 ) -> Tuple[Dict[str, float | List[float]], Tensor]:
+    dataset_info = {
+        "dataset_size": len(train_dataset),
+        "num_classes": train_dataset.get_num_classes(),
+        "window_size": train_dataset.get_window_size(),
+        "input_size": train_dataset.get_image_size(),
+    }
+
     input_size = dataset_info["input_size"]
     patch_size = model_info["patch_size"]
 
@@ -554,19 +565,11 @@ if __name__ == "__main__":
         train_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="train", target_size=target_size)
         val_dts = CityscapesDataset(root="/datasets_local/cityscapes", split="val", target_size=target_size)
 
-    dataset_info = {
-        "dataset_size": len(train_dts),
-        "num_classes": train_dts.get_num_classes(),
-        "window_size": train_dts.get_window_size(),
-        "input_size": train_dts.get_image_size(),
-    }
-
     logs, preds = hbird_evaluation(
         ftr_extr_fn=fwd,
         model_info=model_info,
         train_dataset=train_dts,
         val_dataset=val_dts,
-        dataset_info=dataset_info,
         batch_size=16,
         batch_size_eval=16,
         augmentation_epoch=1,

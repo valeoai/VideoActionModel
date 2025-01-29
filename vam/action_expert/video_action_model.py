@@ -238,7 +238,7 @@ class VideoActionModel(nn.Module):
         verbose: bool = False,
         num_inference_steps: Optional[int] = None,
         final_action_clip_value: Optional[float] = None,
-    ) -> torch.Tensor:
+    ) -> Tensor:
         """
         Inference for action prediction.
 
@@ -299,7 +299,7 @@ class VideoActionModelInference(VideoActionModel):
         high_level_command: LongTensor,
         dtype: torch.dtype,
         verbose: bool = False,
-    ) -> torch.Tensor:
+    ) -> Tensor:
         return super().forward_inference(visual_tokens, high_level_command, dtype, verbose)
 
 

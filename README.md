@@ -189,5 +189,5 @@ logs, preds = hbird_evaluation(
     l_mem_p=None,
 )
 
-print(logs["IoU"], logs["mIoU"])
+print(logs["mIoU"], logs["IoU"])
 ```

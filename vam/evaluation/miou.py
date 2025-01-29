@@ -7,9 +7,10 @@ from typing import Optional
 
 import numpy as np
 import torch
+from torch import Tensor
 
 
-def batched_bincount(x: torch.Tensor, max_value: int, dim: int = -1) -> torch.Tensor:
+def batched_bincount(x: Tensor, max_value: int, dim: int = -1) -> Tensor:
     # adapted from
     # https://discuss.pytorch.org/t/batched-bincount/72819/3
     shape = (len(x), max_value)
@@ -20,18 +21,18 @@ def batched_bincount(x: torch.Tensor, max_value: int, dim: int = -1) -> torch.Te
 
 
 def fast_cm_torch(
-    y_true: torch.Tensor, y_pred: torch.Tensor, n: int, do_check: bool = True, invalid_value: Optional[int] = None
-) -> torch.Tensor:
+    y_true: Tensor, y_pred: Tensor, n: int, do_check: bool = True, invalid_value: Optional[int] = None
+) -> Tensor:
     """
     Fast computation of a confusion matrix from two arrays of labels.
 
     Args:
-        y_true  (torch.Tensor): array of true labels
-        y_pred (torch.Tensor): array of predicted labels
+        y_true  (Tensor): array of true labels
+        y_pred (Tensor): array of predicted labels
         n (int): number of classes
 
     Returns:
-        torch.Tensor: confusion matrix, where rows are true labels and columns are predicted labels
+        Tensor: confusion matrix, where rows are true labels and columns are predicted labels
     """
     y_true = y_true.flatten(start_dim=1).long()
     y_pred = y_pred.flatten(start_dim=1).long()
@@ -53,15 +54,15 @@ def fast_cm_torch(
     return batched_bincount(effective_indices, max_value)[..., : n**2].view(-1, n, n)
 
 
-def per_class_iou_torch(cm: torch.Tensor) -> torch.Tensor:
+def per_class_iou_torch(cm: Tensor) -> Tensor:
     """'
     Compute the Intersection over Union (IoU) for each class from a confusion matrix.
 
     Args:
-        cm (torch.Tensor): n x n 2D confusion matrix (the orientation is not important, as the formula is symmetric)
+        cm (Tensor): n x n 2D confusion matrix (the orientation is not important, as the formula is symmetric)
 
     Returns:
-        torch.Tensor: 1D array of IoU values for each of the n classes
+        Tensor: 1D array of IoU values for each of the n classes
     """
     # The diagonal contains the intersection of predicted and true labels
     # The sum of rows (columns) is the union of predicted (true) labels (or vice-versa, depending on the orientation)

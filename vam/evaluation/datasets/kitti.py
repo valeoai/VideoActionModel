@@ -9,6 +9,7 @@ from PIL import Image
 from torch import Tensor
 
 from vam.evaluation.datasets.base_dataset import GenericVideoDataset, load_depthMaps
+from vam.utils import expand_path
 
 
 def decode_panoptic_map(panoptic_map: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -79,7 +80,7 @@ class KITTIDataset(GenericVideoDataset):
             - G channel: instance ID // 256
             - B channel: instance ID % 256
         """
-        self.root = Path(root)
+        self.root = Path(expand_path(root))
         self.split = split
         self.window_size = window_size
         self.frame_stride = frame_stride

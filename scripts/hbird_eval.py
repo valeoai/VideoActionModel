@@ -10,7 +10,7 @@ srun -A ycy@h100 -C h100 --pty \
 --qos=qos_gpu_h100-dev --time=00:25:00 bash
 
 python scripts/hbird_eval.py \
---gpt_checkpoint_path $ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07_0116_1243_1737027800/checkpoints/quarters_epoch=000_step=0000038823.ckpt \
+--gpt_checkpoint_path xxx \
 --tokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
 --outfile ./tmp/test_fn.json \
 --num_workers 10
@@ -42,6 +42,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
+from einops import rearrange
 from torch import Tensor
 
 from vam.evaluation.datasets import CityscapesDataset, KITTIDataset
@@ -52,15 +53,15 @@ from vam.video_pretraining import MupGPT2, load_pretrained_gpt
 
 def get_cityscapes() -> Tuple[CityscapesDataset, ...]:
     return (
-        CityscapesDataset(data_root_dir="$fzh_ALL_CCFRSCRATCH/cityscapes", split="val"),
-        CityscapesDataset(data_root_dir="$fzh_ALL_CCFRSCRATCH/cityscapes", split="val"),
+        CityscapesDataset(root="$ycy_ALL_CCFRSCRATCH/cityscapes", split="train"),
+        CityscapesDataset(root="$ycy_ALL_CCFRSCRATCH/cityscapes", split="val"),
     )
 
 
 def get_kitti() -> Tuple[KITTIDataset, ...]:
     return (
-        KITTIDataset(data_root_dir="$fzh_ALL_CCFRSCRATCH/KITTI_STEP", split="val", window_size=1),
-        KITTIDataset(data_root_dir="$fzh_ALL_CCFRSCRATCH/KITTI_STEP", split="val", window_size=1),
+        KITTIDataset(root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="train", window_size=1),
+        KITTIDataset(root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="val", window_size=1),
     )
 
 
@@ -77,8 +78,14 @@ def evaluate_datasets(
     world_size: int = 1,
 ) -> Dict[str, Dict[str, float | List[float]]]:
     def _forward_fn(x: Tensor, inference: bool) -> Tensor:
+        time = 1
+        if x.ndim == 5:
+            time = x.size(1)
+            x = rearrange(x, "b t c h w -> (b t) c h w")
+
         x = image_tokenizer(x)
-        x = gpt.get_intermediate_layers(x.unsqueeze(1), 22)
+        x = rearrange(x, "(b t) c h w -> b t c h w", t=time)
+        x = gpt.get_intermediate_layers(x, 22)
         return x
 
     def _get_hbird_score(dts: Tuple[CityscapesDataset | KITTIDataset, ...]) -> Dict[str, float | List[float]]:
@@ -122,7 +129,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     all_datasets = {
-        "cityscapes": get_cityscapes(),
+        # "cityscapes": get_cityscapes(),
         "kitti": get_kitti(),
     }
 
