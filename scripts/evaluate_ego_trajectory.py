@@ -78,6 +78,7 @@ def evaluate_loader(
     loader: DataLoader,
     name: str,
     outdir: str,
+    num_sampled_trajectories: int = 10,
     rank: int = 0,
     world_size: int = 1,
     store_trajectories: bool = False,
@@ -88,16 +89,14 @@ def evaluate_loader(
     x_min, y_min = float("inf"), float("inf")
     x_max, y_max = float("-inf"), float("-inf")
 
-    num_sampling = 10
     stored_trajectories = {}
-
     total_loss, total_samples = torch.tensor(0.0).cuda(), torch.tensor(0).cuda()
     iterator = tqdm(loader, "Evaluating", disable=rank != 0)
     for batch in iterator:
         sampled_trajectory = []
         visual_tokens = batch["visual_tokens"].to("cuda", non_blocking=True)
         commands = batch["high_level_command"].to("cuda", non_blocking=True)[:, -1:]
-        for _ in range(num_sampling):
+        for _ in range(num_sampled_trajectories):
             with torch.amp.autocast("cuda", dtype=torch.bfloat16):
                 trajectory = vam(visual_tokens, commands, torch.bfloat16)
             sampled_trajectory.append(trajectory)
@@ -177,6 +176,7 @@ def evaluate_datasets(
     vam: VideoActionModelInference,
     datasets: Dict[str, Dataset],
     outdir: str,
+    num_sampled_trajectories: int = 10,
     batch_size: int = 4,
     num_workers: int = 4,
     rank: int = 0,
@@ -196,6 +196,7 @@ def evaluate_datasets(
             _get_loader(ds),
             name,
             outdir,
+            num_sampled_trajectories=num_sampled_trajectories,
             rank=rank,
             world_size=world_size,
             store_trajectories=store_trajectories and name == "nuscenes",
@@ -211,12 +212,13 @@ if __name__ == "__main__":
     parser.add_argument("--outdir", type=expand_path, required=True)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=16)
+    parser.add_argument("--num_sampled_trajectories", type=int, default=10)
     parser.add_argument("--store_trajectories", type=boolean_flag, default=False)
     args = parser.parse_args()
 
     dts = {
+        "nuplan": get_nuplan(),
         "nuscenes": get_nuscenes(),
-        # "nuplan": get_nuplan(),
     }
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -244,6 +246,7 @@ if __name__ == "__main__":
         vam,
         dts,
         outdir=args.outdir,
+        num_sampled_trajectories=args.num_sampled_trajectories,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         rank=rank,

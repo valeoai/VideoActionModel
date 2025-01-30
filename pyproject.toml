@@ -28,6 +28,7 @@ dependencies = [
     "pillow",
     "pyquaternion",
     "colorlog",
+    "plotly",
     "prettytable",
     "clean-fid",
     "hyperqueue==0.19.0",

@@ -554,8 +554,8 @@ if __name__ == "__main__":
     BATCH_SIZE = 64
     BATCH_SIZE = 16
     METRICS = defaultdict(lambda: defaultdict(dict))
-    DINOV = ["v2l", "v2g", "v1", "v2b"]
-    DINOV = ["v1"]
+    DINOV = ["v2g", "v2l", "v1", "v2b"]
+    # DINOV = ["v1"]
     scale = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # images are normalized to [-1, 1]
 
     iterator_dino = tqdm(DINOV, desc="DINOv models")
@@ -677,5 +677,5 @@ if __name__ == "__main__":
 
                 print(f"{dinov} {dts_name} {logs['mIoU' if task == 'segmentation' else 'rmse']:.2f}")
                 METRICS[dinov][dts_name][task] = logs
-                with open("metrics.json", "w") as f:
+                with open("./tmp/metrics.json", "w") as f:
                     json.dump(METRICS, f, indent=4)

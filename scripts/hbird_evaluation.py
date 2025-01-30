@@ -82,6 +82,7 @@ def evaluate_datasets(
     layer_idx: int,
     image_tokenizer: nn.Module,
     datasets: Dict[str, Tuple[CityscapesDataset | KITTIDataset, ...]],
+    task: str = "segmentation",
     memory_size: str = "x10",
     num_neighbour: int = 30,
     batch_size: int = 4,
@@ -111,6 +112,7 @@ def evaluate_datasets(
             },
             train_dataset=dts[0],
             val_dataset=dts[1],
+            evaluation_task=task,
             batch_size=batch_size // dts[0].get_window_size(),
             batch_size_eval=(batch_size_eval or batch_size) // dts[0].get_window_size(),
             num_workers=num_workers,
@@ -137,6 +139,7 @@ if __name__ == "__main__":
     parser.add_argument("--tokenizer_jit_path", type=expand_path, required=True)
     parser.add_argument("--outfile", type=expand_path, required=True)
     parser.add_argument("--memory_size", type=str, default="x10")
+    parser.add_argument("--task", type=str, default="segmentation", choices=["segmentation", "depth"])
     parser.add_argument("--num_neighbour", type=int, default=128)
     parser.add_argument("--dtype", type=str, default="bf16", choices=["bf16", "fp32", "fp16"])
     parser.add_argument("--batch_size", type=int, default=128)
@@ -173,6 +176,7 @@ if __name__ == "__main__":
         args.layer_idx,
         tokenizer,
         all_datasets,
+        task=args.task,
         memory_size=args.memory_size,
         num_neighbour=args.num_neighbour,
         batch_size=args.batch_size,
