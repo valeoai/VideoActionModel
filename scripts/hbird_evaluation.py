@@ -143,8 +143,8 @@ if __name__ == "__main__":
 
     all_datasets = {
         "cityscapes": get_cityscapes(),
-        # "kitti": get_kitti(),
-        # "kitti_video": get_kitti_video(),
+        "kitti": get_kitti(),
+        "kitti_video": get_kitti_video(),
     }
 
     world_size = int(os.environ["SLURM_NTASKS"])
