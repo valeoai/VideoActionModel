@@ -44,6 +44,7 @@ def evaluate_a_dataset(
     world_size: int,
     is_distributed: bool,
     device: torch.device | str = "cuda",
+    dtype: torch.dtype = torch.bfloat16,
 ) -> None:
     # Setup PyTorch:
     assert torch.cuda.is_available(), "Sampling with DDP requires at least one GPU."
@@ -77,22 +78,24 @@ def evaluate_a_dataset(
             print(f"Processing batch {i + 1}/{len(loader)}")
 
         x = batch["image"].to(device, non_blocking=True)
-        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        with torch.amp.autocast("cuda", dtype=dtype):
             # If tokenizer_only, we only encode the future frames
             loader.set_description("Creating the tokens...")
             to_tokenize = x[:, args.context_length :] if args.tokenizer_only else x[:, : args.context_length]
+            to_tokenize = rearrange(to_tokenize, "b t ... -> (b t) ...")
             visual_tokens = tokenizer(to_tokenize)
 
             loader.set_description("Generating future frames...")
             if not args.tokenizer_only:
+                visual_tokens = rearrange(visual_tokens, "(b t) ... -> b t ...", t=args.context_length)
                 future_generated_frames = gpt.forward_inference(
                     number_of_future_frames=args.prediction_length,
                     burnin_visual_tokens=visual_tokens,
                     temperature=args.temperature,
                     topk_sampler=args.topk_sampler,
                 )
+                visual_tokens = rearrange(visual_tokens, "b t ... -> (b t) ...")
 
-            visual_tokens = rearrange(visual_tokens, "b t ... -> (b t) ...")
             future_generated_frames = detokenizer(visual_tokens)
             future_generated_frames = rearrange(future_generated_frames, "(b t) ... -> b t ...", t=args.prediction_length)
 
@@ -113,8 +116,7 @@ def evaluate_a_dataset(
 
     all_metrics = {}
 
-    if not args.generation_only:
-        all_metrics.update(pixel_evaluator.compute())
+    all_metrics.update(pixel_evaluator.compute())
 
     for k, fid in fid_evaluator.items():
         all_metrics[f"FID@{k}"] = fid.compute()["FID"]
@@ -128,38 +130,41 @@ def evaluate_a_dataset(
 
 if __name__ == "__main__":
     """
-    python nuplan_video_reconstruction_eval.py \
-        --dataset kitti \
-        --frames_dir /datasets_local/KITTI_STEP \
-        --ckpt ../../weights/llamagen_mode_quantized_normalized_True_loss_cosine_0110000.pt \
-        --context_length 10 \
-        --prediction_length 12 \
-        --number_of_futures 1 \
-        --per_proc_batch_size 4 \
-        --tokenizer_only False \
-        --stop_after_x 2
+    python scripts/reconstruction_quality_eval.py \
+        --outfile ./tmp/reconstruction_quality_eval.json \
+        --tokenizer_only True \
+        --tokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
+        --detokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit \
+        --stop_after_x 10 \
+        --dtype bf16
+
+    python scripts/reconstruction_quality_eval.py \
+        --outfile ./tmp/reconstruction_quality_eval.json \
+        --gpt_checkpoint_path weights/fused_ckpt.pt \
+        --tokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
+        --detokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit \
+        --dtype fp16
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, default="kitti")
+    parser.add_argument("--outfile", type=expand_path, required=True)
 
+    parser.add_argument("--tokenizer_only", type=boolean_flag, default=False)
     parser.add_argument("--tokenizer_jit_path", type=expand_path, required=True)
     parser.add_argument("--detokenizer_jit_path", type=expand_path, required=True)
-    parser.add_argument("--gpt_checkpoint_path", type=expand_path, required=True)
+    parser.add_argument("--gpt_checkpoint_path", type=expand_path, default=None)
 
-    parser.add_argument("--temperature", type=float, default=1.0)
-    parser.add_argument("--topk_sampler", type=int, default=1)
     parser.add_argument("--context_length", type=int, default=4)
     parser.add_argument("--prediction_length", type=int, default=4)
+    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--topk_sampler", type=int, default=1)
     parser.add_argument("--number_of_futures", type=int, default=1)
     parser.add_argument("--deterministic", type=boolean_flag, default=True)
-    parser.add_argument("--use_kv_cache", type=boolean_flag, default=True)
 
     parser.add_argument("--fid_at", type=int, default=None, nargs="+")
 
     parser.add_argument("--global_seed", type=int, default=0)
     parser.add_argument("--per_proc_batch_size", type=int, default=2)
     parser.add_argument("--num_workers", type=int, default=8)
-    parser.add_argument("--outfile", type=str, default=None)
     parser.add_argument("--stop_after_x", type=int, default=float("inf"))
 
     parser.add_argument("--device", type=str, default="cuda")
@@ -182,7 +187,7 @@ if __name__ == "__main__":
         "kitti": get_kitti(window_size=args.context_length + args.prediction_length),
     }
 
-    world_size = int(os.environ["SLURM_NTASKS"])
+    world_size = int(os.environ.get("SLURM_NTASKS", 1))
     rank = 0
     if world_size > 1:
         dist_url = "env://"
@@ -201,7 +206,11 @@ if __name__ == "__main__":
 
     tokenizer = torch.jit.load(args.tokenizer_jit_path).to("cuda")
     detokenizer = torch.jit.load(args.detokenizer_jit_path).to("cuda")
-    gpt = load_pretrained_gpt(args.gpt_checkpoint_path, tempdir=os.environ["JOBSCRATCH"])
+    gpt = (
+        None
+        if args.tokenizer_only
+        else load_pretrained_gpt(args.gpt_checkpoint_path, tempdir=os.environ.get("JOBSCRATCH", "/tmp"))
+    )
 
     metrics = evaluate_a_dataset(
         args,
@@ -220,5 +229,6 @@ if __name__ == "__main__":
     metrics["tokenizer_jit_path"] = args.tokenizer_jit_path
     metrics["detokenizer_jit_path"] = args.detokenizer_jit_path
 
+    os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
     with open(args.outfile, "w") as f:
         json.dump(metrics, f, indent=4)

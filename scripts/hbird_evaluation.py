@@ -79,6 +79,7 @@ def get_kitti_video() -> Tuple[KITTIDataset, ...]:
 
 def evaluate_datasets(
     gpt: MupGPT2,
+    layer_idx: int,
     image_tokenizer: nn.Module,
     datasets: Dict[str, Tuple[CityscapesDataset | KITTIDataset, ...]],
     memory_size: str = "x10",
@@ -97,7 +98,7 @@ def evaluate_datasets(
             x = rearrange(x, "b t c h w -> (b t) c h w")
         x = image_tokenizer(x)
         x = rearrange(x, "(b t) h w -> b t h w", t=time)
-        x = gpt.get_intermediate_layers(x, 22)
+        x = gpt.get_intermediate_layers(x, layer_idx)
         x = rearrange(x[:, -1], "b h w d -> b (h w) d")
         return x
 
@@ -132,6 +133,7 @@ def evaluate_datasets(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpt_checkpoint_path", type=expand_path, required=True)
+    parser.add_argument("--layer_idx", type=int, default=12)
     parser.add_argument("--tokenizer_jit_path", type=expand_path, required=True)
     parser.add_argument("--outfile", type=expand_path, required=True)
     parser.add_argument("--memory_size", type=str, default="x10")
@@ -168,6 +170,7 @@ if __name__ == "__main__":
     tokenizer = torch.jit.load(args.tokenizer_jit_path).to("cuda")
     metrics = evaluate_datasets(
         gpt,
+        args.layer_idx,
         tokenizer,
         all_datasets,
         memory_size=args.memory_size,

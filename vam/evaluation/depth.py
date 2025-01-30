@@ -43,6 +43,9 @@ def _compute_errors(gt: Tensor, pred: Tensor, reduce: str = "sum") -> Dict[str, 
 
 
 class DepthMetrics:
+    """
+    Class to compute depth metrics online.
+    """
 
     def __init__(self, device: str = "cuda") -> None:
         self.logs = {
@@ -75,6 +78,9 @@ class DepthMetrics:
 
 
 def compute_depth_metrics(gt: Tensor, pred: Tensor, reduce: str = "sum") -> Dict[str, float]:
+    """
+    Compute depth metrics offline.
+    """
     logs = _compute_errors(gt, pred, reduce=reduce)
     if reduce == "sum":
         logs = {k: v.item() / len(gt) for k, v in logs.items()}

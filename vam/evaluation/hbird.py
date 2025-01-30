@@ -3,7 +3,7 @@ Adapted from:
 https://github.com/vpariza/open-hummingbird-eval
 
 Main changes:
-- Batch operations, which speeds up the evaluation.
+- Batch operations to speed up evaluation.
 - Compute metrics online to save memory.
 - Added support for depth evaluation.
 - Added support for distributed training.
@@ -549,10 +549,13 @@ if __name__ == "__main__":
 
     os.environ["TMPDIR"] = os.environ.get("JOBSCRATCH", "/tmp")
 
+    EVAL = ["segmentation", "depth"]
+    EVAL = ["depth"]
     BATCH_SIZE = 64
     BATCH_SIZE = 16
-    METRICS = defaultdict(dict)
+    METRICS = defaultdict(lambda: defaultdict(dict))
     DINOV = ["v2l", "v2g", "v1", "v2b"]
+    DINOV = ["v1"]
     scale = Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))  # images are normalized to [-1, 1]
 
     iterator_dino = tqdm(DINOV, desc="DINOv models")
@@ -593,22 +596,25 @@ if __name__ == "__main__":
 
         DTS = defaultdict(dict)
         DTS["kitti"]["train"] = KITTIDataset(
+            # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
             root="/datasets_local/KITTI_STEP",
+            pseudo_depth="./kitti_depth",
             split="train",
             target_size=target_size,
             window_size=1,
-            # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="train", target_size=target_size, window_size=1
         )
         DTS["kitti"]["val"] = KITTIDataset(
+            # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
             root="/datasets_local/KITTI_STEP",
+            pseudo_depth="./kitti_depth",
             split="val",
             target_size=target_size,
             window_size=1,
-            # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="val", target_size=target_size, window_size=1
         )
         DTS["kitti_video"]["train"] = KITTIDataset(
-            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
             # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            root="/datasets_local/KITTI_STEP",
+            pseudo_depth="./kitti_video_depth",
             split="train",
             window_size=8,
             frame_stride=5,
@@ -616,8 +622,9 @@ if __name__ == "__main__":
             target_size=target_size,
         )
         DTS["kitti_video"]["val"] = KITTIDataset(
-            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
             # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            root="/datasets_local/KITTI_STEP",
+            pseudo_depth="./kitti_video_depth",
             split="val",
             window_size=8,
             frame_stride=5,
@@ -625,16 +632,18 @@ if __name__ == "__main__":
             target_size=target_size,
         )
         DTS["cityscapes"]["train"] = CityscapesDataset(
+            # root="$ycy_ALL_CCFRSCRATCH/cityscapes",
             root="/datasets_local/cityscapes",
+            pseudo_depth="./cityscapes_depth",
             split="train",
             target_size=target_size,
-            # root="$ycy_ALL_CCFRSCRATCH/cityscapes", split="train", target_size=target_size
         )
         DTS["cityscapes"]["val"] = CityscapesDataset(
+            # root="$ycy_ALL_CCFRSCRATCH/cityscapes",
             root="/datasets_local/cityscapes",
+            pseudo_depth="./cityscapes_depth",
             split="val",
             target_size=target_size,
-            # root="$ycy_ALL_CCFRSCRATCH/cityscapes", split="val", target_size=target_size
         )
 
         iterator_dts = tqdm(DTS, desc=f"Datasets for {dinov}", position=1, leave=False)
@@ -644,26 +653,29 @@ if __name__ == "__main__":
             train_dataset.target_size = target_size
             val_dataset.target_size = target_size
 
-            logs, preds = hbird_evaluation(
-                ftr_extr_fn=fwd,
-                model_info=model_info,
-                train_dataset=train_dataset,
-                val_dataset=val_dataset,
-                batch_size=BATCH_SIZE,
-                batch_size_eval=BATCH_SIZE,
-                augmentation_epoch=1,
-                device="cuda",
-                dtype="bf16",
-                return_labels=False,
-                num_neighbour=30,
-                nn_params=None,
-                num_workers=10,
-                memory_size="x10",  # you can set this to reduce memory size
-                f_mem_p=None,
-                l_mem_p=None,
-            )
+            for task in EVAL:
+                memory_size = "x10" if task == "segmentation" else "x100"
+                logs, preds = hbird_evaluation(
+                    evaluation_task=task,
+                    ftr_extr_fn=fwd,
+                    model_info=model_info,
+                    train_dataset=train_dataset,
+                    val_dataset=val_dataset,
+                    batch_size=BATCH_SIZE,
+                    batch_size_eval=BATCH_SIZE,
+                    augmentation_epoch=1,
+                    device="cuda",
+                    dtype="bf16",
+                    return_labels=False,
+                    num_neighbour=30,
+                    nn_params=None,
+                    num_workers=10,
+                    memory_size=memory_size,
+                    f_mem_p=None,
+                    l_mem_p=None,
+                )
 
-            print(f"{dinov} {dts_name} {logs['mIoU']:.2f}")
-            METRICS[dinov][dts_name] = logs
-            with open("metrics.json", "w") as f:
-                json.dump(METRICS, f, indent=4)
+                print(f"{dinov} {dts_name} {logs['mIoU' if task == 'segmentation' else 'rmse']:.2f}")
+                METRICS[dinov][dts_name][task] = logs
+                with open("metrics.json", "w") as f:
+                    json.dump(METRICS, f, indent=4)

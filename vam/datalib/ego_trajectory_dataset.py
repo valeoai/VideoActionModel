@@ -292,6 +292,7 @@ class EgoTrajectoryDataset(Dataset):
             data["yaw_rate"] = torch.stack(data["yaw_rate"], dim=0)
 
         data = dict(data)
+        data["window_idx"] = index
         if self.tokens_only:
             # Compatibility with OpenDV
             return {

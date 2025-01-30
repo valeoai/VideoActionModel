@@ -37,28 +37,29 @@ set -x
 # [PRETRAIN]
 # 768, 90% data:
 ckpt[0]="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07_0116_1243_1737027800/checkpoints/before_drop_epoch=000_step=0000139763.ckpt"
-outfile[0]="./slurm_jobs_logs/files/hbird_eval/test_pretrain_768.json"
+outfile[0]="./slurm_jobs_logs/files/hbird_eval/test_layer12_pretrain_768.json"
 # 1024, 90% data:
 ckpt[1]="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_1024_Nodes32_BSperGPU3_totalBS384_weight_decay1e-07_0118_0114_1737159286/checkpoints/before_drop_epoch=000_step=0000139763.ckpt"
-outfile[1]="./slurm_jobs_logs/files/hbird_eval/test_pretrain_1024.json"
+outfile[1]="./slurm_jobs_logs/files/hbird_eval/test_layer12_pretrain_1024.json"
 # 2048, 90% data:
 ckpt[2]="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_2048_Nodes48_BSperGPU2_totalBS384_weight_decay1e-07_0118_0125_1737159936/checkpoints/before_drop_epoch=000_step=0000139763.ckpt"
-outfile[2]="./slurm_jobs_logs/files/hbird_eval/test_pretrain_2048.json"
+outfile[2]="./slurm_jobs_logs/files/hbird_eval/test_layer12_pretrain_2048.json"
 
 # [FINETUNE]
 # 768, 90% data:
 ckpt[3]="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned/Finetuned_0000139763_mixOpendvNuplanNuscenes_GPT2_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07_0122_2017_1737573432/checkpoints/end_of_epoch_epoch=001_step=0000155294.ckpt"
-outfile[3]="./slurm_jobs_logs/files/hbird_eval/test_finetune_768.json"
+outfile[3]="./slurm_jobs_logs/files/hbird_eval/test_layer12_finetune_768.json"
 # 1024, 90% data:
 ckpt[4]="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned/Finetuned_0000139763_mixOpendvNuplanNuscenes_GPT2_Llamagen_1024_Nodes32_BSperGPU3_totalBS384_weight_decay1e-07_0122_2024_1737573850/checkpoints/end_of_epoch_epoch=001_step=0000155294.ckpt"
-outfile[4]="./slurm_jobs_logs/files/hbird_eval/test_finetune_1024.json"
+outfile[4]="./slurm_jobs_logs/files/hbird_eval/test_layer12_finetune_1024.json"
 # 2048, 90% data:
 ckpt[5]="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned/Finetuned_0000139763_mixOpendvNuplanNuscenes_GPT2_Llamagen_2048_Nodes48_BSperGPU2_totalBS384_weight_decay1e-07_0121_0119_1737418786/checkpoints/end_of_epoch_epoch=001_step=0000155294.ckpt"
-outfile[5]="./slurm_jobs_logs/files/hbird_eval/test_finetune_2048.json"
+outfile[5]="./slurm_jobs_logs/files/hbird_eval/test_layer12_finetune_2048.json"
 
 srun python scripts/hbird_evaluation.py \
 --gpt_checkpoint_path ${ckpt[$SLURM_ARRAY_TASK_ID]} \
 --tokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
 --outfile ${outfile[$SLURM_ARRAY_TASK_ID]} \
 --num_workers 16 \
---batch_size 16
+--batch_size 16 \
+--layer_idx 12
