@@ -238,6 +238,7 @@ class VideoActionModel(nn.Module):
         verbose: bool = False,
         num_inference_steps: Optional[int] = None,
         final_action_clip_value: Optional[float] = None,
+        store_intermediate_states: bool = False,
     ) -> Tensor:
         """
         Inference for action prediction.
@@ -250,8 +251,19 @@ class VideoActionModel(nn.Module):
         num_inference_steps = num_inference_steps or self.num_inference_steps
         final_action_clip_value = final_action_clip_value or self.final_action_clip_value
 
+        def _post_process_traj(action: Tensor) -> Tensor:
+            # clamp final output if specified
+            if final_action_clip_value is not None:
+                action = torch.clamp(
+                    action,
+                    -final_action_clip_value,
+                    final_action_clip_value,
+                )
+            return action * self.action_scaling
+
         # sample pure action noise
         action = torch.randn((bsz, 1, self.action_horizon, self.action_dim), device=device, dtype=dtype)
+        intermediate_states = []
 
         # attn_mask for inference
         attn_mask = self.build_inference_attention_mask(context_length, device=device)
@@ -277,30 +289,24 @@ class VideoActionModel(nn.Module):
             action += delta_t * action_vel
             t += delta_t
 
+            if store_intermediate_states:
+                # store intermediate states
+                intermediate_states.append(_post_process_traj(action.clone()))
+
         # cleanup KV cache
         self.joint_model.cleanup_kv_cache()
 
-        # clamp final output if specified
-        if final_action_clip_value is not None:
-            action = torch.clamp(
-                action,
-                -final_action_clip_value,
-                final_action_clip_value,
-            )
-        return action * self.action_scaling
+        if store_intermediate_states:
+            return _post_process_traj(action), intermediate_states
+
+        return _post_process_traj(action)
 
 
 class VideoActionModelInference(VideoActionModel):
     """Helper class to perform inference with the VideoActionModel model."""
 
-    def forward(
-        self,
-        visual_tokens: LongTensor,
-        high_level_command: LongTensor,
-        dtype: torch.dtype,
-        verbose: bool = False,
-    ) -> Tensor:
-        return super().forward_inference(visual_tokens, high_level_command, dtype, verbose)
+    def forward(self, *args, **kwargs) -> Tensor:
+        return super().forward_inference(*args, **kwargs)
 
 
 def load_inference_VAM(
