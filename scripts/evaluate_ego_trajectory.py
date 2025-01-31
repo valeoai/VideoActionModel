@@ -240,7 +240,7 @@ if __name__ == "__main__":
         torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
-    vam = load_inference_VAM(args.vam_checkpoint_path, tempdir=os.environ["JOBSCRATCH"])
+    vam = load_inference_VAM(args.vam_checkpoint_path, tempdir=os.environ.get("JOBSCRATCH", "/tmp"))
 
     metrics = evaluate_datasets(
         vam,

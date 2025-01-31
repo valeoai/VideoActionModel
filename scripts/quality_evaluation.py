@@ -25,8 +25,8 @@ _DISABLE_TQDM = os.environ.get("DISABLE_TQDM", False)
 
 def get_kitti(context_length: int) -> KITTIDataset:
     return KITTIDataset(
-        # root="/datasets_local/KITTI_STEP",
-        root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+        root="/datasets_local/KITTI_STEP",
+        # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
         split="val",
         window_size=context_length,
         frame_stride=5,
@@ -35,16 +35,16 @@ def get_kitti(context_length: int) -> KITTIDataset:
 
 
 def get_nuscenes(context_length: int) -> EgoTrajectoryDataset:
-    # with open(expand_path("pickles/nuscenes_val_data_cleaned.pkl"), "rb") as f:
-    with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl"), "rb") as f:
+    # with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl"), "rb") as f:
+    with open(expand_path("pickles/nuscenes_val_data_cleaned.pkl"), "rb") as f:
         pickle_data = pickle.load(f)
 
     transform = CropAndResizeTransform(resize_factor=3.125, trop_crop_size=0)
 
     return EgoTrajectoryDataset(
         pickle_data=pickle_data,
-        images_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuscenes_v2"),
-        # images_rootdir=expand_path("/datasets_local/nuscenes_v2"),
+        # images_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuscenes_v2"),
+        images_rootdir=expand_path("/datasets_local/nuscenes"),
         sequence_length=context_length,
         images_transform=transform,
     )
@@ -161,6 +161,15 @@ if __name__ == "__main__":
     # 768 --> Batch size: 32 / time: ~4h
     # 1024 --> Batch size: 32 / time: ~6h
     # 2048 --> Batch size: 32 / time: ~10h
+
+    python scripts/quality_evaluation.py \
+        --outfile ./tmp/reconstruction_quality_eval_llamagen.json \
+        --gpt_checkpoint_path xxx \
+        --tokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
+        --detokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit \
+        --dtype bf16 \
+        --tokenizer_only True \
+        --per_proc_batch_size 32
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--outfile", type=expand_path, required=True)
