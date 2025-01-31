@@ -54,25 +54,53 @@ from vam.video_pretraining import MupGPT2, load_pretrained_gpt
 
 def get_cityscapes() -> Tuple[CityscapesDataset, ...]:
     return (
-        CityscapesDataset(root="$ycy_ALL_CCFRSCRATCH/cityscapes", split="train"),
-        CityscapesDataset(root="$ycy_ALL_CCFRSCRATCH/cityscapes", split="val"),
+        CityscapesDataset(
+            root="$ycy_ALL_CCFRSCRATCH/cityscapes",
+            split="train",
+            pseudo_depth="$ycy_ALL_CCFRSCRATCH/cityscapes/cityscapes_depth",
+        ),
+        CityscapesDataset(
+            root="$ycy_ALL_CCFRSCRATCH/cityscapes",
+            split="val",
+            pseudo_depth="$ycy_ALL_CCFRSCRATCH/cityscapes/cityscapes_depth",
+        ),
     )
 
 
 def get_kitti() -> Tuple[KITTIDataset, ...]:
     return (
-        KITTIDataset(root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="train", window_size=1),
-        KITTIDataset(root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="val", window_size=1),
+        KITTIDataset(
+            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            split="train",
+            window_size=1,
+            pseudo_depth="$ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_depth",
+        ),
+        KITTIDataset(
+            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            split="val",
+            window_size=1,
+            pseudo_depth="$ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_depth",
+        ),
     )
 
 
 def get_kitti_video() -> Tuple[KITTIDataset, ...]:
     return (
         KITTIDataset(
-            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="train", window_size=8, frame_stride=5, eval_on_last_frame=True
+            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            split="train",
+            window_size=8,
+            frame_stride=5,
+            eval_on_last_frame=True,
+            pseudo_depth="$ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_video_depth",
         ),
         KITTIDataset(
-            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP", split="val", window_size=8, frame_stride=5, eval_on_last_frame=True
+            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            split="val",
+            window_size=8,
+            frame_stride=5,
+            eval_on_last_frame=True,
+            pseudo_depth="$ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_video_depth",
         ),
     )
 

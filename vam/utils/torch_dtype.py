@@ -14,3 +14,8 @@ def torch_dtype(dtype: str | torch.dtype) -> torch.dtype:
 
     if dtype in ["bf16", "bfloat16"]:
         return torch.bfloat16
+
+    try:
+        return getattr(torch, dtype)
+    except AttributeError:
+        raise ValueError(f"Unknown dtype: {dtype}")

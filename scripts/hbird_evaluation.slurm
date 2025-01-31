@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=nxt_eval
+#SBATCH --job-name=hbird_eval
 #SBATCH -A ycy@h100
 #SBATCH -C h100
 #SBATCH --nodes=1

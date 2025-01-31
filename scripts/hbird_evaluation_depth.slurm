@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=nxt_eval
+#SBATCH --job-name=hbird_d_eval
 #SBATCH -A ycy@h100
 #SBATCH -C h100
 #SBATCH --nodes=1
@@ -9,12 +9,12 @@
 #SBATCH --hint=nomultithread
 #SBATCH --qos=qos_gpu_h100-gc
 #SBATCH --time=10:00:00
-#SBATCH --output=slurm_jobs_logs/stdout/hbird_eval/%A_%a.out
-#SBATCH --error=slurm_jobs_logs/stdout/hbird_eval/%A_%a.out
+#SBATCH --output=slurm_jobs_logs/stdout/hbird_d_eval/%A_%a.out
+#SBATCH --error=slurm_jobs_logs/stdout/hbird_d_eval/%A_%a.out
 #SBATCH --array=0-5
 
-mkdir -p slurm_jobs_logs/stdout/hbird_eval
-mkdir -p slurm_jobs_logs/files/hbird_eval
+mkdir -p slurm_jobs_logs/stdout/hbird_d_eval
+mkdir -p slurm_jobs_logs/files/hbird_d_eval
 
 
 module purge
