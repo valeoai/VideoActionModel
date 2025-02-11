@@ -1,0 +1,25 @@
+defaults:
+  - model_summary
+  - tqdm_progress_bar
+  - learning_rate_monitor
+  - device_stats_monitor
+  - _self_
+
+last_hours_checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: "${paths.output_dir}/${name}/checkpoints/"
+  filename: "last_hours_{epoch:03d}_{step:010d}"
+  save_top_k: 1
+  train_time_interval:
+    _target_: datetime.timedelta
+    hours: 1
+  verbose: true
+
+end_of_epoch_checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: "${paths.output_dir}/${name}/checkpoints/"
+  filename: "end_of_epoch_{epoch:03d}_{step:010d}"
+  save_last: True
+  #every_n_train_steps: ???
+  every_n_epochs: 1
+  verbose: true

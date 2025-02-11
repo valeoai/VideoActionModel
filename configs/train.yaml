@@ -4,11 +4,9 @@
 # order of defaults determines the order in which configs override each other
 defaults:
   - _self_
-  - data: tokenized_sequence_nuplan
-  - model: next_token_predictor
+  - data: null
   - callbacks: callbacks_training
   - logger: many_loggers # set logger here or use command line (e.g. `python train.py logger=tensorboard`)
-  - optimizer: adamW
   - scheduler: none
   - trainer: default
   - paths: default
@@ -35,6 +33,8 @@ train: True
 # lightning chooses best weights based on the metric specified in checkpoint callback
 test: False
 
+is_finetuning: False
+
 # simply provide checkpoint path to resume training
 ckpt_path: null
 
@@ -46,5 +46,3 @@ print_config: True
 
 # disable python warnings if they annoy you
 ignore_warnings: True
-
-

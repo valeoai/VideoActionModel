@@ -1,6 +1,6 @@
 _target_: lightning.pytorch.trainer.Trainer
 
-# Default path for logs and weights when 
+# Default path for logs and weights when
 # no logger or lightning.pytorch.callbacks.ModelCheckpoint callback passed
 default_root_dir: ${paths.output_dir}/default_log_dir
 

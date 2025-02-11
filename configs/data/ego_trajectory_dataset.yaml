@@ -1,0 +1,11 @@
+_target_: vam.datalib.EgoTrajectoryDataModule
+nuplan_tokens_rootdir: null
+nuscenes_tokens_rootdir: null
+nuplan_train_pickle_path: null
+nuscenes_train_pickle_path: null
+nuplan_val_pickle_path: null
+nuscenes_val_pickle_path: null
+sequence_length: 8
+action_length: 6
+batch_size: 4
+num_workers: 4
