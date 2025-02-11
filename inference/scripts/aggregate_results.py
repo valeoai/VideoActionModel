@@ -122,6 +122,10 @@ def main(result_path: Path, no_check: bool = False) -> None:
     keys_we_want = [
         "ncap_score",
         "any_collide@0.0s",
+        "trajectory_mean_deviation",
+        "trajectory_max_deviation",
+        "progress_toward_goal",
+        "final_goal_distance",
     ]
     header_keys = [k.replace("any_collide", "CR") for k in keys_we_want]
 

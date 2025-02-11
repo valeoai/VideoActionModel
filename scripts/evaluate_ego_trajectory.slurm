@@ -11,7 +11,7 @@
 #SBATCH --time=10:10:00
 #SBATCH --output=slurm_jobs_logs/stdout/ego_eval/%A_%a.out
 #SBATCH --error=slurm_jobs_logs/stdout/ego_eval/%A_%a.out
-#SBATCH --array=0-5
+#SBATCH --array=3,6,7
 
 mkdir -p slurm_jobs_logs/stdout/ego_eval
 mkdir -p slurm_jobs_logs/files/ego_eval
@@ -45,17 +45,29 @@ ckpt[2]=./tmp/vam_ckpt/action_expert_116k_attndim768_actdim192.ckpt
 batch_size[2]=64
 outdir[2]=action_expert_116k_attndim768_actdim192_5samples
 
-ckpt[3]=./tmp/vam_ckpt/action_expert_38k_attndim1024_actdim256.ckpt
+ckpt[3]=./tmp/vam_ckpt/action_expert_139k_attndim768_actdim192.ckpt
 batch_size[3]=64
-outdir[3]=action_expert_38k_attndim1024_actdim256_5samples
+outdir[3]=action_expert_139k_attndim768_actdim192_5samples
 
-ckpt[4]=./tmp/vam_ckpt/action_expert_77k_attndim1024_actdim256.ckpt
+ckpt[4]=./tmp/vam_ckpt/action_expert_38k_attndim1024_actdim256.ckpt
 batch_size[4]=64
-outdir[4]=action_expert_77k_attndim1024_actdim256_5samples
+outdir[4]=action_expert_38k_attndim1024_actdim256_5samples
 
-ckpt[5]=./tmp/vam_ckpt/action_expert_139k_attndim2048_actdim512.ckpt
-batch_size[5]=32
-outdir[5]=action_expert_139k_attndim2048_actdim512_5samples
+ckpt[5]=./tmp/vam_ckpt/action_expert_77k_attndim1024_actdim256.ckpt
+batch_size[5]=64
+outdir[5]=action_expert_77k_attndim1024_actdim256_5samples
+
+ckpt[6]=./tmp/vam_ckpt/action_expert_116k_attndim1024_actdim256.ckpt
+batch_size[6]=64
+outdir[6]=action_expert_116k_attndim1024_actdim256_5samples
+
+ckpt[7]=./tmp/vam_ckpt/action_expert_139k_attndim1024_actdim256.ckpt
+batch_size[7]=64
+outdir[7]=action_expert_139k_attndim1024_actdim256_5samples
+
+ckpt[8]=./tmp/vam_ckpt/action_expert_139k_attndim2048_actdim512.ckpt
+batch_size[8]=32
+outdir[8]=action_expert_139k_attndim2048_actdim512_5samples
 
 
 srun python scripts/evaluate_ego_trajectory.py \
@@ -64,4 +76,5 @@ srun python scripts/evaluate_ego_trajectory.py \
 --num_workers 24 \
 --batch_size ${batch_size[${SLURM_ARRAY_TASK_ID}]} \
 --store_trajectories True \
---num_sampled_trajectories 5
+--num_sampled_trajectories 5 \
+--dtype bf16

@@ -7,14 +7,17 @@ Tutorial to install NeuroNCAP. This is the first part that must be done on the l
 First define the base directory where to store all folder:
 
 ```bash
-export BASE_REPO=~/shared/eramzi/
+export BASE_REPO=~/dev
 cd $BASE_REPO
 ```
 
 Clone all the repository.
 
 ```bash
-git clone https://github.com/atonderski/neuro-ncap.git
+git clone https://github.com/F-Barto/neuro-ncap.git  # This is the forked repo
+cd neuro-ncap
+git checkout trajectory_metrics  # We need to checkout the trajectory_metrics branch to have our new metrics
+cd $BASE_REPO
 git clone https://github.com/georghess/neurad-studio.git
 # We assume that the NextTokenPredictor repo is already here
 ```
@@ -71,8 +74,10 @@ cd $BASE_JZ_REPO
 Clone the repo on JZ:
 
 ```bash
+git clone https://github.com/F-Barto/neuro-ncap.git  # This is the forked repo
+cd neuro-ncap
+git checkout trajectory_metrics  # We need to checkout the trajectory_metrics branch to have our new metrics
 cd $BASE_JZ_REPO
-git clone https://github.com/atonderski/neuro-ncap.git
 git clone https://github.com/georghess/neurad-studio.git
 # We assume that the NextTokenPredictor repo is already here
 ```

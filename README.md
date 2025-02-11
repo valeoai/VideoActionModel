@@ -12,9 +12,9 @@ pip install -e .
 # to code: pip install -e ".[dev]"
 ```
 
-## DATA
+## Data
 
-Follow the instructions in the [opendv](vam/datalib/README.md) folder.
+Follow the instructions in the [datalib](vam/datalib/README.md) folder.
 
 ## Training
 
@@ -143,6 +143,8 @@ Please follow instruction on: [Neuro-NCAP](inference/README.md).
 ### Humming bird
 
 ```python
+from einops import rearrange
+
 from vam.video_pretraining import load_pretrained_gpt
 from vam.utils import expand_path
 from vam.evaluation.hbird import hbird_evaluation
@@ -153,29 +155,24 @@ gpt = load_pretrained_gpt(expand_path("xxx"))
 image_tokenizer = torch.jit.load(expand_path("xxx")).to("cuda")
 model_info = {
     "patch_size": 16,
-    "d_model": 768,
+    "d_model": gpt.embedding_dim,
 }
 
 def forward_fn(x: Tensor, inference: bool) -> Tensor:
     x = image_tokenizer(x)
-    x = gpt.get_intermediate_layers(x.unsqueeze(1), 22)
+    x = rearrange(x, "(b t) h w -> b t h w", t=1)
+    x = gpt.get_intermediate_layers(x.unsqueeze(1), 12)
+    x = rearrange(x[:, -1], "b h w d -> b (h w) d")
     return x
 
 train_dts = CityscapesDataset(root="xxx", split="train")
 val_dts = CityscapesDataset(root="xxx", split="val")
-dataset_info = {
-    "dataset_size": len(train_dts),
-    "num_classes": train_dts.get_num_classes(),
-    "window_size": train_dts.get_window_size(),
-    "input_size": train_dts.get_image_size(),
-}
 
 logs, preds = hbird_evaluation(
     ftr_extr_fn=forward_fn,
     model_info=model_info,
     train_dataset=train_dts,
     val_dataset=val_dts,
-    dataset_info=dataset_info,
     batch_size=16,
     batch_size_eval=16,
     augmentation_epoch=1,

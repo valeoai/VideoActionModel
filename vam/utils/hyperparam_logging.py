@@ -1,7 +1,11 @@
 from pathlib import Path
 from typing import Any, Dict
 
-import git
+try:
+    import git
+except Exception as e:
+    print(e)
+    git = None
 import torch
 from lightning.pytorch.core.saving import save_hparams_to_yaml
 from lightning_utilities.core.rank_zero import rank_zero_only
@@ -58,12 +62,13 @@ def log_hyperparameters(object_dict: Dict[str, Any]) -> None:
     else:
         hparams["training_device"] = "cpu"  # or handle the situation appropriately
 
-    try:
-        repo = git.Repo(search_parent_directories=True)
-        sha = repo.head.object.hexsha
-        hparams["git_sha"] = sha
-    except git.exc.InvalidGitRepositoryError:
-        hparams["git_sha"] = None
+    if git is not None:
+        try:
+            repo = git.Repo(search_parent_directories=True)
+            sha = repo.head.object.hexsha
+            hparams["git_sha"] = sha
+        except git.exc.InvalidGitRepositoryError:
+            hparams["git_sha"] = None
 
     # send hparams to all loggers
     for logger in trainer.loggers:

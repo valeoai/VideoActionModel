@@ -1,6 +1,10 @@
 from typing import Any, Dict, Optional, Tuple
 
-import git
+try:
+    import git
+except Exception as e:
+    print(e)
+    git = None
 import hydra
 import mup
 import torch
@@ -231,13 +235,14 @@ class NextTokenPredictor(LightningModule):
             scheduler.step(metric)
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        try:
-            repo = git.Repo(search_parent_directories=True)
-            sha = repo.head.object.hexsha
+        if git is not None:
+            try:
+                repo = git.Repo(search_parent_directories=True)
+                sha = repo.head.object.hexsha
 
-            checkpoint["git_sha"] = sha
-        except git.exc.InvalidGitRepositoryError:
-            checkpoint["git_sha"] = None
+                checkpoint["git_sha"] = sha
+            except git.exc.InvalidGitRepositoryError:
+                checkpoint["git_sha"] = None
 
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
