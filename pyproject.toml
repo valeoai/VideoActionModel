@@ -9,7 +9,8 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.10.0"
 authors = [
-    { name = "Florent Bartoccioni", email = "florent.bartoccioni@valeo.com" }
+    { name = "Florent Bartoccioni", email = "florent.bartoccioni@valeo.com" },
+    { name = "Elias Ramzi", email = "elias.ramzi@valeo.com" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

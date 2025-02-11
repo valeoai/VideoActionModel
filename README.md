@@ -12,6 +12,24 @@ pip install -e .
 # to code: pip install -e ".[dev]"
 ```
 
+## Repository structure
+
+```bash
+VaViM
+|––––inference  # Things related to Neuro-NCAP evaluation
+|--------scripts  # Scripts to run the evaluation
+|––––mup_shapes  # mup parametrization
+|––––notebooks
+|--------qualitative*.ipynb  # Qualitative examples for Vavim an Vavam
+|--------scaling_laws.ipynb  # notebook to compute the scaling laws of vavim
+|––––scripts  # Several useful scripts: fusing deepspeed checkpoints, evaluations, etc...
+|––––vam  # Main source code for our project
+|--------action_expert  # Implementation of the action expert
+|--------datalib  # Data pre-processing and loading
+|--------evaluation  # Evaluation utils
+|--------video_pretraining  # Implementation of the GPT-style model
+```
+
 ## Data
 
 Follow the instructions in the [datalib](vam/datalib/README.md) folder.
@@ -132,6 +150,10 @@ loss = min_ade(trajectory, ground_truth)
 print(loss)
 ```
 
+### Notebooks
+
+Find examples in the [notebooks](notebooks) folder.
+
 ## Evaluation
 
 ### Neuro-NCAP
@@ -199,3 +221,41 @@ python scripts/depth_anything_a_dataset.py --dataset_name cityscapes --compute_o
 ```
 
 This should be a standalone script. It was not exstensively tested.
+
+## TODO
+
+- [ ] Details of commands to run all different experiments.
+- [ ] Upload the pretrained models.
+- [ ] Upload the tokenizers (or the script to create JIT files).
+- [ ] Upload pickle files for nuplan / nuscenes.
+- [ ] Upload refined metadata for opendv.
+
+## Acknowledgements
+
+### Contributors
+
+| Contributor | Highlights |
+| -- | -- |
+| [Florent BARTOCCIONI](https://github.com/F-Barto) | Project lead, core contributor |
+| [Elias RAMZI](https://github.com/elias-ramzi) | Core contributor |
+| Yihong XU ||
+| Tuan-Hung VU ||
+| Loick CHAMBON ||
+| Victor BESNIER ||
+| Eloi ZABLOCKI ||
+| Michael CHEN ||
+| Shashanka VENKATARAMANAN ||
+| Renaud MARLET ||
+| Spyros GIDARIS ||
+| Alexandre BOULCH ||
+| David HURYCH ||
+| Eduardo VALLE ||
+
+### Sources
+
+This code was inspired / contains parts of the following repositories:
+
+- [nanoGPT](https://github.com/karpathy/nanoGPT)
+- [LLamaGen](https://github.com/FoundationVision/LlamaGen)
+- [open-pi-zero](https://github.com/allenzren/open-pi-zero)
+- [open-hummingbird-eval](https://github.com/vpariza/open-hummingbird-eval)
