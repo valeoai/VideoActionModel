@@ -11,4 +11,3 @@ run:
 sweep:
   dir: ${paths.output_dir}/${name}/multiruns
   subdir: ${hydra.job.num}
-  

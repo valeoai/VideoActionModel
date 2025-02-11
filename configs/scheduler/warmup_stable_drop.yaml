@@ -1,5 +1,6 @@
-_target_ : world_model.lr_schedulers.warmup_stable_drop.WarmupStableDrop
+_target_ : vam.utils.WarmupStableDrop
 warmup_iter: ???
 end_iter: ??? # = len(dataset) / (bs * gpus * nodes * grad_acc)
 drop_iter: ??? # typically 0.1 * total_nb_of_steps
 num_iter: 0
+is_finetuning: false

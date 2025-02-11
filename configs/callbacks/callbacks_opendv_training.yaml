@@ -9,14 +9,14 @@ before_drop_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
   dirpath: "${paths.output_dir}/${name}/checkpoints/"
   filename: "before_drop_{epoch:03d}_{step:010d}"
-  every_n_train_steps: 134860 # 149845 - 149845*0.1
+  every_n_train_steps: 139763 # 155293 - 155293*0.1
   verbose: true
 
 every_quarter_epoch_checkpoint:
   _target_: lightning.pytorch.callbacks.ModelCheckpoint
   dirpath: "${paths.output_dir}/${name}/checkpoints/"
   filename: "quarters_{epoch:03d}_{step:010d}"
-  every_n_train_steps: 37500
+  every_n_train_steps: 38823 # 155293 // 4
   save_top_k: -1
   verbose: true
 

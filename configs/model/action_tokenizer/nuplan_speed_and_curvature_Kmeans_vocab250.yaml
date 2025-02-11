@@ -1,5 +1,0 @@
-_target_: world_model.action_tokenizers.speed_and_curvature_tokenizer.SpeedCurvatureTokenizer
-vocab_size: 250
-centroids_file: ./configs/model/action_tokenizer/nuplan_centroids_Kmeans_vocab250.txt
-data_min: [-5.23845434, -2.01165009]
-data_max: [22.53469467,  2.01165009]

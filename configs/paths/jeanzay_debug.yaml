@@ -1,5 +1,5 @@
 defaults:
-  - adastra
+  - default
 
 # Path to the directory where checkpoints and logs will be saved
 output_dir: /lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor_debug
