@@ -59,8 +59,10 @@ class CropAndResizeTransform:
         return self.transforms(*args, **kwargs)
 
 
-def torch_image_to_plot(img: Tensor) -> np.ndarray:
-    img = torch.clamp(127.5 * img + 128.0, 0, 255).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8).numpy()
+def torch_image_to_plot(img: Tensor, to_numpy: bool = True) -> np.ndarray:
+    img = torch.clamp(127.5 * img + 128.0, 0, 255).permute(0, 2, 3, 1).to("cpu", dtype=torch.uint8)
+    if to_numpy:
+        img = img.numpy()
     return img
 
 

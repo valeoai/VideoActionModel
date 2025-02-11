@@ -36,7 +36,7 @@ def compute_position_indices(batch_size: int, num_frames: int, height: int, widt
     return {"spatial_positions": spatial_positions, "temporal_positions": temporal_positions}
 
 
-def prepare_token_sequence(visual_tokens: Tensor) -> Dict[str, torch.Tensor]:
+def prepare_token_sequence(visual_tokens: Tensor) -> Dict[str, Tensor]:
 
     position_indices = compute_position_indices(*visual_tokens.shape)
 
@@ -45,7 +45,7 @@ def prepare_token_sequence(visual_tokens: Tensor) -> Dict[str, torch.Tensor]:
     return {"token_sequence": visual_tokens, **position_indices}
 
 
-def prepare_AR_token_sequences(visual_tokens: Tensor) -> Dict[str, torch.Tensor]:
+def prepare_AR_token_sequences(visual_tokens: Tensor) -> Dict[str, Tensor]:
 
     sequence_data = prepare_token_sequence(visual_tokens)
 

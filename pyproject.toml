@@ -9,7 +9,8 @@ description = ""
 readme = "README.md"
 requires-python = ">=3.10.0"
 authors = [
-    { name = "Florent Bartoccioni", email = "florent.bartoccioni@valeo.com" }
+    { name = "Florent Bartoccioni", email = "florent.bartoccioni@valeo.com" },
+    { name = "Elias Ramzi", email = "elias.ramzi@valeo.com" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -19,6 +20,7 @@ classifiers = [
 
 dependencies = [
     "lightning",
+    "torchmetrics",
     "hydra-core",
     "hydra-colorlog",
     "mup @ git+https://github.com/microsoft/mup.git",
@@ -27,7 +29,9 @@ dependencies = [
     "pillow",
     "pyquaternion",
     "colorlog",
+    "plotly",
     "prettytable",
+    "clean-fid",
     "hyperqueue==0.19.0",
     "torchdata @ https://download.pytorch.org/whl/nightly/torchdata-0.11.0.dev20250103-py3-none-any.whl",
 ]

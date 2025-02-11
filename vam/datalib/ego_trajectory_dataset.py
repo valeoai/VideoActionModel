@@ -1,15 +1,16 @@
 import enum
 import os
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from PIL import Image
 from pyquaternion import Quaternion
 from torch import Tensor
 from torch.utils.data import ConcatDataset, Dataset
 
-from vam.utils import RankedLogger
+from vam.utils import RankedLogger, expand_path
 
 terminal_log = RankedLogger(__name__, rank_zero_only=True)
 
@@ -59,9 +60,11 @@ class EgoTrajectoryDataset(Dataset):
         subsampling_factor: int = 1,
         with_yaw_rate: bool = False,
         command_distance_threshold: float = 2.0,
+        images_rootdir: Optional[str] = None,
+        images_transform: Optional[Callable[[Image.Image], Tensor]] = None,
     ) -> None:
         self.tokens_only = tokens_only
-        self.tokens_rootdir = None if tokens_rootdir is None else os.path.expanduser(os.path.expandvars(tokens_rootdir))
+        self.tokens_rootdir = None if tokens_rootdir is None else expand_path(tokens_rootdir)
         assert not (self.tokens_only and self.tokens_rootdir is None), "Tokens rootdir must be provided for tokens_only"
         self.sequence_length = sequence_length
         self.action_length = action_length
@@ -69,6 +72,8 @@ class EgoTrajectoryDataset(Dataset):
         self.with_yaw_rate = with_yaw_rate
         self.camera = camera
         self.command_distance_threshold = command_distance_threshold
+        self.images_rootdir = None if images_rootdir is None else expand_path(images_rootdir)
+        self.images_transform = images_transform
 
         # Sort by scene and timestamp
         pickle_data.sort(key=lambda x: (x["scene"]["name"], x[self.camera]["timestamp"]))
@@ -257,6 +262,14 @@ class EgoTrajectoryDataset(Dataset):
                 if self.tokens_only:
                     continue
 
+            if self.images_rootdir is not None:
+                # get image
+                file_path = os.path.join(self.images_rootdir, sample["file_path"])
+                image = Image.open(file_path).convert("RGB")
+                if self.images_transform is not None:
+                    image = self.images_transform(image)
+                data["image"].append(image)
+
             positions, rotations = [], []
             for _j in range(0, (1 + self.action_length) * self.subsampling_factor, self.subsampling_factor):
                 positions.append(self.pickle_data[temporal_index + _j][self.camera]["ego_to_world_tran"][:2])
@@ -288,10 +301,13 @@ class EgoTrajectoryDataset(Dataset):
             data["high_level_command"] = torch.tensor(data["high_level_command"], dtype=torch.int64)
         if self.tokens_rootdir is not None:
             data["visual_tokens"] = torch.stack(data["visual_tokens"], dim=0)
+        if self.images_rootdir is not None:
+            data["image"] = torch.stack(data["image"], dim=0)
         if self.with_yaw_rate:
             data["yaw_rate"] = torch.stack(data["yaw_rate"], dim=0)
 
         data = dict(data)
+        data["window_idx"] = index
         if self.tokens_only:
             # Compatibility with OpenDV
             return {

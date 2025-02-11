@@ -12,9 +12,27 @@ pip install -e .
 # to code: pip install -e ".[dev]"
 ```
 
-## DATA
+## Repository structure
 
-Follow the instructions in the [opendv](vam/datalib/README.md) folder.
+```bash
+VaViM
+|––––inference  # Things related to Neuro-NCAP evaluation
+|--------scripts  # Scripts to run the evaluation
+|––––mup_shapes  # mup parametrization
+|––––notebooks
+|--------qualitative*.ipynb  # Qualitative examples for Vavim an Vavam
+|--------scaling_laws.ipynb  # notebook to compute the scaling laws of vavim
+|––––scripts  # Several useful scripts: fusing deepspeed checkpoints, evaluations, etc...
+|––––vam  # Main source code for our project
+|--------action_expert  # Implementation of the action expert
+|--------datalib  # Data pre-processing and loading
+|--------evaluation  # Evaluation utils
+|--------video_pretraining  # Implementation of the GPT-style model
+```
+
+## Data
+
+Follow the instructions in the [datalib](vam/datalib/README.md) folder.
 
 ## Training
 
@@ -132,8 +150,112 @@ loss = min_ade(trajectory, ground_truth)
 print(loss)
 ```
 
+### Notebooks
+
+Find examples in the [notebooks](notebooks) folder.
+
+## Evaluation
+
 ### Neuro-NCAP
 
 Please follow instruction on: [Neuro-NCAP](inference/README.md).
 
 ![teaser](.github/ressources/frontal_0103_run_45.gif)
+
+### Humming bird
+
+```python
+from einops import rearrange
+
+from vam.video_pretraining import load_pretrained_gpt
+from vam.utils import expand_path
+from vam.evaluation.hbird import hbird_evaluation
+from vam.evaluation.datasets import CityscapesDataset
+
+
+gpt = load_pretrained_gpt(expand_path("xxx"))
+image_tokenizer = torch.jit.load(expand_path("xxx")).to("cuda")
+model_info = {
+    "patch_size": 16,
+    "d_model": gpt.embedding_dim,
+}
+
+def forward_fn(x: Tensor, inference: bool) -> Tensor:
+    x = image_tokenizer(x)
+    x = rearrange(x, "(b t) h w -> b t h w", t=1)
+    x = gpt.get_intermediate_layers(x.unsqueeze(1), 12)
+    x = rearrange(x[:, -1], "b h w d -> b (h w) d")
+    return x
+
+train_dts = CityscapesDataset(root="xxx", split="train")
+val_dts = CityscapesDataset(root="xxx", split="val")
+
+logs, preds = hbird_evaluation(
+    ftr_extr_fn=forward_fn,
+    model_info=model_info,
+    train_dataset=train_dts,
+    val_dataset=val_dts,
+    batch_size=16,
+    batch_size_eval=16,
+    augmentation_epoch=1,
+    device="cuda",
+    dtype="fp16",
+    return_labels=False,
+    num_neighbour=30,
+    nn_params=None,
+    memory_size="x10",  # you can set this to reduce memory size
+    f_mem_p=None,
+    l_mem_p=None,
+)
+
+print(logs["mIoU"], logs["IoU"])
+```
+
+### Humming bird depth
+
+You can generate the pseudo-depth map using the following code:
+
+```bash
+python scripts/depth_anything_a_dataset.py --dataset_name cityscapes
+python scripts/depth_anything_a_dataset.py --dataset_name cityscapes --compute_only_issues
+```
+
+This should be a standalone script. It was not exstensively tested.
+
+## TODO
+
+- [ ] Details of commands to run all different experiments.
+- [ ] Upload the pretrained models.
+- [ ] Upload the tokenizers (or the script to create JIT files).
+- [ ] Upload pickle files for nuplan / nuscenes.
+- [ ] Upload refined metadata for opendv.
+
+## Acknowledgements
+
+### Contributors
+
+| Contributor | Highlights |
+| -- | -- |
+| [Florent BARTOCCIONI](https://github.com/F-Barto) | Project lead, core contributor |
+| [Elias RAMZI](https://github.com/elias-ramzi) | Core contributor |
+| Yihong XU ||
+| Tuan-Hung VU ||
+| Loick CHAMBON ||
+| Victor BESNIER ||
+| Eloi ZABLOCKI ||
+| Michael CHEN ||
+| Shashanka VENKATARAMANAN ||
+| Renaud MARLET ||
+| Spyros GIDARIS ||
+| Alexandre BOULCH ||
+| David HURYCH ||
+| Eduardo VALLE ||
+
+### Sources
+
+This code was inspired / contains parts of the following repositories:
+
+- [nanoGPT](https://github.com/karpathy/nanoGPT)
+- [LLamaGen](https://github.com/FoundationVision/LlamaGen)
+- [open-pi-zero](https://github.com/allenzren/open-pi-zero)
+- [open-hummingbird-eval](https://github.com/vpariza/open-hummingbird-eval)

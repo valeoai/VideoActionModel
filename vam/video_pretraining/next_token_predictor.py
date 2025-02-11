@@ -1,6 +1,10 @@
 from typing import Any, Dict, Optional, Tuple
 
-import git
+try:
+    import git
+except Exception as e:
+    print(e)
+    git = None
 import hydra
 import mup
 import torch
@@ -9,6 +13,7 @@ from lightning import LightningModule
 from lightning.pytorch.utilities import grad_norm
 from mup.optim import MuAdamW
 from omegaconf import DictConfig
+from torch import Tensor
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 
@@ -27,7 +32,7 @@ def remove_prefix(state_dict: Dict, prefix: str) -> Dict:
     return result
 
 
-Batch = Dict[str, torch.Tensor]
+Batch = Dict[str, Tensor]
 mupShapes = Dict[str, Tuple[int, ...]]
 
 
@@ -99,7 +104,7 @@ class NextTokenPredictor(LightningModule):
         """Lightning hook that is called when training begins."""
         pass
 
-    def training_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> torch.Tensor:
+    def training_step(self, batch: Batch, batch_idx: int, dataloader_idx: int = 0) -> Tensor:
         """Perform a single training step on a batch of data from the training set.
 
         Args:
@@ -230,13 +235,14 @@ class NextTokenPredictor(LightningModule):
             scheduler.step(metric)
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        try:
-            repo = git.Repo(search_parent_directories=True)
-            sha = repo.head.object.hexsha
+        if git is not None:
+            try:
+                repo = git.Repo(search_parent_directories=True)
+                sha = repo.head.object.hexsha
 
-            checkpoint["git_sha"] = sha
-        except git.exc.InvalidGitRepositoryError:
-            checkpoint["git_sha"] = None
+                checkpoint["git_sha"] = sha
+            except git.exc.InvalidGitRepositoryError:
+                checkpoint["git_sha"] = None
 
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__

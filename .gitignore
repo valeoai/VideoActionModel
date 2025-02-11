@@ -163,3 +163,10 @@ personal_experiments
 tokens
 tensorboard
 gifs
+pickles
+Depth-Anything
+cityscapes_depth
+kitti_depth
+kitti_video_depth
+torchhub
+figs

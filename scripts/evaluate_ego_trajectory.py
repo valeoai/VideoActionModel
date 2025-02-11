@@ -6,8 +6,8 @@ srun -A ycy@h100 -C h100 --pty \
 --qos=qos_gpu_h100-dev --time=00:15:00 bash
 
 python scripts/evaluate_ego_trajectory.py \
---vam_checkpoint_path xxx \
---outdir ./tmp/ego_eval \
+--vam_checkpoint_path ~/iveco/scratch_iveco/VAM_JZGC4/checkpoints/VAM/width_768_pretrained_139k.pt \
+--outdir ./tmp/ego_eval_width_768_pretrained_139k \
 --batch_size 64 \
 --num_workers 16
 
@@ -36,7 +36,7 @@ from tqdm import tqdm
 from vam.action_expert import VideoActionModelInference, load_inference_VAM
 from vam.datalib import EgoTrajectoryDataset
 from vam.evaluation import min_ade
-from vam.utils import expand_path
+from vam.utils import boolean_flag, expand_path, torch_dtype
 
 plt.style.use("default")
 plt.rcParams.update(
@@ -74,7 +74,15 @@ def get_nuscenes() -> EgoTrajectoryDataset:
 
 @torch.no_grad()
 def evaluate_loader(
-    vam: VideoActionModelInference, loader: DataLoader, name: str, outdir: str, rank: int = 0, world_size: int = 1
+    vam: VideoActionModelInference,
+    loader: DataLoader,
+    name: str,
+    outdir: str,
+    num_sampled_trajectories: int = 10,
+    rank: int = 0,
+    world_size: int = 1,
+    store_trajectories: bool = False,
+    dtype: torch.dtype = torch.bfloat16,
 ) -> float:
     _, ax = plt.subplots(figsize=(12, 8))
     ax.set_facecolor("white")
@@ -82,20 +90,24 @@ def evaluate_loader(
     x_min, y_min = float("inf"), float("inf")
     x_max, y_max = float("-inf"), float("-inf")
 
-    num_sampling = 10
-
+    stored_trajectories = {}
     total_loss, total_samples = torch.tensor(0.0).cuda(), torch.tensor(0).cuda()
     iterator = tqdm(loader, "Evaluating", disable=rank != 0)
     for batch in iterator:
         sampled_trajectory = []
         visual_tokens = batch["visual_tokens"].to("cuda", non_blocking=True)
         commands = batch["high_level_command"].to("cuda", non_blocking=True)[:, -1:]
-        for _ in range(num_sampling):
-            with torch.amp.autocast("cuda", dtype=torch.bfloat16):
-                trajectory = vam(visual_tokens, commands, torch.bfloat16)
+        for _ in range(num_sampled_trajectories):
+            with torch.amp.autocast("cuda", dtype=dtype):
+                trajectory = vam(visual_tokens, commands, dtype)
             sampled_trajectory.append(trajectory)
 
         sampled_trajectory = torch.cat(sampled_trajectory, dim=1)
+
+        if store_trajectories:
+            for idx, window_idx in enumerate(batch["window_idx"]):
+                stored_trajectories[window_idx.item()] = sampled_trajectory[idx].cpu().tolist()
+
         ground_truth = batch["positions"].to("cuda", non_blocking=True)[:, -1]
         loss, idx = min_ade(sampled_trajectory, ground_truth, return_idx=True, reduction="sum")
         best_sampled_trajectory = sampled_trajectory[torch.arange(len(sampled_trajectory)), idx]
@@ -113,6 +125,20 @@ def evaluate_loader(
 
             for traj in best_sampled_trajectory.float().cpu():
                 ax.plot(traj[:, 0], traj[:, 1], alpha=0.5, linewidth=1)
+
+    if store_trajectories:
+
+        if world_size > 1:
+            torch.distributed.barrier()
+            all_stored_trajectories = [None] * world_size
+            torch.distributed.all_gather_object(all_stored_trajectories, stored_trajectories)
+
+        if rank == 0:
+            combine_trajectories = {}
+            for stored_trajectories in all_stored_trajectories:
+                combine_trajectories.update(stored_trajectories)
+            with open(os.path.join(outdir, f"{name}_trajectories.json"), "w") as f:
+                json.dump(combine_trajectories, f)
 
     if rank == 0:
         # Add padding to the limits
@@ -151,10 +177,13 @@ def evaluate_datasets(
     vam: VideoActionModelInference,
     datasets: Dict[str, Dataset],
     outdir: str,
+    num_sampled_trajectories: int = 10,
     batch_size: int = 4,
     num_workers: int = 4,
     rank: int = 0,
     world_size: int = 1,
+    store_trajectories: bool = False,
+    dtype: torch.dtype = torch.bfloat16,
 ) -> Dict[str, float]:
     def _get_loader(ds: Dataset) -> DataLoader:
         sampler = None
@@ -162,10 +191,22 @@ def evaluate_datasets(
             sampler = DistributedSampler(ds, shuffle=False)
         return DataLoader(ds, batch_size=batch_size, pin_memory=True, num_workers=num_workers, sampler=sampler)
 
-    return {
-        name: evaluate_loader(vam, _get_loader(ds), name, outdir, rank=rank, world_size=world_size)
-        for name, ds in datasets.items()
-    }
+    metrics = {}
+    for name, ds in datasets.items():
+        metrics[name] = evaluate_loader(
+            vam,
+            _get_loader(ds),
+            name,
+            outdir,
+            num_sampled_trajectories=num_sampled_trajectories,
+            rank=rank,
+            world_size=world_size,
+            store_trajectories=store_trajectories and name == "nuscenes",
+            dtype=dtype,
+        )
+        print(metrics)
+
+    return metrics
 
 
 if __name__ == "__main__":
@@ -174,6 +215,9 @@ if __name__ == "__main__":
     parser.add_argument("--outdir", type=expand_path, required=True)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=16)
+    parser.add_argument("--num_sampled_trajectories", type=int, default=10)
+    parser.add_argument("--store_trajectories", type=boolean_flag, default=False)
+    parser.add_argument("--dtype", type=torch_dtype, default=torch.bfloat16)
     args = parser.parse_args()
 
     dts = {
@@ -200,16 +244,19 @@ if __name__ == "__main__":
         torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
-    vam = load_inference_VAM(args.vam_checkpoint_path, tempdir=os.environ["JOBSCRATCH"])
+    vam = load_inference_VAM(args.vam_checkpoint_path, tempdir=os.environ.get("JOBSCRATCH", "/tmp"))
 
     metrics = evaluate_datasets(
         vam,
         dts,
         outdir=args.outdir,
+        num_sampled_trajectories=args.num_sampled_trajectories,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         rank=rank,
         world_size=world_size,
+        store_trajectories=args.store_trajectories,
+        dtype=args.dtype,
     )
     metrics["vam_checkpoint_path"] = args.vam_checkpoint_path
     metrics["outdir"] = args.outdir
