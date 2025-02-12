@@ -39,7 +39,7 @@ Follow the instructions in the [datalib](vam/datalib/README.md) folder.
 ### Pre-training
 
 ```bash
-python jeanzay_slurm_job_submit.py \
+python slurm_job_submit.py \
 -n GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07 \
 --gpus_per_node 4 --nodes 16 \
 -wt 20:00:00 \
@@ -49,7 +49,7 @@ python jeanzay_slurm_job_submit.py \
 ### Fine-tuning
 
 ```bash
-python jeanzay_slurm_job_submit.py \
+python slurm_job_submit.py \
 -n Finetuned_0000038823_mixOpendvNuplanNuscenes_GPT2_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07 \
 --gpus_per_node 4 --nodes 16 \
 -wt 02:30:00 \
@@ -59,7 +59,7 @@ python jeanzay_slurm_job_submit.py \
 ### Action learning
 
 ```bash
-python jeanzay_slurm_job_submit.py \
+python slurm_job_submit.py \
 -n VAM_pretrained0000038823_DDP_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192 \
 --gpus_per_node 4 \
 --nodes 6 \
