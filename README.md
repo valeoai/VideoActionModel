@@ -4,8 +4,8 @@
 
 [![Paper](http://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg)](https://www.nature.com/articles/nature14539) <br>
 [![python](https://img.shields.io/badge/-Python_3.8_%7C_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![pytorch](https://img.shields.io/badge/PyTorch_2.0+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
-[![lightning](https://img.shields.io/badge/-Lightning_2.0+-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/)
+[![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
+[![lightning](https://img.shields.io/badge/-Lightning_2.4.0-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/)
 [![hydra](https://img.shields.io/badge/Config-Hydra_1.3-89b8cd)](https://hydra.cc/)
 <a href="https://github.com/ashleve/lightning-hydra-template"><img alt="Template" src="https://img.shields.io/badge/-Lightning--Hydra--Template-017F2F?style=flat&logo=github&labelColor=gray"></a><br>
 [![black](https://img.shields.io/badge/Code%20Style-Black-black.svg?labelColor=gray)](https://black.readthedocs.io/en/stable/)
@@ -67,7 +67,7 @@ Follow the instructions in the [datalib](vam/datalib/README.md) folder.
 
 ## Training
 
-The different scripts in this repo rely on a SLURM envrionment. To be able to launch the following commands, you should adapt the `jeanzay_slurm_job_submit.py` script to your own SLURM cluster.
+The different scripts in this repo rely on a SLURM envrionment. In our case they are specific to the French Jean-Zay cluster. It should work on other SLURM clusters. We let the users in charge of adapting the scripts and SLURM config to their needs, e.g., you should adapt the `jeanzay_slurm_job_submit.py` script to your own SLURM requirements.
 
 ### Pre-training
 
@@ -109,6 +109,10 @@ python jeanzay_slurm_job_submit.py \
 ```
 
 ## Inference
+
+### Downloading the pretrained models
+
+The models are stored on the GitHub release.
 
 ### Video generation
 
@@ -271,8 +275,11 @@ This should be a standalone script. It was not exstensively tested.
 - [ ] Upload pickle files for nuplan / nuscenes.
 - [ ] Upload refined metadata for opendv.
 - [ ] Add the License.
+- [ ] Remove hard coded paths from the different eval scripts.
 
 ## Acknowledgements
+
+## Compute
 
 ## Sources
 
