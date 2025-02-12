@@ -29,8 +29,8 @@ RUN pip install fire
 RUN pip install "Shapely<2.0.0"
 RUN pip install parameterized
 
-ADD . /NextTokenPredictor
-RUN cd /NextTokenPredictor && pip install --no-cache-dir .
+ADD . /VideoActionModel
+RUN cd /VideoActionModel && pip install --no-cache-dir .
 
 # Bash as default entrypoint.
 CMD /bin/bash -l

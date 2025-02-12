@@ -15,7 +15,7 @@ pip install -e .
 ## Repository structure
 
 ```bash
-VaViM
+VideoActionModel
 |––––inference  # Things related to Neuro-NCAP evaluation
 |--------scripts  # Scripts to run the evaluation
 |––––mup_shapes  # mup parametrization

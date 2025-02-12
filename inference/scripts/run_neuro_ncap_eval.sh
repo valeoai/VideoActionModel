@@ -9,7 +9,7 @@ module load singularity
 export BASE_DIR=$WORK
 export NUSCENES_PATH=$ycy_ALL_CCFRSCRATCH/nuscenes_v2
 # Model related stuff
-export MODEL_NAME='NextTokenPredictor'
+export MODEL_NAME='VideoActionModel'
 export MODEL_FOLDER=$BASE_DIR/$MODEL_NAME
 export MODEL_IMAGE='ncap_vam.sif'
 export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/$MODEL_IMAGE
