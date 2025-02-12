@@ -6,7 +6,7 @@ from pathlib import Path
 
 SCRATCH_DIR = Path(os.path.expandvars("$SCRATCH"))
 WORK_DIR = Path(os.path.expandvars("$WORK"))
-REPO_DIR = WORK_DIR / "NextTokenPredictor"
+REPO_DIR = WORK_DIR / "VideoActionModel"
 
 default_cpu_per_task = 24
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
         "module purge",  # cleans out the modules loaded in interactive and inherited by default
         "module load arch/h100",
         "module load pytorch-gpu/py3/2.4.0",
-        f"export PYTHONUSERBASE={WORK_DIR}/python_envs/worldmodel",
+        f"export PYTHONUSERBASE={WORK_DIR}/python_envs/video_action_model",
         "export MPICH_GPU_SUPPORT_ENABLED=1",
         "export TMPDIR=$JOBSCRATCH",
         # "export NCCL_DEBUG=INFO",

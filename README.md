@@ -8,8 +8,10 @@ To use the world model, you need to install the following dependencies:
 git clone https://www.github.com/valeoai/VideoActionModel
 cd VideoActionModel
 pip install -e .
-# to install torch at the same time: pip install -e ".[torch]"
-# to code: pip install -e ".[dev]"
+# We tested the repo with torch == 2.4.0; to install torch at the same time:
+# pip install -e ".[torch]"
+# to code:
+# pip install -e ".[dev]"
 ```
 
 ## Repository structure
@@ -36,6 +38,8 @@ Follow the instructions in the [datalib](vam/datalib/README.md) folder.
 
 ## Training
 
+The different scripts in this repo rely on a SLURM envrionment. To be able to launch the following commands, you should adapt the `jeanzay_slurm_job_submit.py` script to your own environment.
+
 ### Pre-training
 
 ```bash
@@ -54,6 +58,14 @@ python jeanzay_slurm_job_submit.py \
 --gpus_per_node 4 --nodes 16 \
 -wt 02:30:00 \
 -p 'experiment=finetune_mix_complet data.batch_size=6 paths.output_dir=$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned  model.network.embedding_dim=768 model.optimizer_conf.weight_decay=1e-07 model.optimizer_conf.lr=0.0041  data.num_workers=6 ckpt_path="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_1024_Nodes32_BSperGPU3_totalBS384_weight_decay1e-07_0118_0114_1737159286/checkpoints/quarters_epoch\=000_step\=0000038823.ckpt"'
+```
+
+If not on SLURM, you can launch the `vam/train.py` script, and add the following to the command lines:
+
+```bash
+name=XXX \  # Name of the experiment
+++trainer.devices=XXX \  # Number of GPUs per node
+++trainer.num_nodes=XXX \  # Number of nodes
 ```
 
 ### Action learning
@@ -75,7 +87,7 @@ python jeanzay_slurm_job_submit.py \
 import torch
 
 from vam.video_pretraining import load_pretrained_gpt
-from vam.utils import expand_path, plot_images
+from vam.utils import expand_path, plot_multiple_images
 from vam.datalib import OpenDVTokensDataset, torch_image_to_plot
 
 # Load the pretrained model and the tokenizer decoder.
@@ -94,7 +106,7 @@ dts = OpenDVTokensDataset(
 visual_tokens = dts[100]["visual_tokens"].to("cuda", non_blocking=True)
 gt_images = image_detokenizer(dts[100]["visual_tokens"].to("cuda", non_blocking=True))
 gt_images = torch_image_to_plot(gt_images)
-plot_images(gt_images, 2, 4)
+plot_multiple_images(gt_images, 2, 4)
 
 # Generate 4 frames in the future from the first 6 frames.
 # Note: we can use bloat16 on A100 or H100 GPUs.
@@ -106,7 +118,7 @@ with torch.amp.autocast("cuda", dtype=torch.bfloat16):
 
 pred_images = image_detokenizer(generated_frames.squeeze(0))
 pred_images = torch_image_to_plot(pred_images)
-plot_images(pred_images, 2, 4)
+plot_multiple_images(pred_images, 2, 4)
 ```
 
 ### Action generation
@@ -229,33 +241,20 @@ This should be a standalone script. It was not exstensively tested.
 - [ ] Upload the tokenizers (or the script to create JIT files).
 - [ ] Upload pickle files for nuplan / nuscenes.
 - [ ] Upload refined metadata for opendv.
+- [ ] Add the License.
 
 ## Acknowledgements
 
-### Contributors
-
-| Contributor | Highlights |
-| -- | -- |
-| [Florent BARTOCCIONI](https://github.com/F-Barto) | Project lead, core contributor |
-| [Elias RAMZI](https://github.com/elias-ramzi) | Core contributor |
-| Yihong XU ||
-| Tuan-Hung VU ||
-| Loick CHAMBON ||
-| Victor BESNIER ||
-| Eloi ZABLOCKI ||
-| Michael CHEN ||
-| Shashanka VENKATARAMANAN ||
-| Renaud MARLET ||
-| Spyros GIDARIS ||
-| Alexandre BOULCH ||
-| David HURYCH ||
-| Eduardo VALLE ||
-
-### Sources
+## Sources
 
 This code was inspired / contains parts of the following repositories:
 
+- [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)
 - [nanoGPT](https://github.com/karpathy/nanoGPT)
 - [LLamaGen](https://github.com/FoundationVision/LlamaGen)
 - [open-pi-zero](https://github.com/allenzren/open-pi-zero)
 - [open-hummingbird-eval](https://github.com/vpariza/open-hummingbird-eval)
+
+## License
+
+## Citation
