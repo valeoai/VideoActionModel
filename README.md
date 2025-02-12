@@ -28,6 +28,21 @@ pip install -e .
 # pip install -e ".[dev]"
 ```
 
+On our SLURM cluster we first create a virtual environment with the following command:
+
+```bash
+bash scripts/create_vam_env_jeanzay.sh
+```
+
+We can then use the repository with the following command:
+
+```bash
+module purge
+module load arch/h100
+module load pytorch-gpu/py3/2.4.0
+export PYTHONUSERBASE=$WORK/python_envs/video_action_model
+```
+
 ## Repository structure
 
 ```bash
