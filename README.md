@@ -5,8 +5,8 @@
 To use the world model, you need to install the following dependencies:
 
 ```bash
-git clone https://www.github.com/valeoai/NextTokenPredictor
-cd NextTokenPredictor
+git clone https://www.github.com/valeoai/VideoActionModel
+cd VideoActionModel
 pip install -e .
 # to install torch at the same time: pip install -e ".[torch]"
 # to code: pip install -e ".[dev]"

@@ -52,7 +52,7 @@ torch = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/valeoai/NextTokenPredictor"
+Homepage = "https://github.com/valeoai/VideoActionModel"
 
 [tool.hatch.metadata]
 allow-direct-references = true
