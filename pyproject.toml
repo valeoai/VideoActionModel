@@ -25,6 +25,7 @@ dependencies = [
     "hydra-colorlog",
     "mup @ git+https://github.com/microsoft/mup.git",
     "tqdm",
+    "jupyter",
     "numpy",
     "pillow",
     "pyquaternion",
@@ -47,6 +48,8 @@ dev = [
     "flake8-simplify",
     "isort",
     "black",
+    "ipython",
+    "ipdb",
 ]
 torch = [
     "torch==2.4.0",

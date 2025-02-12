@@ -52,7 +52,7 @@ Follow the instructions in the [datalib](vam/datalib/README.md) folder.
 
 ## Training
 
-The different scripts in this repo rely on a SLURM envrionment. To be able to launch the following commands, you should adapt the `jeanzay_slurm_job_submit.py` script to your own environment.
+The different scripts in this repo rely on a SLURM envrionment. To be able to launch the following commands, you should adapt the `jeanzay_slurm_job_submit.py` script to your own SLURM cluster.
 
 ### Pre-training
 
@@ -120,7 +120,7 @@ dts = OpenDVTokensDataset(
 visual_tokens = dts[100]["visual_tokens"].to("cuda", non_blocking=True)
 gt_images = image_detokenizer(dts[100]["visual_tokens"].to("cuda", non_blocking=True))
 gt_images = torch_image_to_plot(gt_images)
-plot_multiple_images(gt_images, 2, 4)
+_ = plot_multiple_images(gt_images, 2, 4)
 
 # Generate 4 frames in the future from the first 6 frames.
 # Note: we can use bloat16 on A100 or H100 GPUs.
@@ -132,7 +132,7 @@ with torch.amp.autocast("cuda", dtype=torch.bfloat16):
 
 pred_images = image_detokenizer(generated_frames.squeeze(0))
 pred_images = torch_image_to_plot(pred_images)
-plot_multiple_images(pred_images, 2, 4)
+_ = plot_multiple_images(pred_images, 1, 4)
 ```
 
 ### Action generation

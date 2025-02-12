@@ -6,11 +6,12 @@ set -eu
 
 python_module=pytorch-gpu/py3/2.4.0
 env_name=video_action_model
-ENVS_ROOT_DIR=${ycy_CCFRWORK}/python_envs
+ENVS_ROOT_DIR=${WORK}/python_envs
 export PYTHONUSERBASE=${ENVS_ROOT_DIR}/${env_name}
 mkdir -p "${PYTHONUSERBASE}"
 
 module purge
+module load arch/h100
 module load "${python_module}"
 
 pip install -e .
