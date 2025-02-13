@@ -2,8 +2,7 @@ from typing import Any, Dict, Optional, Tuple
 
 try:
     import git
-except Exception as e:
-    print(e)
+except Exception:
     git = None
 import hydra
 import mup

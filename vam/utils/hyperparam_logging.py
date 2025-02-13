@@ -3,8 +3,7 @@ from typing import Any, Dict
 
 try:
     import git
-except Exception as e:
-    print(e)
+except Exception:
     git = None
 import torch
 from lightning.pytorch.core.saving import save_hparams_to_yaml

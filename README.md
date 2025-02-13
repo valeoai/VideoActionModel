@@ -28,7 +28,7 @@ pip install -e .
 # pip install -e ".[dev]"
 ```
 
-On our SLURM cluster we first create a virtual environment with the following command:
+Alternatively, on our SLURM cluster we follow the following steps to setup our environment:
 
 ```bash
 bash scripts/create_vam_env_jeanzay.sh
@@ -195,9 +195,11 @@ loss = min_ade(trajectory, ground_truth)
 print(loss)
 ```
 
-### Notebooks
+### Examples
 
-Find examples in the [notebooks](notebooks) folder.
+There are several example scripts, [detailed here](scripts).
+
+Find notebook examples in the [notebooks](notebooks) folder.
 
 ## Evaluation
 
@@ -209,10 +211,18 @@ Please follow instruction on: [Neuro-NCAP](inference/README.md).
 
 ### Humming bird
 
+In order to use Humming Bird, you need to install an additional package:
+
+```bash
+pip install scann
+```
+
+Then you can use the following:
+
 ```python
 import torch
-from torch import Tensor
 from einops import rearrange
+from torch import Tensor
 
 from vam.evaluation.datasets import CityscapesDataset
 from vam.evaluation.hbird import hbird_evaluation
@@ -229,15 +239,15 @@ model_info = {
 
 def forward_fn(x: Tensor, inference: bool) -> Tensor:
     x = image_tokenizer(x)
-    x = rearrange(x, "(b t) h w -> b t h w", t=1)
-    x = gpt.get_intermediate_layers(x.unsqueeze(1), 12)
+    x = rearrange(x, "b h w -> b 1 h w")
+    x = gpt.get_intermediate_layers(x, 12)
     x = rearrange(x[:, -1], "b h w d -> b (h w) d")
     return x
 
-train_dts = CityscapesDataset(root="xxx", split="train")
-val_dts = CityscapesDataset(root="xxx", split="val")
+train_dts = CityscapesDataset(root=expand_path("xxx"), split="train")
+val_dts = CityscapesDataset(root=expand_path("xxx"), split="val")
 
-logs, preds = hbird_evaluation(
+logs, _ = hbird_evaluation(
     ftr_extr_fn=forward_fn,
     model_info=model_info,
     train_dataset=train_dts,
@@ -282,6 +292,12 @@ This should be a standalone script. It was not exstensively tested.
 ## Acknowledgements
 
 ## Compute
+
+We thank the following public strucures for granting us access to their computing resources:
+
+- Adastra
+- Jean-Zay
+- EuroHPC (CINECA)
 
 ## Sources
 
