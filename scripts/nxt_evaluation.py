@@ -150,7 +150,7 @@ if __name__ == "__main__":
         torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
-    gpt = load_pretrained_gpt(args.gpt_checkpoint_path, tempdir=os.environ["JOBSCRATCH"])
+    gpt = load_pretrained_gpt(args.gpt_checkpoint_path, tempdir=os.environ.get("JOBSCRATCH", "/tmp"))
     metrics = evaluate_datasets(gpt, dts, batch_size=args.batch_size, num_workers=args.num_workers, world_size=world_size)
     metrics["gpt_checkpoint_path"] = args.gpt_checkpoint_path
     print(metrics)

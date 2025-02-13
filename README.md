@@ -73,31 +73,42 @@ The SLURM configurations provided in this repository is specifically tailored fo
 
 ```bash
 python jeanzay_slurm_job_submit.py \
--n GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07 \
+-n VaViM_768_pretraining_OpenDV \
 --gpus_per_node 4 --nodes 16 \
 -wt 20:00:00 \
--p 'experiment=video_pretraining_GPT2_llamagen_ds16_16384_opendv data.batch_size=6 paths.output_dir=$ycy_ALL_CCFRSCRATCH/VAM_test model.network.embedding_dim=768 callbacks=callbacks_opendv_training model.optimizer_conf.weight_decay=1e-07 model.network.init_std=0.0289 model.optimizer_conf.lr=0.0041 data.num_workers=6 ++trainer.max_epochs=1 ++trainer.val_check_interval=0.25'
+-p 'experiment=video_pretraining_GPT2_llamagen_ds16_16384_opendv data.batch_size=6 paths.output_dir=XXXXX model.network.embedding_dim=768 callbacks=callbacks_opendv_training model.optimizer_conf.weight_decay=1e-07 model.network.init_std=0.0289 model.optimizer_conf.lr=0.0041 data.num_workers=6 ++trainer.max_epochs=1 ++trainer.val_check_interval=0.25'
 ```
 
 ### Fine-tuning
 
+You first need to launch the following command to generate the fine-tuning data:
+
+```bash
+python scripts/regain_index_from_train.py \
+--ckpt /path/to/ckpt.pt \
+--outdir $ycy_ALL_CCFRWORK \
+--name checkpoint_pretraining
+```
+
+Then you can launch the fine-tuning job with the following command:
+
 ```bash
 python jeanzay_slurm_job_submit.py \
--n Finetuned_0000038823_mixOpendvNuplanNuscenes_GPT2_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07 \
+-n VaViM_768_finetuning_data_mix \
 --gpus_per_node 4 --nodes 16 \
 -wt 02:30:00 \
--p 'experiment=finetune_mix_complet data.batch_size=6 paths.output_dir=$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned  model.network.embedding_dim=768 model.optimizer_conf.weight_decay=1e-07 model.optimizer_conf.lr=0.0041  data.num_workers=6 ckpt_path="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_1024_Nodes32_BSperGPU3_totalBS384_weight_decay1e-07_0118_0114_1737159286/checkpoints/quarters_epoch\=000_step\=0000038823.ckpt"'
+-p 'experiment=finetune_mix_complet data.batch_size=6 paths.output_dir=XXXXX  model.network.embedding_dim=768 model.optimizer_conf.weight_decay=1e-07 model.optimizer_conf.lr=0.0041 data.num_workers=6 ckpt_path="XXXXX"'
 ```
 
 ### Action learning
 
 ```bash
 python jeanzay_slurm_job_submit.py \
--n VAM_pretrained0000038823_DDP_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192 \
+-n VaVAM_768_action_learning_nuPlan_nuScenes \
 --gpus_per_node 4 \
 --nodes 6 \
 -wt 10:00:00 \
--p 'experiment=action_learning data.batch_size=16 model.vam_conf.gpt_config.embedding_dim=768  model.vam_conf.action_config.embedding_dim=192 model.vam_conf.action_config.init_std=0.0086 model.optimizer_conf.lr=0.0194  model.optimizer_conf.weight_decay=1e-07 paths.output_dir=$ycy_ALL_CCFRSCRATCH/output_data/VAM ++trainer.max_epochs=1 data.num_workers=6 model.vam_conf.gpt_checkpoint_path="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned/Finetuned_0000038823_mixOpendvNuplanNuscenes_GPT2_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07_0119_1726_1737303976/checkpoints/end_of_epoch_epoch\=001_step\=0000054354_fused.pt" trainer.strategy=ddp +model.grad_logging=100'
+-p 'experiment=action_learning data.batch_size=16 model.vam_conf.gpt_config.embedding_dim=768 model.vam_conf.action_config.embedding_dim=192 model.vam_conf.action_config.init_std=0.0086 model.optimizer_conf.lr=0.0194 model.optimizer_conf.weight_decay=1e-07 paths.output_dir=XXXXX ++trainer.max_epochs=1 data.num_workers=6 model.vam_conf.gpt_checkpoint_path="XXXXX" trainer.strategy=ddp +model.grad_logging=100'
 ```
 
 If not on SLURM, you can launch the `vam/train.py` script, and add the following to the command lines:
@@ -256,7 +267,7 @@ logs, _ = hbird_evaluation(
     batch_size_eval=16,
     augmentation_epoch=1,
     device="cuda",
-    dtype="fp16",
+    dtype="bf16",
     return_labels=False,
     num_neighbour=30,
     nn_params=None,
