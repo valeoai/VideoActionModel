@@ -26,7 +26,7 @@ import json
 import os
 import pickle
 import subprocess
-from typing import Dict
+from typing import Any, Dict
 
 import matplotlib.pyplot as plt
 import torch
@@ -36,7 +36,9 @@ from tqdm import tqdm
 from vam.action_expert import VideoActionModelInference, load_inference_VAM
 from vam.datalib import EgoTrajectoryDataset
 from vam.evaluation import min_ade
-from vam.utils import boolean_flag, expand_path, torch_dtype
+from vam.utils import boolean_flag, expand_path, read_eval_config, torch_dtype
+
+Config = Dict[str, Any]
 
 plt.style.use("default")
 plt.rcParams.update(
@@ -50,25 +52,25 @@ plt.rcParams.update(
 )
 
 
-def get_nuplan() -> EgoTrajectoryDataset:
-    with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl"), "rb") as f:
+def get_nuplan(config: Config) -> EgoTrajectoryDataset:
+    with open(expand_path(config["nuplan"]["pickle"]), "rb") as f:
         pickle_data = pickle.load(f)
 
     return EgoTrajectoryDataset(
         pickle_data=pickle_data,
-        tokens_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens"),
+        tokens_rootdir=expand_path(config["nuplan"]["tokens_rootdir"]),
         subsampling_factor=5,
         camera="CAM_F0",
     )
 
 
-def get_nuscenes() -> EgoTrajectoryDataset:
-    with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl"), "rb") as f:
+def get_nuscenes(config: Config) -> EgoTrajectoryDataset:
+    with open(expand_path(config["nuscenes"]["pickle"]), "rb") as f:
         pickle_data = pickle.load(f)
 
     return EgoTrajectoryDataset(
         pickle_data=pickle_data,
-        tokens_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens"),
+        tokens_rootdir=expand_path(config["nuscenes"]["tokens_rootdir"]),
     )
 
 
@@ -212,6 +214,7 @@ def evaluate_datasets(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--vam_checkpoint_path", type=expand_path, required=True)
+    parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))
     parser.add_argument("--outdir", type=expand_path, required=True)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=16)
@@ -221,8 +224,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     dts = {
-        "nuplan": get_nuplan(),
-        "nuscenes": get_nuscenes(),
+        "nuplan": get_nuplan(args.config),
+        "nuscenes": get_nuscenes(args.config),
     }
 
     os.makedirs(args.outdir, exist_ok=True)

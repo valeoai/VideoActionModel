@@ -1,0 +1,25 @@
+cityscapes:
+  root: /datasets_local/cityscapes
+  pseudo_depth: null
+
+kitti:
+  root: /datasets_local/KITTI_STEP
+  pseudo_depth: null
+
+kitti_video:
+  root: /datasets_local/KITTI_STEP
+  pseudo_depth: null
+
+opendv:
+  data_root_dir: null
+  split: null
+
+nuscenes:
+  images_rootdir: /datasets_local/nuscenes
+  tokens_rootdir: null
+  pickle: ~/iveco/scratch_iveco/VAM_JZGC4/pickles/nuscenes_val_data_cleaned.pkl
+
+nuplan:
+  images_rootdir: null
+  tokens_rootdir: null
+  pickle: null

@@ -3,6 +3,7 @@ import json
 import os
 import pickle
 import subprocess
+from typing import Any, Dict
 
 import torch
 import torch.distributed as dist
@@ -15,18 +16,19 @@ from tqdm import tqdm
 from vam.datalib import CropAndResizeTransform, EgoTrajectoryDataset
 from vam.evaluation import MultiInceptionMetrics
 from vam.evaluation.datasets import KITTIDataset
-from vam.utils import boolean_flag, expand_path, torch_dtype
+from vam.utils import boolean_flag, expand_path, read_eval_config, torch_dtype
 from vam.video_pretraining import MupGPT2, load_pretrained_gpt
 
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cuda.matmul.allow_tf32 = True
 _DISABLE_TQDM = os.environ.get("DISABLE_TQDM", False)
 
+Config = Dict[str, Any]
 
-def get_kitti(context_length: int) -> KITTIDataset:
+
+def get_kitti(config: Config, context_length: int) -> KITTIDataset:
     return KITTIDataset(
-        root="/datasets_local/KITTI_STEP",
-        # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+        root=config["kitti"]["root"],
         split="val",
         window_size=context_length,
         frame_stride=5,
@@ -34,17 +36,15 @@ def get_kitti(context_length: int) -> KITTIDataset:
     )
 
 
-def get_nuscenes(context_length: int) -> EgoTrajectoryDataset:
-    # with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl"), "rb") as f:
-    with open(expand_path("pickles/nuscenes_val_data_cleaned.pkl"), "rb") as f:
+def get_nuscenes(config: Config, context_length: int) -> EgoTrajectoryDataset:
+    with open(expand_path(config["nuscenes"]["pickle"]), "rb") as f:
         pickle_data = pickle.load(f)
 
     transform = CropAndResizeTransform(resize_factor=3.125, trop_crop_size=0)
 
     return EgoTrajectoryDataset(
         pickle_data=pickle_data,
-        # images_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuscenes_v2"),
-        images_rootdir=expand_path("/datasets_local/nuscenes"),
+        images_rootdir=expand_path(config["nuscenes"]["images_rootdir"]),
         sequence_length=context_length,
         images_transform=transform,
     )
@@ -173,6 +173,7 @@ if __name__ == "__main__":
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--outfile", type=expand_path, required=True)
+    parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))
 
     parser.add_argument("--tokenizer_only", type=boolean_flag, default=False)
     parser.add_argument("--tokenizer_jit_path", type=expand_path, required=True)
@@ -207,8 +208,8 @@ if __name__ == "__main__":
         raise ValueError("Topk sampler must be greater than 1 for stochastic sampling")
 
     all_datasets = {
-        "nuscenes": get_nuscenes(context_length=args.context_length + args.prediction_length),
-        "kitti": get_kitti(context_length=args.context_length + args.prediction_length),
+        "nuscenes": get_nuscenes(args.config, context_length=args.context_length + args.prediction_length),
+        "kitti": get_kitti(args.config, context_length=args.context_length + args.prediction_length),
     }
 
     world_size = int(os.environ.get("SLURM_NTASKS", 1))

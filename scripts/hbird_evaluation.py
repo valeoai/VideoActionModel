@@ -39,7 +39,7 @@ import argparse
 import json
 import os
 import subprocess
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -48,59 +48,61 @@ from torch import Tensor
 
 from vam.evaluation.datasets import CityscapesDataset, KITTIDataset
 from vam.evaluation.hbird import hbird_evaluation
-from vam.utils import expand_path
+from vam.utils import expand_path, read_eval_config
 from vam.video_pretraining import MupGPT2, load_pretrained_gpt
 
+Config = Dict[str, Any]
 
-def get_cityscapes() -> Tuple[CityscapesDataset, ...]:
+
+def get_cityscapes(config: Config) -> Tuple[CityscapesDataset, ...]:
     return (
         CityscapesDataset(
-            root="$ycy_ALL_CCFRSCRATCH/cityscapes",
+            root=config["cityscapes"]["root"],
             split="train",
-            pseudo_depth="$ycy_ALL_CCFRSCRATCH/cityscapes/cityscapes_depth",
+            pseudo_depth=config["cityscapes"]["pseudo_depth"],
         ),
         CityscapesDataset(
-            root="$ycy_ALL_CCFRSCRATCH/cityscapes",
+            root=config["cityscapes"]["root"],
             split="val",
-            pseudo_depth="$ycy_ALL_CCFRSCRATCH/cityscapes/cityscapes_depth",
+            pseudo_depth=config["cityscapes"]["pseudo_depth"],
         ),
     )
 
 
-def get_kitti() -> Tuple[KITTIDataset, ...]:
+def get_kitti(config: Config) -> Tuple[KITTIDataset, ...]:
     return (
         KITTIDataset(
-            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            root=config["kitti"]["root"],
             split="train",
             window_size=1,
-            pseudo_depth="$ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_depth",
+            pseudo_depth=config["kitti"]["pseudo_depth"],
         ),
         KITTIDataset(
-            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            root=config["kitti"]["root"],
             split="val",
             window_size=1,
-            pseudo_depth="$ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_depth",
+            pseudo_depth=config["kitti"]["pseudo_depth"],
         ),
     )
 
 
-def get_kitti_video() -> Tuple[KITTIDataset, ...]:
+def get_kitti_video(config: Config) -> Tuple[KITTIDataset, ...]:
     return (
         KITTIDataset(
-            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            root=config["kitti_video"]["root"],
             split="train",
             window_size=8,
             frame_stride=5,
             eval_on_last_frame=True,
-            pseudo_depth="$ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_video_depth",
+            pseudo_depth=config["kitti_video"]["pseudo_depth"],
         ),
         KITTIDataset(
-            root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+            root=config["kitti_video"]["root"],
             split="val",
             window_size=8,
             frame_stride=5,
             eval_on_last_frame=True,
-            pseudo_depth="$ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_video_depth",
+            pseudo_depth=config["kitti_video"]["pseudo_depth"],
         ),
     )
 
@@ -163,6 +165,7 @@ def evaluate_datasets(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpt_checkpoint_path", type=expand_path, required=True)
+    parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))
     parser.add_argument("--layer_idx", type=int, default=12)
     parser.add_argument("--tokenizer_jit_path", type=expand_path, required=True)
     parser.add_argument("--outfile", type=expand_path, required=True)
@@ -175,9 +178,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     all_datasets = {
-        "cityscapes": get_cityscapes(),
-        "kitti": get_kitti(),
-        "kitti_video": get_kitti_video(),
+        "cityscapes": get_cityscapes(args.config),
+        "kitti": get_kitti(args.config),
+        "kitti_video": get_kitti_video(args.config),
     }
 
     world_size = int(os.environ["SLURM_NTASKS"])

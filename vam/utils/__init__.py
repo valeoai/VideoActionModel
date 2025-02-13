@@ -5,6 +5,7 @@ from vam.utils.hyperparam_logging import log_hyperparameters
 from vam.utils.info_printing import print_config_tree
 from vam.utils.instantiators import instantiate_callbacks, instantiate_loggers
 from vam.utils.plot_utils import plot_multiple_images
+from vam.utils.read_eval_config import read_eval_config
 from vam.utils.task_utils import extras, get_metric_value, task_wrapper
 from vam.utils.torch_dtype import torch_dtype
 from vam.utils.trajectory_logging import TrajectoryLoggingCallback
@@ -19,6 +20,7 @@ __all__ = [
     "instantiate_callbacks",
     "instantiate_loggers",
     "plot_multiple_images",
+    "read_eval_config",
     "extras",
     "get_metric_value",
     "task_wrapper",

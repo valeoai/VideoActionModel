@@ -29,7 +29,7 @@ import json
 import os
 import pickle
 import subprocess
-from typing import Dict
+from typing import Any, Dict
 
 import torch
 import torch.nn.functional as F
@@ -38,41 +38,43 @@ from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from tqdm import tqdm
 
 from vam.datalib import EgoTrajectoryDataset, OpenDVTokensDataset
-from vam.utils import expand_path
+from vam.utils import expand_path, read_eval_config
 from vam.video_pretraining import MupGPT2, load_pretrained_gpt, prepare_AR_token_sequences
 
+Config = Dict[str, Any]
 
-def get_opendv() -> OpenDVTokensDataset:
-    with open(expand_path("$fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json")) as f:
+
+def get_opendv(config: Config) -> OpenDVTokensDataset:
+    with open(expand_path(config["opendv"]["split"])) as f:
         val_videos = json.load(f)
 
     return OpenDVTokensDataset(
-        data_root_dir="$fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens",
+        data_root_dir=config["opendv"]["data_root_dir"],
         video_list=val_videos,
         sequence_length=8,
         subsampling_factor=5,
     )
 
 
-def get_nuplan() -> EgoTrajectoryDataset:
-    with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl"), "rb") as f:
+def get_nuplan(config: Config) -> EgoTrajectoryDataset:
+    with open(expand_path(config["nuplan"]["pickle"]), "rb") as f:
         pickle_data = pickle.load(f)
 
     return EgoTrajectoryDataset(
         pickle_data=pickle_data,
-        tokens_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens"),
+        tokens_rootdir=expand_path(config["nuplan"]["tokens_rootdir"]),
         subsampling_factor=5,
         camera="CAM_F0",
     )
 
 
-def get_nuscenes() -> EgoTrajectoryDataset:
-    with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl"), "rb") as f:
+def get_nuscenes(config: Config) -> EgoTrajectoryDataset:
+    with open(expand_path(config["nuscenes"]["pickle"]), "rb") as f:
         pickle_data = pickle.load(f)
 
     return EgoTrajectoryDataset(
         pickle_data=pickle_data,
-        tokens_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens"),
+        tokens_rootdir=expand_path(config["nuscenes"]["tokens_rootdir"]),
     )
 
 
@@ -119,15 +121,16 @@ def evaluate_datasets(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gpt_checkpoint_path", type=expand_path, required=True)
+    parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))
     parser.add_argument("--outfile", type=expand_path, required=True)
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_workers", type=int, default=16)
     args = parser.parse_args()
 
     dts = {
-        "opendv": get_opendv(),
-        "nuplan": get_nuplan(),
-        "nuscenes": get_nuscenes(),
+        "opendv": get_opendv(args.config),
+        "nuplan": get_nuplan(args.config),
+        "nuscenes": get_nuscenes(args.config),
     }
 
     world_size = int(os.environ["SLURM_NTASKS"])

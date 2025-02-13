@@ -67,7 +67,7 @@ Follow the instructions in the [datalib](vam/datalib/README.md) folder.
 
 ## Training
 
-The different scripts in this repo rely on a SLURM envrionment. In our case they are specific to the French Jean-Zay cluster. It should work on other SLURM clusters. We let the users in charge of adapting the scripts and SLURM config to their needs, e.g., you should adapt the `jeanzay_slurm_job_submit.py` script to your own SLURM requirements.
+The SLURM configurations provided in this repository is specifically tailored for the French Jean-Zay cluster. While it should be compatible with other SLURM clusters, users are responsible for verifying and adapting the scripts, e.g. `jeanzay_slurm_job_submit.py`, to meet their own system requirements.
 
 ### Pre-training
 
@@ -89,14 +89,6 @@ python jeanzay_slurm_job_submit.py \
 -p 'experiment=finetune_mix_complet data.batch_size=6 paths.output_dir=$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned  model.network.embedding_dim=768 model.optimizer_conf.weight_decay=1e-07 model.optimizer_conf.lr=0.0041  data.num_workers=6 ckpt_path="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_1024_Nodes32_BSperGPU3_totalBS384_weight_decay1e-07_0118_0114_1737159286/checkpoints/quarters_epoch\=000_step\=0000038823.ckpt"'
 ```
 
-If not on SLURM, you can launch the `vam/train.py` script, and add the following to the command lines:
-
-```bash
-name=XXX \  # Name of the experiment
-++trainer.devices=XXX \  # Number of GPUs per node
-++trainer.num_nodes=XXX \  # Number of nodes
-```
-
 ### Action learning
 
 ```bash
@@ -106,6 +98,14 @@ python jeanzay_slurm_job_submit.py \
 --nodes 6 \
 -wt 10:00:00 \
 -p 'experiment=action_learning data.batch_size=16 model.vam_conf.gpt_config.embedding_dim=768  model.vam_conf.action_config.embedding_dim=192 model.vam_conf.action_config.init_std=0.0086 model.optimizer_conf.lr=0.0194  model.optimizer_conf.weight_decay=1e-07 paths.output_dir=$ycy_ALL_CCFRSCRATCH/output_data/VAM ++trainer.max_epochs=1 data.num_workers=6 model.vam_conf.gpt_checkpoint_path="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/finetuned/Finetuned_0000038823_mixOpendvNuplanNuscenes_GPT2_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07_0119_1726_1737303976/checkpoints/end_of_epoch_epoch\=001_step\=0000054354_fused.pt" trainer.strategy=ddp +model.grad_logging=100'
+```
+
+If not on SLURM, you can launch the `vam/train.py` script, and add the following to the command lines:
+
+```bash
+name=XXX \  # Name of the experiment
+++trainer.devices=XXX \  # Number of GPUs per node
+++trainer.num_nodes=XXX \  # Number of nodes
 ```
 
 ## Inference
@@ -119,9 +119,9 @@ The models are stored on the GitHub release.
 ```python
 import torch
 
-from vam.video_pretraining import load_pretrained_gpt
-from vam.utils import expand_path, plot_multiple_images
 from vam.datalib import OpenDVTokensDataset, torch_image_to_plot
+from vam.utils import expand_path, plot_multiple_images
+from vam.video_pretraining import load_pretrained_gpt
 
 # Load the pretrained model and the tokenizer decoder.
 gpt = load_pretrained_gpt(expand_path("XXX"))
@@ -162,9 +162,9 @@ import pickle
 import torch
 from einops import rearrange, repeat
 
-from vam.evaluation import min_ade
 from vam.action_expert import load_inference_VAM
 from vam.datalib import EgoTrajectoryDataset
+from vam.evaluation import min_ade
 from vam.utils import expand_path
 
 vam = load_inference_VAM(expand_path("XXX"), "cuda")
@@ -212,10 +212,10 @@ Please follow instruction on: [Neuro-NCAP](inference/README.md).
 ```python
 from einops import rearrange
 
-from vam.video_pretraining import load_pretrained_gpt
-from vam.utils import expand_path
-from vam.evaluation.hbird import hbird_evaluation
 from vam.evaluation.datasets import CityscapesDataset
+from vam.evaluation.hbird import hbird_evaluation
+from vam.utils import expand_path
+from vam.video_pretraining import load_pretrained_gpt
 
 
 gpt = load_pretrained_gpt(expand_path("xxx"))
@@ -275,7 +275,7 @@ This should be a standalone script. It was not exstensively tested.
 - [ ] Upload pickle files for nuplan / nuscenes.
 - [ ] Upload refined metadata for opendv.
 - [ ] Add the License.
-- [ ] Remove hard coded paths from the different eval scripts.
+- [x] Remove hard coded paths from the different eval scripts.
 
 ## Acknowledgements
 
