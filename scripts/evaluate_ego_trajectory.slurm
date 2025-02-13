@@ -11,7 +11,7 @@
 #SBATCH --time=10:10:00
 #SBATCH --output=slurm_jobs_logs/stdout/ego_eval/%A_%a.out
 #SBATCH --error=slurm_jobs_logs/stdout/ego_eval/%A_%a.out
-#SBATCH --array=3,6,7
+#SBATCH --array=0-8
 
 mkdir -p slurm_jobs_logs/stdout/ego_eval
 mkdir -p slurm_jobs_logs/files/ego_eval

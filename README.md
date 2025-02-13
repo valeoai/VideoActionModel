@@ -2,7 +2,7 @@
 
 # VaViM and VaVAM
 
-[![Paper](http://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg)](https://www.nature.com/articles/nature14539) <br>
+[![Paper](http://img.shields.io/badge/paper-arxiv.0000.0000-B31B1B.svg)](https://arxiv.org/) <br>
 [![python](https://img.shields.io/badge/-Python_3.8_%7C_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
 [![lightning](https://img.shields.io/badge/-Lightning_2.4.0-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/)
@@ -303,6 +303,32 @@ This should be a standalone script. It was not exstensively tested.
 
 ## Acknowledgements
 
+**Project Lead (Research direction, technical roadmap and project coordination)** <br>
+Florent BARTOCCIONI
+
+**Core contributors (Contributed to all aspects of the codebase, ran experiments and evaluations)** <br>
+Florent BARTOCCIONI, Elias RAMZI
+
+**Contributors**<br>
+Victor BESNIER -- Visual Tokenization codebase using pre-trained VQGAN; FID metric code <br>
+Loick CHAMBON -- Data download, transfer and extraction; visualization code development <br>
+Eduardo VALLE -- OpenDV preprocessing <br>
+Shashanka VENKATARAMANAN -- Depth anything pseudo-GT generation <br>
+Tuan-Hung VU -- GPT adaptation from nanoGPT <br>
+Yihong XU -- nuPlan preprocessing and initial dataloader development <br>
+
+**Paper (manuscript preparation, designing paper visualization and figures)** <br>
+Florent BARTOCCIONI, Victor BESNIER, Shashanka VENKATARAMANAN, Eloi ZABLOCKI, Elias RAMZI, Yihong XU, Tuan-Hung VU
+
+**Public Computing Grant Acquisition (project proposal writing for Adastra, EuroHPC and Jean-Zay grand challenges)** <br>
+Florent BARTOCCIONI, Alexandre BOULCH, Eduardo VALLE, Spyros GIDARIS, Eloi ZABLOCKI, Matthieu CORD, Serkan ODABAS, David HURYCH
+
+**Advisory (research and organization guidance)** <br>
+Eloi ZABLOCKI, Alexandre BOULCH, Mickael CHEN
+
+**Senior Advisory (research and organization guidance)** <br>
+Eduardo VALLE, Andrei BURSUC, Renaud MARLET, Matthieu CORD
+
 ## Compute
 
 We thank the following public strucures for granting us access to their computing resources:
@@ -337,9 +363,9 @@ To cite the code:
 
 ```text
 @software{Bartoccioni_VaVAM,
-author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Loick Chambon} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Mickael Chen} and {Eloi Zablocki} and {Alexandre Boulch} and {Eduardo Valle} and {Andrei Bursuc} and {Matthieu Cord}},
-license = {MIT},
-title = {{VaViM and VaVAM: Autonomous Driving through Video Generative Modeling}},
-url = {https://github.com/valeoai/VideoActionModel}
+    author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Loick Chambon} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Mickael Chen} and {Eloi Zablocki} and {Alexandre Boulch} and {Eduardo Valle} and {Andrei Bursuc} and {Matthieu Cord}},
+    license = {MIT},
+    title = {{VaViM and VaVAM: Autonomous Driving through Video Generative Modeling}},
+    url = {https://github.com/valeoai/VideoActionModel}
 }
 ```
