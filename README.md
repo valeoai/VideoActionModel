@@ -16,7 +16,7 @@
 
 ## Install
 
-To use the world model, you need to install the following dependencies:
+To use VideoActionModel, install the following dependencies:
 
 ```bash
 git clone https://www.github.com/valeoai/VideoActionModel
@@ -210,6 +210,8 @@ Please follow instruction on: [Neuro-NCAP](inference/README.md).
 ### Humming bird
 
 ```python
+import torch
+from torch import Tensor
 from einops import rearrange
 
 from vam.evaluation.datasets import CityscapesDataset
@@ -296,3 +298,7 @@ This code was inspired / contains parts of the following repositories:
 This code repository is licensed under [MIT License](LICENSE). The use of pretrained models is subject to the [Model License](LICENSE_MODEL). VideoActionModel is intended for academic / research purposes only.
 
 ## Citation
+
+```text
+@misc{}
+```

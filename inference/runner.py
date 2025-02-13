@@ -111,7 +111,7 @@ class VAMRunner:
         # This should (T, c, h, w)
         # So here the temporal frames play the role of batch size
         preproc_output = self.prev_frame_info["prev_frames"].to(self.device)
-        # Here we unsqueeze because the input of the world model is (B, T, h, w)
+        # Here we unsqueeze because the input of the VAM is (B, T, h, w)
         visual_tokens = self.image_tokenizer(preproc_output).unsqueeze(0)
 
         # Get the command tokens

@@ -217,7 +217,7 @@ class MupActionExpert(nn.Module):
     GPT2 implementation following the original formulation to be able to load existing pre-trained weights
 
     Args:
-        embedding_dim: embedding dimension for the world model
+        embedding_dim: embedding dimension of VM
         nb_layers: number of transformer blocks
         dim_heads: dimension of attention heads
         vocabulary_size: total number of vector embeddings in GPT's codebook

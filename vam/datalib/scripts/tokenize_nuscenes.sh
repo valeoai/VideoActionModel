@@ -12,7 +12,7 @@ INPUT_FILE=$FILES_LIST_DIR/frames_list.txt
 module purge
 module load arch/h100
 module load pytorch-gpu/py3/2.4.0
-export PYTHONUSERBASE=$WORK/python_envs/world_model
+export PYTHONUSERBASE=$WORK/python_envs/video_action_model
 
 mkdir -p hq_tokenize_nuscenes/tokens
 
