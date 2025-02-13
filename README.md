@@ -125,6 +125,29 @@ name=XXX \  # Name of the experiment
 
 The models are stored on the GitHub release.
 
+We use the following script to convert to tar files:
+
+```bash
+python scripts/handle_checkpoints.py \
+--mode create \
+--checkpoint_dir XXXX \
+--outdir vavam_release \
+--maxsize 1.9G
+```
+
+If a model is chunked into several tar files:
+
+1. Download them all.
+2. Put them in a single folder (e.g. `vavam_release_chunks`).
+3. Run the following command:
+
+```bash
+python scripts/handle_checkpoints.py \
+--mode extract \
+--checkpoint_dir vavam_release_chunks \
+--outdir vavam_release
+```
+
 ### Video generation
 
 ```python
