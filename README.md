@@ -327,6 +327,19 @@ This code repository is licensed under [MIT License](LICENSE). The use of pretra
 
 ## Citation
 
+To cite our tech report:
+
 ```text
 @misc{}
+```
+
+To cite the code:
+
+```text
+@software{Bartoccioni_VaVAM,
+author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Loick Chambon} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Mickael Chen} and {Eloi Zablocki} and {Alexandre Boulch} and {Eduardo Valle} and {Andrei Bursuc} and {Matthieu Cord}},
+license = {MIT},
+title = {{VaViM and VaVAM: Autonomous Driving through Video Generative Modeling}},
+url = {https://github.com/valeoai/VideoActionModel}
+}
 ```

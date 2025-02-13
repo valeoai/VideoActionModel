@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it using the following metadata."
+title: "VaViM and VaVAM: Autonomous Driving through Video Generative Modeling"
+authors:
+  - name: "Florent Bartoccioni"
+  - name: "Elias Ramzi"
+  - name: "Victor Besnier"
+  - name: "Loick Chambon"
+  - name: "Shashanka Venkataramanan"
+  - name: "Tuan-Hung Vu"
+  - name: "Yihong Xu"
+  - name: "Spyros Gidaris"
+  - name: "Serkan Odabas"
+  - name: "David Hurych"
+  - name: "Renaud Marlet"
+  - name: "Mickael Chen"
+  - name: "Eloi Zablocki"
+  - name: "Alexandre Boulch"
+  - name: "Eduardo Valle"
+  - name: "Andrei Bursuc"
+  - name: "Matthieu Cord"
+year: 2025
+identifiers:
+  - type: arXiv
+    value: TODO
+url: "TODO"
+categories:
+  - "cs.CV"
+repository-code: "https://github.com/valeoai/VideoActionModel"
+license: "MIT"
+abstract: >
+  TODO
