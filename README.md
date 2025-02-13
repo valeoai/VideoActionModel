@@ -292,14 +292,15 @@ This should be a standalone script. It was not exstensively tested.
 
 ## TODO
 
+- [x] Remove hard coded paths from the different eval scripts.
 - [ ] Details of commands to run all different experiments.
 - [ ] Upload the pretrained models.
 - [ ] Upload the tokenizers (or the script to create JIT files).
 - [ ] Upload pickle files for nuplan / nuscenes.
 - [ ] Upload refined metadata for opendv.
 - [ ] Add the License.
-- [x] Remove hard coded paths from the different eval scripts.
 - [ ] Update citation and the Arxiv link at the top.
+- [ ] Finish the compute acknowledgements.
 
 ## Acknowledgements
 
@@ -349,7 +350,7 @@ This code was inspired / contains parts of the following repositories:
 
 ## License
 
-This code repository is licensed under [MIT License](LICENSE). The use of pretrained models is subject to the [Model License](LICENSE_MODEL). VideoActionModel is intended for academic / research purposes only.
+This code repository is licensed under [MIT License](LICENSE). The use of pretrained models is subject to the [RAIL Model License](LICENSE_MODEL). VideoActionModel is intended for academic / research purposes only.
 
 ## Citation
 
