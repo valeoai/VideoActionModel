@@ -1,3 +1,6 @@
+tokenizer_jit_path: $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit
+detokenizer_jit_path: $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit
+
 cityscapes:
   root: $ycy_ALL_CCFRSCRATCH/cityscapes
   pseudo_depth: $ycy_ALL_CCFRSCRATCH/cityscapes/cityscapes_depth

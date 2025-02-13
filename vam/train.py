@@ -44,10 +44,13 @@ def train(config: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     if config.get("is_finetuning") and config.get("ckpt_path") is not None:
 
-        deepspeed_ckpt_dir = config.get("ckpt_path")
-        pt_path = "checkpoint/mp_rank_00_model_states.pt"
-        pt_path = os.path.join(deepspeed_ckpt_dir, pt_path)
-        pt = torch.load(pt_path, map_location="cpu")
+        if os.path.isdir(config.get("ckpt_path")):
+            deepspeed_ckpt_dir = config.get("ckpt_path")
+            pt_path = "checkpoint/mp_rank_00_model_states.pt"
+            pt_path = os.path.join(deepspeed_ckpt_dir, pt_path)
+            pt = torch.load(pt_path, map_location="cpu")
+        else:
+            pt = torch.load(config.get("ckpt_path"), map_location="cpu")
         pretrained_global_step = pt["global_step"]
 
         config.scheduler.end_iter = pretrained_global_step + config.scheduler.end_iter

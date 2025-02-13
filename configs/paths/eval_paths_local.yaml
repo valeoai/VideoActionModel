@@ -1,3 +1,6 @@
+tokenizer_jit_path: ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit
+detokenizer_jit_path: ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit
+
 cityscapes:
   root: /datasets_local/cityscapes
   pseudo_depth: null
