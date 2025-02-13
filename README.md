@@ -293,4 +293,6 @@ This code was inspired / contains parts of the following repositories:
 
 ## License
 
+This code repository is licensed under [MIT License](LICENSE). The use of pretrained models is subject to the [Model License](LICENSE_MODEL). VideoActionModel is intended for academic / research purposes only.
+
 ## Citation

@@ -17,6 +17,7 @@ if __name__ == "__main__":
     parser.add_argument("--gpus_per_node", type=int, default=1)
     parser.add_argument("--nodes", type=int, default=1)
     parser.add_argument("--account", type=str, default="ycy@h100")
+    parser.add_argument("--gpu_type", type=str, default="h100")
     parser.add_argument("--file_to_run", "-f", type=str, default="train")
     parser.add_argument("--wall_time", "-wt", type=str, default="20:00:00")  # jean zay has max time of 20h
     parser.add_argument("--dev_qos", action="store_true")
@@ -42,7 +43,8 @@ if __name__ == "__main__":
     slurm_cmd = [
         "#!/bin/bash",
         f"#SBATCH --job-name={args.run_name}",
-        "#SBATCH -C h100",
+        f"#SBATCH -A {args.account}",
+        f"#SBATCH -C {args.gpu_type}",
         f"#SBATCH --nodes={args.nodes}",
         f"#SBATCH --gres=gpu:{args.gpus_per_node}",
         f"#SBATCH --ntasks-per-node={args.gpus_per_node}",
@@ -55,7 +57,6 @@ if __name__ == "__main__":
         f"#SBATCH --output={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         f"#SBATCH --error={WORK_DIR}/slurm_jobs_logs/stdout/%x_%j.out",
         "#SBATCH --qos=qos_gpu_h100-dev" if args.dev_qos else "",
-        f"#SBATCH -A {args.account}",
         "#SBATCH --signal=SIGUSR1@60",  # Send signal 30 seconds before time limit
         "module purge",  # cleans out the modules loaded in interactive and inherited by default
         "module load arch/h100",
