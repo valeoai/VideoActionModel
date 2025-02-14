@@ -4,7 +4,7 @@
 
 [![Paper](http://img.shields.io/badge/paper-arxiv.0000.0000-B31B1B.svg)](https://arxiv.org/)
 [![python](https://img.shields.io/badge/-Python_3.8_%7C_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/) 
+[![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
 [![license](https://img.shields.io/badge/License-MIT-green.svg?labelColor=gray)](https://github.com/valeoai/VideoActionModel#license)
 
 </div>
@@ -13,7 +13,7 @@ This is the code for VaViM (video generative model) and VaVAM (video-action mode
 
 We explores the potential of large-scale generative video models to enhance
 autonomous driving capabilities, introducing an open-source autoregressive video
-model (VaViM) and a companion video-action model (VaVAM). 
+model (VaViM) and a companion video-action model (VaVAM).
 VaViM is a simple autoregressive model that predicts frames using
 spatio-temporal token sequences, while VaVAM leverages the learned representations to generate driving trajectories through imitation learning. Together, they offer a complete perception-to-action pipeline.
 
@@ -40,10 +40,10 @@ We also have  [Dockerfile](docker/Dockerfile) used to run the Neuro-NCAP benchma
 
 ## Repository structure
 
-```
+```text
 VideoActionModel
 |––inference    => Neuro-NCAP evaluation
-     \--scripts => Scripts to run the evaluation
+     \--scripts => Scripts to run the Neuro-NCAP evaluation
 |––mup_shapes   => mup parameterization
 |––notebooks
      |--qualitative*.ipynb => Qualitative examples for VaViM an VaVAM
@@ -64,7 +64,7 @@ To obtain and prepare the training and evaluation datasets, please follow the in
 
 VaViM and VaVAM are large-scale models that require at least a few dozen latest-model GPUs to train. Please refer to the technical report for more details.
 
-The instructions and scripts provided below were specifically tailored for the French Jean Zay cluster. Adapting them to other SLURM clusters could require some adjustments, completely different environments (e.g., cloud) may require extensive adaptation. 
+The instructions and scripts provided below were specifically tailored for the French Jean Zay cluster. Adapting them to other SLURM clusters could require some adjustments, completely different environments (e.g., cloud) may require extensive adaptation.
 
 ### Pre-training
 
@@ -122,7 +122,7 @@ name=XXX \  # Name of the experiment
 
 ## Pretrained models
 
-We release several sets of weights of the models, corresponding to different combinations of parameters and data. The most important combinations are below. 
+We release several sets of weights of the models, corresponding to different combinations of parameters and data. The most important combinations are below.
 
 <table style="margin: auto">
   <thead>
@@ -339,23 +339,14 @@ python scripts/depth_anything_a_dataset.py --dataset_name cityscapes
 python scripts/depth_anything_a_dataset.py --dataset_name cityscapes --compute_only_issues
 ```
 
+You can then:
 
-## TODO
-
-- [x] Remove hard coded paths from the different eval scripts.
-- [x] Add the license & model license.
-- [x] Finish the compute acknowledgements.
-- [x] Update links for the different models.
-- [x] Update link for the data_files.tar.gz in [datalib](vam/datalib/README.md).
-- [ ] Details of commands to run all different experiments.
-- [ ] Upload the pretrained models.
-- [ ] Upload the tokenizers (or the script to create JIT files).
-- [ ] Upload data tar file.
-- [ ] Update citation and the Arxiv link at the top.
+- Pass `evaluation_task="depth"` to the `hbird_evaluation` function above.
+- Increase the `memory_size` parameter to `x100` which leads to better results for depth estimation.
 
 ## License
 
-We are releasing the code in this repository under the [MIT License](LICENSE). 
+We are releasing the code in this repository under the [MIT License](LICENSE).
 
 We are releasing the pre-trained models / weights under the **research-only** [VideoActionModel License](LICENSE_MODEL). The weights were trained with datasets that are subjected to their own licenses and restrictions. Please see below.
 
@@ -388,12 +379,26 @@ This code was inspired / contains parts of the following repositories:
 - [open-pi-zero](https://github.com/allenzren/open-pi-zero)
 - [open-hummingbird-eval](https://github.com/vpariza/open-hummingbird-eval)
 
+## Data sources
+
+We train our VaViM and VaVAM models on the following datasets:
+
+- [OpenDV](https://arxiv.org/abs/2403.09630)
+- [nuPlan](https://www.nuscenes.org/nuplan)
+- [nuScenes](https://www.nuscenes.org/)
+
+We additionally use the following datasets for evaluation:
+
+- [Cityscapes](https://arxiv.org/abs/1604.01685)
+- [KITTI](https://www.cvlibs.net/publications/Geiger2013IJRR.pdf)
+
 ## Compute acknowledgements
 
 We thank the following public structures for granting us access to their computing resources:
 
 - This work was performed using HPC resources from GENCI–IDRIS (Grant 2024-GC011015459).
-- This work was performed using HPC resources from GENCI–Adastra (Grant 2024-).
+- This work was performed using HPC resources from GENCI–Adastra (Grant 2023-
+A0141014181).
 - We acknowledge the EuroHPC Joint Undertaking for awarding this project access to the EuroHPC supercomputer LEONARDO, hosted by CINECA (Italy) and the LEONARDO consortium through an EuroHPC AI and Data-Intensive Access call.
 
 ## Credits
