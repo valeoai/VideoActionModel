@@ -20,7 +20,7 @@ export VAM_CKPT_PATH=$1
 # Rendering related stuff
 export RENDERING_FOLDER=$BASE_DIR/'neurad-studio'
 export RENDERING_CHECKPOITNS_PATH='checkpoints'
-export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/'neurad_70.sif'  # Changed compared to original code from neuro-ncap
+export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/'neurad_70.sif'  # Changed compared to original code from NeuroNCAP
 # NCAP related stuff
 export NCAP_FOLDER=$BASE_DIR/'neuro-ncap'
 export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/'ncap.sif'

@@ -36,14 +36,14 @@ pip install -e .
 
 Installation in cluster / cloud environments may require adaptation to their software infrastructure. While we cannot offer guidance for each individual situation, we present, as an example, the [setup we employed in a SLURM environment](scripts/create_worldmodel_env_jeanzay.sh).
 
-We also have  [Dockerfile](docker/Dockerfile) used to run the Neuro-NCAP benchmark, which can provide additional hints on how to setup an environment.
+We also have  [Dockerfile](docker/Dockerfile) used to run the NeuroNCAP benchmark, which can provide additional hints on how to setup an environment.
 
 ## Repository structure
 
 ```text
 VideoActionModel
-|––inference    => Neuro-NCAP evaluation
-     \--scripts => Scripts to run the Neuro-NCAP evaluation
+|––inference    => NeuroNCAP evaluation
+     \--scripts => Scripts to run the NeuroNCAP evaluation
 |––mup_shapes   => mup parameterization
 |––notebooks
      |--qualitative*.ipynb => Qualitative examples for VaViM an VaVAM
@@ -261,9 +261,9 @@ Please refer to to the [scripts](scripts) and [notebooks](notebooks) folders for
 
 ## Evaluation
 
-### Neuro-NCAP
+### NeuroNCAP
 
-Please follow the instructions on the [Neuro-NCAP readme](inference/README.md) for the evaluation on this task.
+Please follow the instructions on the [NeuroNCAP readme](inference/README.md) for the evaluation on this task.
 
 ![teaser](.github/ressources/frontal_0103_run_45.gif)
 
@@ -418,7 +418,7 @@ Tuan-Hung VU -- GPT adaptation from nanoGPT <br>
 Yihong XU -- nuPlan preprocessing and initial dataloader development <br>
 
 **Paper (manuscript preparation, designing paper visualization and figures)** <br>
-Florent BARTOCCIONI, Victor BESNIER, Shashanka VENKATARAMANAN, Eloi ZABLOCKI, Elias RAMZI, Yihong XU, Tuan-Hung VU
+Florent BARTOCCIONI, Elias RAMZI, Victor BESNIER, Shashanka VENKATARAMANAN, Eloi ZABLOCKI, Yihong XU, Tuan-Hung VU
 
 **Public Computing Grant Acquisition (project proposal writing for Adastra, EuroHPC and Jean-Zay grand challenges)** <br>
 Florent BARTOCCIONI, Alexandre BOULCH, Eduardo VALLE, Spyros GIDARIS, Eloi ZABLOCKI, Matthieu CORD, Serkan ODABAS, David HURYCH

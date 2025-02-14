@@ -1,4 +1,4 @@
-"""Small script to create .mp4 from Neuro-NCAP logs."""
+"""Small script to create .mp4 from NeuroNCAP logs."""
 
 import argparse
 import os

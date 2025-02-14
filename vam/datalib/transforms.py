@@ -85,7 +85,7 @@ class NeuroNCAPTransform:
     """
     NeuroNCAP transform for nuScenes.
 
-    Some images send by Neuro-NCAP are exactly the correct shape.
+    Some images send by NeuroNCAP are exactly the correct shape.
     For instance:
     (900, 1599) instead of (900, 1600)
     """
