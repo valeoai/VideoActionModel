@@ -1,18 +1,36 @@
 <div align="center">
 
-# VaViM and VaVAM
+# VaViM and VaVAM: Autonomous Driving through Video Generative Modeling
 
 [![Paper](http://img.shields.io/badge/paper-arxiv.0000.0000-B31B1B.svg)](https://arxiv.org/) <br>
 [![python](https://img.shields.io/badge/-Python_3.8_%7C_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
-[![lightning](https://img.shields.io/badge/-Lightning_2.4.0-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/)
-[![hydra](https://img.shields.io/badge/Config-Hydra_1.3-89b8cd)](https://hydra.cc/)
-<a href="https://github.com/ashleve/lightning-hydra-template"><img alt="Template" src="https://img.shields.io/badge/-Lightning--Hydra--Template-017F2F?style=flat&logo=github&labelColor=gray"></a><br>
-[![black](https://img.shields.io/badge/Code%20Style-Black-black.svg?labelColor=gray)](https://black.readthedocs.io/en/stable/)
-[![isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/) <br>
+[![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/) <br>
 [![license](https://img.shields.io/badge/License-MIT-green.svg?labelColor=gray)](https://github.com/valeoai/VideoActionModel#license)
 
 </div>
+
+This repository contains the code for the VaViM and VaVAM, our video generative model, and video-action model. This repository implements the models detailed in our tech report [tech report](https://arxiv.org/).
+
+```text
+This paper explores the potential of large-scale generative video models to enhance
+autonomous driving capabilities. We introduce an open-source autoregressive video
+model (VaViM) and a companion video-action model (VaVAM) to investigate how
+video pre-training can transfer to real-world driving tasks. The video model
+VaViM is a simple autoregressive model that predicts future frames by modeling
+spatio-temporal token sequences, capturing semantics and dynamics of driving
+scenes. The video-action model VaVAM leverages these learned representations
+to generate driving trajectories through imitation learning, forming a complete
+perception-to-action pipeline. Our study evaluates this approach in both open-
+loop and closed-loop driving scenarios, revealing that video-based pre-training
+holds promise for autonomous driving. Key insights include the semantic and
+geometric richness of learned representations, the benefits of scaling for video
+synthesis, and the complex relationship between model size, data, and safety
+metrics in closed-loop evaluations. Our code and model weights are released at
+github.com/valeoai/VideoActionModel with MIT license for the code and
+a RAIL research-only license for the weights.
+```
+
+This repository is a research project!
 
 ## Install
 
@@ -43,6 +61,8 @@ module load pytorch-gpu/py3/2.4.0
 export PYTHONUSERBASE=$WORK/python_envs/video_action_model
 ```
 
+Note: we also have a [Dockerfile](docker/Dockerfile), that we used to run the Neuro-NCAP benchmark, it can provide additional guidance on how to setup an environment.
+
 ## Repository structure
 
 ```bash
@@ -67,9 +87,11 @@ Follow the instructions in the [datalib](vam/datalib/README.md) folder.
 
 ## Training
 
-The SLURM configurations provided in this repository is specifically tailored for the French Jean-Zay cluster. While it should be compatible with other SLURM clusters, users are responsible for verifying and adapting the scripts, e.g. `jeanzay_slurm_job_submit.py`, to meet their own system requirements.
+The SLURM configurations provided in this repository are specifically tailored for the French Jean-Zay cluster. While it should be compatible with other SLURM clusters, please verify and adapt the scripts, e.g. `jeanzay_slurm_job_submit.py`, to meet your own system requirements.
 
 ### Pre-training
+
+To run the VaViM pre-training, you can use the following command:
 
 ```bash
 python jeanzay_slurm_job_submit.py \
@@ -102,6 +124,8 @@ python jeanzay_slurm_job_submit.py \
 
 ### Action learning
 
+Finally, to train VaVAM with imitation learning, you can use the following command:
+
 ```bash
 python jeanzay_slurm_job_submit.py \
 -n VaVAM_768_action_learning_nuPlan_nuScenes \
@@ -111,7 +135,7 @@ python jeanzay_slurm_job_submit.py \
 -p 'experiment=action_learning data.batch_size=16 model.vam_conf.gpt_config.embedding_dim=768 model.vam_conf.action_config.embedding_dim=192 model.vam_conf.action_config.init_std=0.0086 model.optimizer_conf.lr=0.0194 model.optimizer_conf.weight_decay=1e-07 paths.output_dir=XXXXX ++trainer.max_epochs=1 data.num_workers=6 model.vam_conf.gpt_checkpoint_path="XXXXX" trainer.strategy=ddp +model.grad_logging=100'
 ```
 
-If not on SLURM, you can launch the `vam/train.py` script, and add the following to the command lines:
+If you are not using a SLURM environement, you can launch the `vam/train.py` script, and add the following to your command line:
 
 ```bash
 name=XXX \  # Name of the experiment
@@ -119,36 +143,52 @@ name=XXX \  # Name of the experiment
 ++trainer.num_nodes=XXX \  # Number of nodes
 ```
 
+## Pretrained models
+
+We release all the weights described in our tech report, under a research-only [RAIL Model License](LICENSE_MODEL).
+
+This tables references our main models, in three sizes, you can download both the video generative model (VaViM) and the video-action model (VaVAM) weights.
+
+<table style="margin: auto">
+  <thead>
+    <tr>
+      <th>model</th>
+      <th># of<br />params</th>
+      <th>VaViM</th>
+      <th>VaVAM</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>VaVAM-S</td>
+      <td align="right">185M + 21M</td>
+      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+    </tr>
+    <tr>
+      <td>VaVAM-B</td>
+      <td align="right">318M + 38M</td>
+      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+    </tr>
+    <tr>
+      <td>VaVAM-L</td>
+      <td align="right">1.2B + 150M</td>
+      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a></td>
+      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 3</a></td>
+    </tr>
+  </tbody>
+</table>
+
+The larger models are split into multiple parts due to the size limit of files for a GitHub release. Please see the [MODELS.md](MODELS.md) on how to untar them.
+
+We also release all the weights described in our tech report, detailed here: [MODELS.md](MODELS.md).
+
 ## Inference
 
-### Downloading the pretrained models
-
-The models are stored on the GitHub release.
-
-We use the following script to convert to tar files:
-
-```bash
-python scripts/handle_checkpoints.py \
---mode create \
---checkpoint_dir XXXX \
---outdir vavam_release \
---maxsize 1.9G
-```
-
-If a model is chunked into several tar files:
-
-1. Download them all.
-2. Put them in a single folder (e.g. `vavam_release_chunks`).
-3. Run the following command:
-
-```bash
-python scripts/handle_checkpoints.py \
---mode extract \
---checkpoint_dir vavam_release_chunks \
---outdir vavam_release
-```
-
 ### Video generation
+
+To generate a sequence of frames from a sequence of tokens, you can use the following code:
 
 ```python
 import torch
@@ -157,13 +197,17 @@ from vam.datalib import OpenDVTokensDataset, torch_image_to_plot
 from vam.utils import expand_path, plot_multiple_images
 from vam.video_pretraining import load_pretrained_gpt
 
+vm_checkpoint_path = "XXX"
+detokenizer_path = "XXX"
+opendv_data_root_dir = "XXX"
+
 # Load the pretrained model and the tokenizer decoder.
-gpt = load_pretrained_gpt(expand_path("XXX"))
-image_detokenizer = torch.jit.load(expand_path("XXXX")).to("cuda")
+gpt = load_pretrained_gpt(expand_path(vm_checkpoint_path))
+image_detokenizer = torch.jit.load(expand_path(detokenizer_path)).to("cuda")
 
 # Load the dataset.
 dts = OpenDVTokensDataset(
-    data_root_dir="XXXX",
+    data_root_dir=opendv_data_root_dir,
     video_list=["5pAf38x5z9Q"],  # This is one of the validation video from OpenDV
     sequence_length=8,
     subsampling_factor=5,
@@ -190,6 +234,8 @@ _ = plot_multiple_images(pred_images, 1, 4)
 
 ### Action generation
 
+To generate multiple trajectories, you can use the following code:
+
 ```python
 import pickle
 
@@ -201,14 +247,19 @@ from vam.datalib import EgoTrajectoryDataset
 from vam.evaluation import min_ade
 from vam.utils import expand_path
 
-vam = load_inference_VAM(expand_path("XXX"), "cuda")
+vam_checkpoint_path = "XXX"
+nuscenes_pickle_data_path = "XXX"
+nuscenes_tokens_rootdir = "XXX"
 
-with open("XXX", "rb") as f:
+# Load the pretrained model.
+vam = load_inference_VAM(expand_path(vam_checkpoint_path), "cuda")
+
+with open(nuscenes_pickle_data_path, "rb") as f:
     nuscenes_pickle_data = pickle.load(f)
 
 dataset = EgoTrajectoryDataset(
     pickle_data=nuscenes_pickle_data,
-    tokens_rootdir=expand_path("XXX"),
+    tokens_rootdir=expand_path(nuscenes_tokens_rootdir),
 )
 
 num_sampling = 5
@@ -251,7 +302,7 @@ In order to use Humming Bird, you need to install an additional package:
 pip install scann
 ```
 
-Then you can use the following:
+To run the Humming Bird evaluation, you can use the following code:
 
 ```python
 import torch
@@ -263,9 +314,13 @@ from vam.evaluation.hbird import hbird_evaluation
 from vam.utils import expand_path
 from vam.video_pretraining import load_pretrained_gpt
 
+vm_checkpoint_path = "XXX"
+tokenizer_path = "XXX"
+cityscapes_root = "XXX"
 
-gpt = load_pretrained_gpt(expand_path("xxx"))
-image_tokenizer = torch.jit.load(expand_path("xxx")).to("cuda")
+# Load the pretrained model and the tokenizer.
+gpt = load_pretrained_gpt(expand_path(vm_checkpoint_path))
+image_tokenizer = torch.jit.load(expand_path(tokenizer_path)).to("cuda")
 model_info = {
     "patch_size": 16,
     "d_model": gpt.embedding_dim,
@@ -278,8 +333,8 @@ def forward_fn(x: Tensor, inference: bool) -> Tensor:
     x = rearrange(x[:, -1], "b h w d -> b (h w) d")
     return x
 
-train_dts = CityscapesDataset(root=expand_path("xxx"), split="train")
-val_dts = CityscapesDataset(root=expand_path("xxx"), split="val")
+train_dts = CityscapesDataset(root=expand_path(cityscapes_root), split="train")
+val_dts = CityscapesDataset(root=expand_path(cityscapes_root), split="val")
 
 logs, _ = hbird_evaluation(
     ftr_extr_fn=forward_fn,
@@ -304,28 +359,70 @@ print(logs["mIoU"], logs["IoU"])
 
 ### Humming bird depth
 
-You can generate the pseudo-depth map using the following code:
+To evaluate with Humming bird depth, you first need to generate pseudo-depth maps using the following code:
 
 ```bash
 python scripts/depth_anything_a_dataset.py --dataset_name cityscapes
 python scripts/depth_anything_a_dataset.py --dataset_name cityscapes --compute_only_issues
 ```
 
-This should be a standalone script. It was not exstensively tested.
+This should be a standalone script, however it was not exstensively tested.
 
 ## TODO
 
 - [x] Remove hard coded paths from the different eval scripts.
+- [x] Add the license & model license.
+- [x] Finish the compute acknowledgements.
+- [x] Update links for the different models.
+- [x] Update link for the data_files.tar.gz in [datalib](vam/datalib/README.md).
 - [ ] Details of commands to run all different experiments.
 - [ ] Upload the pretrained models.
 - [ ] Upload the tokenizers (or the script to create JIT files).
-- [ ] Upload pickle files for nuplan / nuscenes.
-- [ ] Upload refined metadata for opendv.
-- [ ] Add the License.
+- [ ] Upload data tar file.
 - [ ] Update citation and the Arxiv link at the top.
-- [ ] Finish the compute acknowledgements.
 
-## Acknowledgements
+## License
+
+This code repository is licensed under [MIT License](LICENSE). The use of pretrained models is subject to the [RAIL Model License](LICENSE_MODEL), which describes the use of our pre-trained weights as academic / research only.
+
+## Citation
+
+If you are using this code, please cite our tech report:
+
+```bibtex
+@misc{}
+```
+
+You can also cite the code repository:
+
+```bibtex
+@software{Bartoccioni_VaVAM,
+    author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Loick Chambon} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Mickael Chen} and {Eloi Zablocki} and {Alexandre Boulch} and {Eduardo Valle} and {Andrei Bursuc} and {Matthieu Cord}},
+    license = {MIT},
+    title = {{VaViM and VaVAM: Autonomous Driving through Video Generative Modeling}},
+    url = {https://github.com/valeoai/VideoActionModel}
+}
+```
+
+## Sources
+
+This code was inspired / contains parts of the following repositories:
+
+- [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)
+- [nanoGPT](https://github.com/karpathy/nanoGPT)
+- [LLamaGen](https://github.com/FoundationVision/LlamaGen)
+- [open-pi-zero](https://github.com/allenzren/open-pi-zero)
+- [open-hummingbird-eval](https://github.com/vpariza/open-hummingbird-eval)
+
+## Compute acknowledgements
+
+We thank the following public structures for granting us access to their computing resources:
+
+- This work was performed using HPC resources from GENCI–IDRIS (Grant 2024-GC011015459).
+- This work was performed using HPC resources from GENCI–Adastra (Grant 2024-).
+- We acknowledge the EuroHPC Joint Undertaking for awarding this project access to the EuroHPC supercomputer LEONARDO, hosted by CINECA (Italy) and the LEONARDO consortium through an EuroHPC [Extreme/Regular/Benchmark/Development/…] Access call.
+
+## Credits
 
 **Project Lead (Research direction, technical roadmap and project coordination)** <br>
 Florent BARTOCCIONI
@@ -352,44 +449,3 @@ Eloi ZABLOCKI, Alexandre BOULCH, Mickael CHEN
 
 **Senior Advisory (research and organization guidance)** <br>
 Eduardo VALLE, Andrei BURSUC, Renaud MARLET, Matthieu CORD
-
-## Compute
-
-We thank the following public strucures for granting us access to their computing resources:
-
-- Adastra
-- Jean-Zay
-- EuroHPC (CINECA)
-
-## Sources
-
-This code was inspired / contains parts of the following repositories:
-
-- [lightning-hydra-template](https://github.com/ashleve/lightning-hydra-template)
-- [nanoGPT](https://github.com/karpathy/nanoGPT)
-- [LLamaGen](https://github.com/FoundationVision/LlamaGen)
-- [open-pi-zero](https://github.com/allenzren/open-pi-zero)
-- [open-hummingbird-eval](https://github.com/vpariza/open-hummingbird-eval)
-
-## License
-
-This code repository is licensed under [MIT License](LICENSE). The use of pretrained models is subject to the [RAIL Model License](LICENSE_MODEL). VideoActionModel is intended for academic / research purposes only.
-
-## Citation
-
-To cite our tech report:
-
-```text
-@misc{}
-```
-
-To cite the code:
-
-```text
-@software{Bartoccioni_VaVAM,
-    author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Loick Chambon} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Mickael Chen} and {Eloi Zablocki} and {Alexandre Boulch} and {Eduardo Valle} and {Andrei Bursuc} and {Matthieu Cord}},
-    license = {MIT},
-    title = {{VaViM and VaVAM: Autonomous Driving through Video Generative Modeling}},
-    url = {https://github.com/valeoai/VideoActionModel}
-}
-```

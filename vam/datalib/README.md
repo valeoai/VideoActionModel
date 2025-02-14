@@ -1,12 +1,20 @@
-# Preparing OpenDV dataset
+# Data
 
-## Download the dataset
+## Preparing OpenDV dataset
 
-First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDriveLab/DriveAGI) repository to download the data. And the metadata as a csv file [Metadata](https://docs.google.com/spreadsheets/d/1bHWWP_VXeEe5UzIG-QgKFBdH7mNlSC4GFSJkEhFnt2I).
+### Download the dataset
 
-## Prepare the dataset
+First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDriveLab/DriveAGI) repository to download the different videos of the OpenDV dataset.
 
-Then you need to create the following folder structure:
+Please find in the [data_files.tar.gz](https://www.github.com/valeoai/VideoActionModel) tar file the `metadata.csv` that we used to pre-process the OpenDV dataset. As detailed in our tech report, some of the videos were discarded.
+
+```bash
+tar -xvzf data_files.tar.gz
+```
+
+### Prepare the dataset
+
+You should have a folder structure similar to the following:
 
 ```bash
 OpenDV_Youtube
@@ -20,17 +28,13 @@ OpenDV_Youtube
 |––––metadata.csv
 ```
 
-## Tokenizer
+### Tokenizer
 
-Then download the llamagen tokenizer jit file:
+Please download the JIT files of the LlamaGen tokenizer on our repository: [llamagen.jit](https://www.github.com/valeoai/VideoActionModel).
 
-```bash
-wget https://XXX/llamagen.jit
-```
+### Preparing the tokens
 
-## Preparing the tokens
-
-### Install HQ
+#### Install HQ
 
 Hyperqueue is a tool to scale the data extraction process on HPC clusters.
 
@@ -49,29 +53,31 @@ export PATH=$PATH:~/bin  # you can add this to your .bashrc
 pip install hyperqueue==0.19.0
 ```
 
-### Configure SLURM file
+Note: we were able to install `hyperqueue` on our SLURM cluster without requiring any privileges.
 
-You should configure the HQ SLURM files in `./hq/*.slurm` to match your cluster configuration.
+#### Configure SLURM file
 
-### Extract frames from OpenDV dataset
+You can configure the HQ SLURM files in `./hq/*.slurm` to match your SLURM cluster configuration.
 
-To extract the frames from the OpenDV dataset, you need to run the following command:
+#### Extract frames from OpenDV dataset
+
+To extract the frames from the OpenDV dataset, run the following command:
 
 ```bash
 bash ./scripts/extract_opendv_frames.sh 20 24
 ```
 
-The first parameter is the number of workers and the second parameter is the number of cpus per worker (this should match the config of your slurm files). The more worker you have the faster the extraction will be.
+The first parameter is the number of workers (each worker will be a SLURM job) and the second parameter is the number of CPUs per worker (this should match the config of your SLURM files). The more worker you have the faster the extraction will be.
 
-### Tokenize the frames
+#### Tokenize the frames
 
-Once you have the frames extracted, you can tokenize the frames using the following command:
+Once the frames have been extracted, you can tokenize the frames using the following command:
 
 ```bash
 bash ./scripts/tokenize_opendv_from_frames.sh 10 24
 ```
 
-It uses the same arguments as the previous command.
+It uses the same arguments as the previous command, although the workers now require access to GPUs.
 
 You may need to change the batch size in the `./scripts/tokenize_opendv_from_frames.sh` script to match your GPU memory. Also, if you use GPUs that are not A100s or H100s you may need to change the dtype (e.g., fp16 instead of bf16).
 
@@ -82,3 +88,25 @@ python ./scripts/flatten_opendv_tokens.py \
 --rootdir $fzh_ALL_CCFRSCRATCH/OpenDV_processed/tokens \
 --outdir $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
 ```
+
+## Preparing nuPlan and nuScenes datasets
+
+Please follow the instructions to download [nuPlan](https://www.nuscenes.org/nuplan) and [nuScenes](https://www.nuscenes.org/) datasets.
+
+After extracting the datasets, you can use the following scripts to prepare the data.
+
+For nuPlan:
+
+```bash
+bash ./scripts/tokenize_nuplan.sh 10 24
+```
+
+For nuScenes:
+
+```bash
+bash ./scripts/tokenize_nuscenes.sh 10 24
+```
+
+The scripts are similar to the ones used for the OpenDV dataset.
+
+Finally, you can use the pickle files from [data_files.tar.gz](https://www.github.com/valeoai/VideoActionModel) to use the datasets from our repository.

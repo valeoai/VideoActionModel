@@ -11,7 +11,7 @@
 #SBATCH --time=05:00:00
 #SBATCH --output=slurm_jobs_logs/stdout/nxt_eval/%A_%a.out
 #SBATCH --error=slurm_jobs_logs/stdout/nxt_eval/%A_%a.out
-#SBATCH --array=6-7
+#SBATCH --array=1-7
 
 mkdir -p slurm_jobs_logs/stdout/nxt_eval
 mkdir -p slurm_jobs_logs/files/nxt_eval

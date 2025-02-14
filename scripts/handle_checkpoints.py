@@ -5,14 +5,8 @@ Example usage:
 
 python scripts/handle_checkpoints.py \
 --mode create \
---checkpoint_dir ~/iveco/scratch_iveco/VAM_JZGC4/checkpoints/Pretrain/width_768_pretrained_139k.pt \
---outdir tmp/release \
---maxsize 2G
-
-python scripts/handle_checkpoints.py \
---mode create \
---checkpoint_dir ~/iveco/scratch_iveco/VAM_JZGC4/checkpoints/Pretrain \
---outdir tmp/release/pretrain \
+--checkpoint_dir ~/iveco/scratch_iveco/VAM_JZGC4/checkpoints \
+--outdir weights/release \
 --maxsize 2G
 
 2. Extract tar files
@@ -27,6 +21,8 @@ import argparse
 import os
 import subprocess
 from glob import glob
+
+from tqdm import tqdm
 
 from vam.utils import expand_path
 
@@ -70,7 +66,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type=str, required=True, choices=["create", "extract"])
     parser.add_argument("--checkpoint_dir", type=expand_path, required=True)
     parser.add_argument("--outdir", type=expand_path, required=True)
-    parser.add_argument("--maxsize", type=str, default="1G")
+    parser.add_argument("--maxsize", type=str, default="2G")
     parser.add_argument("--extension", type=str, default="pt")
     args = parser.parse_args()
 
@@ -84,7 +80,7 @@ if __name__ == "__main__":
             assert os.path.isfile(args.checkpoint_dir), "Invalid checkpoint path"
             checkpoint_paths = [args.checkpoint_dir]
 
-        for checkpoint_path in checkpoint_paths:
+        for checkpoint_path in tqdm(checkpoint_paths, desc="Creating tar files"):
             create_tar_file(checkpoint_path, args.outdir, args.maxsize)
 
     elif args.mode == "extract":

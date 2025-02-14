@@ -1,8 +1,19 @@
 # Neuro-NCAP evaluation
 
+This repository contains the code to evaluate VaVAM with the Neuro-NCAP benchmark. Please check out their [website](https://research.zenseact.com/publications/neuro-ncap/) for additional details.
+
+Note: we have forked the neuro-ncap repository to add new metrics to the evaluation pipeline. These metrics are detailed in our technical report.
+
+The following installation was derived from our usage:
+
+- We can not use docker on our SLURM cluster, so docker images are first build locally.
+- We follow neuro-ncap and use singularity images on the cluster.
+
+You may need to adapt this installation guide to suit your needs.
+
 ## Local install part
 
-Tutorial to install NeuroNCAP. This is the first part that must be done on the local cluster to have access to docker.
+This is the first part that must be done on the local cluster to have access to docker.
 
 First define the base directory where to store all folder:
 

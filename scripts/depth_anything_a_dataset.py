@@ -30,7 +30,7 @@ from torchvision.transforms import Compose
 from tqdm import tqdm
 
 from vam.evaluation.datasets import CityscapesDataset, KITTIDataset
-from vam.utils import expand_path
+from vam.utils import expand_path, read_eval_config
 
 try:
     print("Cloning Depth-Anything repository")
@@ -63,28 +63,10 @@ if not os.path.exists("torchhub"):
 from depth_anything.dpt import DepthAnything  # noqa: E402 # type: ignore
 from depth_anything.util.transform import NormalizeImage, PrepareForNet, Resize  # noqa: E402  # type: ignore
 
-DATASET_CONFIG = {
-    "cityscapes": {
-        "root": "/datasets_local/cityscapes",
-        "target_size": (288, 512),
-    },
-    "kitti": {
-        "root": "/datasets_local/KITTI_STEP",
-        "window_size": 1,
-        "frame_stride": 1,
-        "target_size": (288, 512),
-    },
-    "kitti_video": {
-        "root": "/datasets_local/KITTI_STEP",
-        "window_size": 8,
-        "frame_stride": 5,
-        "target_size": (288, 512),
-    },
-}
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset_name", type=str, default="cityscapes")
+parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))
 parser.add_argument("--outdir", type=expand_path, default="")
 parser.add_argument("--encoder", type=str, default="vitl", choices=["vits", "vitb", "vitl"])
 parser.add_argument("--grayscale", dest="grayscale", action="store_true", help="do not apply colorful palette")
@@ -94,6 +76,26 @@ parser.add_argument("--num_save_workers", type=int, default=8)
 parser.add_argument("--max_queue_size", type=int, default=1000)
 parser.add_argument("--compute_only_issues", action="store_true", help="only compute issues")
 args = parser.parse_args()
+
+
+DATASET_CONFIG = {
+    "cityscapes": {
+        "root": args.config["cityscapes"]["root"],
+        "target_size": (288, 512),
+    },
+    "kitti": {
+        "root": args.config["kitti"]["root"],
+        "window_size": 1,
+        "frame_stride": 1,
+        "target_size": (288, 512),
+    },
+    "kitti_video": {
+        "root": args.config["kitti_video"]["root"],
+        "window_size": 8,
+        "frame_stride": 5,
+        "target_size": (288, 512),
+    },
+}
 
 rank = 0
 args.outdir = os.path.join(args.outdir, args.dataset_name + "_depth")
