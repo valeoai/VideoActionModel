@@ -2,96 +2,73 @@
 
 # VaViM and VaVAM: Autonomous Driving through Video Generative Modeling
 
-[![Paper](http://img.shields.io/badge/paper-arxiv.0000.0000-B31B1B.svg)](https://arxiv.org/) <br>
+[![Paper](http://img.shields.io/badge/paper-arxiv.0000.0000-B31B1B.svg)](https://arxiv.org/)
 [![python](https://img.shields.io/badge/-Python_3.8_%7C_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/) <br>
+[![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/) 
 [![license](https://img.shields.io/badge/License-MIT-green.svg?labelColor=gray)](https://github.com/valeoai/VideoActionModel#license)
 
 </div>
 
-This repository contains the code for the VaViM and VaVAM, our video generative model, and video-action model. This repository implements the models detailed in our tech report [tech report](https://arxiv.org/).
+This is the code for VaViM (video generative model) and VaVAM (video-action model) as detailed in [our tech report](https://arxiv.org/).
 
-```text
-This paper explores the potential of large-scale generative video models to enhance
-autonomous driving capabilities. We introduce an open-source autoregressive video
-model (VaViM) and a companion video-action model (VaVAM) to investigate how
-video pre-training can transfer to real-world driving tasks. The video model
-VaViM is a simple autoregressive model that predicts future frames by modeling
-spatio-temporal token sequences, capturing semantics and dynamics of driving
-scenes. The video-action model VaVAM leverages these learned representations
-to generate driving trajectories through imitation learning, forming a complete
-perception-to-action pipeline. Our study evaluates this approach in both open-
-loop and closed-loop driving scenarios, revealing that video-based pre-training
-holds promise for autonomous driving. Key insights include the semantic and
-geometric richness of learned representations, the benefits of scaling for video
-synthesis, and the complex relationship between model size, data, and safety
-metrics in closed-loop evaluations. Our code and model weights are released at
-github.com/valeoai/VideoActionModel with MIT license for the code and
-a RAIL research-only license for the weights.
-```
+We explores the potential of large-scale generative video models to enhance
+autonomous driving capabilities, introducing an open-source autoregressive video
+model (VaViM) and a companion video-action model (VaVAM). 
+VaViM is a simple autoregressive model that predicts frames using
+spatio-temporal token sequences, while VaVAM leverages the learned representations to generate driving trajectories through imitation learning. Together, they offer a complete perception-to-action pipeline.
 
-This repository is a research project!
+This is a research project released to the scientific community to foster advances in end-to-end autonomous driving. **It is not intended for deployment nor commercial use.** Please refer to the Licenses below.
 
-## Install
+## Installation
 
-To use VideoActionModel, install the following dependencies:
+Before using VaViM or VaVAM you must install its dependencies. The easiest way to do it is to install this repo as a package with `pip`:
 
 ```bash
 git clone https://www.github.com/valeoai/VideoActionModel
 cd VideoActionModel
+# Installs all runtime dependencies, except for PyTorch:
 pip install -e .
-# We tested the repo with torch == 2.4.0; to install torch at the same time:
+# Installs all runtime dependencies, including PyTorch 2.4.0 (recommended version):
 # pip install -e ".[torch]"
-# to code:
+# Installs all runtime and development dependencies:
 # pip install -e ".[dev]"
 ```
 
-Alternatively, on our SLURM cluster we follow the following steps to setup our environment:
+Installation in cluster / cloud environments may require adaptation to their software infrastructure. While we cannot offer guidance for each individual situation, we present, as an example, the [setup we employed in a SLURM environment](scripts/create_worldmodel_env_jeanzay.sh).
 
-```bash
-bash scripts/create_vam_env_jeanzay.sh
-```
-
-We can then use the repository with the following command:
-
-```bash
-module purge
-module load arch/h100
-module load pytorch-gpu/py3/2.4.0
-export PYTHONUSERBASE=$WORK/python_envs/video_action_model
-```
-
-Note: we also have a [Dockerfile](docker/Dockerfile), that we used to run the Neuro-NCAP benchmark, it can provide additional guidance on how to setup an environment.
+We also have  [Dockerfile](docker/Dockerfile) used to run the Neuro-NCAP benchmark, which can provide additional hints on how to setup an environment.
 
 ## Repository structure
 
-```bash
+```
 VideoActionModel
-|––––inference  # Things related to Neuro-NCAP evaluation
-|--------scripts  # Scripts to run the evaluation
-|––––mup_shapes  # mup parametrization
-|––––notebooks
-|--------qualitative*.ipynb  # Qualitative examples for Vavim an Vavam
-|--------scaling_laws.ipynb  # notebook to compute the scaling laws of vavim
-|––––scripts  # Several useful scripts: fusing deepspeed checkpoints, evaluations, etc...
-|––––vam  # Main source code for our project
-|--------action_expert  # Implementation of the action expert
-|--------datalib  # Data pre-processing and loading
-|--------evaluation  # Evaluation utils
-|--------video_pretraining  # Implementation of the GPT-style model
+|––inference    => Neuro-NCAP evaluation
+     \--scripts => Scripts to run the evaluation
+|––mup_shapes   => mup parameterization
+|––notebooks
+     |--qualitative*.ipynb => Qualitative examples for VaViM an VaVAM
+     \--scaling_laws.ipynb => Scaling laws of VaViM
+|––scripts  => Utilities: fusing deepspeed checkpoints, evaluations...
+\––vam      => Main source code
+     |--action_expert     => Action expert
+     |--datalib           => Data pre-processing and loading
+     |--evaluation        => Evaluation utils
+     \--video_pretraining => GPT-style model
 ```
 
 ## Data
 
-Follow the instructions in the [datalib](vam/datalib/README.md) folder.
+To obtain and prepare the training and evaluation datasets, please follow the instructions in the [datalib folder](vam/datalib/README.md).
 
 ## Training
 
-The SLURM configurations provided in this repository are specifically tailored for the French Jean-Zay cluster. While it should be compatible with other SLURM clusters, please verify and adapt the scripts, e.g. `jeanzay_slurm_job_submit.py`, to meet your own system requirements.
+VaViM and VaVAM are large-scale models that require at least a few dozen latest-model GPUs to train. Please refer to the technical report for more details.
+
+The instructions and scripts provided below were specifically tailored for the French Jean Zay cluster. Adapting them to other SLURM clusters could require some adjustments, completely different environments (e.g., cloud) may require extensive adaptation. 
 
 ### Pre-training
 
-To run the VaViM pre-training, you can use the following command:
+To pre-train VaViM, you can use:
 
 ```bash
 python jeanzay_slurm_job_submit.py \
@@ -103,7 +80,7 @@ python jeanzay_slurm_job_submit.py \
 
 ### Fine-tuning
 
-You first need to launch the following command to generate the fine-tuning data:
+First, generate the fine-tuning data:
 
 ```bash
 python scripts/regain_index_from_train.py \
@@ -112,7 +89,7 @@ python scripts/regain_index_from_train.py \
 --name checkpoint_pretraining
 ```
 
-Then you can launch the fine-tuning job with the following command:
+Then, launch the fine-tuning job:
 
 ```bash
 python jeanzay_slurm_job_submit.py \
@@ -124,7 +101,7 @@ python jeanzay_slurm_job_submit.py \
 
 ### Action learning
 
-Finally, to train VaVAM with imitation learning, you can use the following command:
+Finally, to train VaVAM with imitation learning:
 
 ```bash
 python jeanzay_slurm_job_submit.py \
@@ -135,7 +112,7 @@ python jeanzay_slurm_job_submit.py \
 -p 'experiment=action_learning data.batch_size=16 model.vam_conf.gpt_config.embedding_dim=768 model.vam_conf.action_config.embedding_dim=192 model.vam_conf.action_config.init_std=0.0086 model.optimizer_conf.lr=0.0194 model.optimizer_conf.weight_decay=1e-07 paths.output_dir=XXXXX ++trainer.max_epochs=1 data.num_workers=6 model.vam_conf.gpt_checkpoint_path="XXXXX" trainer.strategy=ddp +model.grad_logging=100'
 ```
 
-If you are not using a SLURM environement, you can launch the `vam/train.py` script, and add the following to your command line:
+Outside an SLURM environement, you can launch the `vam/train.py` script, and add the following to your command line:
 
 ```bash
 name=XXX \  # Name of the experiment
@@ -145,9 +122,7 @@ name=XXX \  # Name of the experiment
 
 ## Pretrained models
 
-We release all the weights described in our tech report, under a research-only [RAIL Model License](LICENSE_MODEL).
-
-This tables references our main models, in three sizes, you can download both the video generative model (VaViM) and the video-action model (VaVAM) weights.
+We release several sets of weights of the models, corresponding to different combinations of parameters and data. The most important combinations are below. 
 
 <table style="margin: auto">
   <thead>
@@ -180,15 +155,15 @@ This tables references our main models, in three sizes, you can download both th
   </tbody>
 </table>
 
-The larger models are split into multiple parts due to the size limit of files for a GitHub release. Please see the [MODELS.md](MODELS.md) on how to untar them.
+The larger models are split into multiple parts due to limitations on large binary attachments of GitHub. Please refer to [MODELS.md](MODELS.md) for the instructions on how to untar them, as well as the complete list with all the weight sets described in our tech report.
 
-We also release all the weights described in our tech report, detailed here: [MODELS.md](MODELS.md).
+**We are releasing the model / weights to the scientific community to foster research advances. Remark that the model / weights license is more restrictive than the code license. Please see below.**
 
 ## Inference
 
 ### Video generation
 
-To generate a sequence of frames from a sequence of tokens, you can use the following code:
+To generate a sequence of frames from a sequence of tokens, use the following code as reference:
 
 ```python
 import torch
@@ -197,9 +172,9 @@ from vam.datalib import OpenDVTokensDataset, torch_image_to_plot
 from vam.utils import expand_path, plot_multiple_images
 from vam.video_pretraining import load_pretrained_gpt
 
-vm_checkpoint_path = "XXX"
-detokenizer_path = "XXX"
-opendv_data_root_dir = "XXX"
+vm_checkpoint_path = "/path/to/trained/vavim"
+detokenizer_path = "/path/to/trained/detokenizer"
+opendv_data_root_dir = "/path/to/preprocessed/opendv"
 
 # Load the pretrained model and the tokenizer decoder.
 gpt = load_pretrained_gpt(expand_path(vm_checkpoint_path))
@@ -234,7 +209,7 @@ _ = plot_multiple_images(pred_images, 1, 4)
 
 ### Action generation
 
-To generate multiple trajectories, you can use the following code:
+To generate multiple trajectories, use the following code as reference:
 
 ```python
 import pickle
@@ -247,9 +222,9 @@ from vam.datalib import EgoTrajectoryDataset
 from vam.evaluation import min_ade
 from vam.utils import expand_path
 
-vam_checkpoint_path = "XXX"
-nuscenes_pickle_data_path = "XXX"
-nuscenes_tokens_rootdir = "XXX"
+vam_checkpoint_path = "/path/to/trained/vavam"
+nuscenes_pickle_data_path = "/path/to/nuscenes/pickle"
+nuscenes_tokens_rootdir = "/path/to/nuscenes/tokens_dir"
 
 # Load the pretrained model.
 vam = load_inference_VAM(expand_path(vam_checkpoint_path), "cuda")
@@ -282,27 +257,25 @@ print(loss)
 
 ### Examples
 
-There are several example scripts, [detailed here](scripts).
-
-Find notebook examples in the [notebooks](notebooks) folder.
+Please refer to to the [scripts](scripts) and [notebooks](notebooks) folders for several exaples of VaViM and VaVAM in action.
 
 ## Evaluation
 
 ### Neuro-NCAP
 
-Please follow instruction on: [Neuro-NCAP](inference/README.md).
+Please follow the instructions on the [Neuro-NCAP readme](inference/README.md) for the evaluation on this task.
 
 ![teaser](.github/ressources/frontal_0103_run_45.gif)
 
-### Humming bird
+### Humming Bird
 
-In order to use Humming Bird, you need to install an additional package:
+In order to use Humming Bird, you need an additional package:
 
 ```bash
 pip install scann
 ```
 
-To run the Humming Bird evaluation, you can use the following code:
+To run the Humming Bird evaluation, you can use the following code as reference:
 
 ```python
 import torch
@@ -314,9 +287,9 @@ from vam.evaluation.hbird import hbird_evaluation
 from vam.utils import expand_path
 from vam.video_pretraining import load_pretrained_gpt
 
-vm_checkpoint_path = "XXX"
-tokenizer_path = "XXX"
-cityscapes_root = "XXX"
+vm_checkpoint_path = "/path/to/trained/vavim"
+tokenizer_path = "/path/to/trained/tokenizer"
+cityscapes_root = "/path/to/cityscapes/root"
 
 # Load the pretrained model and the tokenizer.
 gpt = load_pretrained_gpt(expand_path(vm_checkpoint_path))
@@ -357,16 +330,15 @@ logs, _ = hbird_evaluation(
 print(logs["mIoU"], logs["IoU"])
 ```
 
-### Humming bird depth
+### Humming Bird depth
 
-To evaluate with Humming bird depth, you first need to generate pseudo-depth maps using the following code:
+To evaluate with Humming Bird depth, first generate the pseudo-depth maps:
 
 ```bash
 python scripts/depth_anything_a_dataset.py --dataset_name cityscapes
 python scripts/depth_anything_a_dataset.py --dataset_name cityscapes --compute_only_issues
 ```
 
-This should be a standalone script, however it was not exstensively tested.
 
 ## TODO
 
@@ -383,11 +355,13 @@ This should be a standalone script, however it was not exstensively tested.
 
 ## License
 
-This code repository is licensed under [MIT License](LICENSE). The use of pretrained models is subject to the [RAIL Model License](LICENSE_MODEL), which describes the use of our pre-trained weights as academic / research only.
+We are releasing the code in this repository under the [MIT License](LICENSE). 
+
+We are releasing the pre-trained models / weights under the **research-only** [VideoActionModel License](LICENSE_MODEL). The weights were trained with datasets that are subjected to their own licenses and restrictions. Please see below.
 
 ## Citation
 
-If you are using this code, please cite our tech report:
+If you use this code, please cite our technical report:
 
 ```bibtex
 @misc{}
@@ -397,7 +371,7 @@ You can also cite the code repository:
 
 ```bibtex
 @software{Bartoccioni_VaVAM,
-    author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Loick Chambon} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Mickael Chen} and {Eloi Zablocki} and {Alexandre Boulch} and {Eduardo Valle} and {Andrei Bursuc} and {Matthieu Cord}},
+    author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Loick Chambon} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Mickael Chen} and {Eloi Zablocki} and {Alexandre Boulch} and {Andrei Bursuc} and {Eduardo Valle} and {Matthieu Cord}},
     license = {MIT},
     title = {{VaViM and VaVAM: Autonomous Driving through Video Generative Modeling}},
     url = {https://github.com/valeoai/VideoActionModel}
@@ -420,7 +394,7 @@ We thank the following public structures for granting us access to their computi
 
 - This work was performed using HPC resources from GENCI–IDRIS (Grant 2024-GC011015459).
 - This work was performed using HPC resources from GENCI–Adastra (Grant 2024-).
-- We acknowledge the EuroHPC Joint Undertaking for awarding this project access to the EuroHPC supercomputer LEONARDO, hosted by CINECA (Italy) and the LEONARDO consortium through an EuroHPC [Extreme/Regular/Benchmark/Development/…] Access call.
+- We acknowledge the EuroHPC Joint Undertaking for awarding this project access to the EuroHPC supercomputer LEONARDO, hosted by CINECA (Italy) and the LEONARDO consortium through an EuroHPC AI and Data-Intensive Access call.
 
 ## Credits
 
