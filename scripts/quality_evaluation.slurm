@@ -56,8 +56,6 @@ tokenizer_only[3]=True
 srun python scripts/quality_evaluation.py \
 --outfile ${outfile[$SLURM_ARRAY_TASK_ID]} \
 --gpt_checkpoint_path ${ckpt[$SLURM_ARRAY_TASK_ID]} \
---tokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
---detokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit \
 --dtype bf16 \
 --tokenizer_only ${tokenizer_only[$SLURM_ARRAY_TASK_ID]} \
 --per_proc_batch_size 32

@@ -152,8 +152,6 @@ if __name__ == "__main__":
     python scripts/quality_evaluation.py \
         --outfile ./tmp/reconstruction_quality_eval.json \
         --gpt_checkpoint_path xxx \
-        --tokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
-        --detokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit \
         --dtype bf16 \
         --stop_after_x 64 \
         --per_proc_batch_size 32
@@ -165,8 +163,6 @@ if __name__ == "__main__":
     python scripts/quality_evaluation.py \
         --outfile ./tmp/reconstruction_quality_eval_llamagen.json \
         --gpt_checkpoint_path xxx \
-        --tokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
-        --detokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit \
         --dtype bf16 \
         --tokenizer_only True \
         --per_proc_batch_size 32
@@ -176,8 +172,6 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))
 
     parser.add_argument("--tokenizer_only", type=boolean_flag, default=False)
-    parser.add_argument("--tokenizer_jit_path", type=expand_path, required=True)
-    parser.add_argument("--detokenizer_jit_path", type=expand_path, required=True)
     parser.add_argument("--gpt_checkpoint_path", type=expand_path, default=None)
 
     parser.add_argument("--context_length", type=int, default=4)
@@ -229,8 +223,8 @@ if __name__ == "__main__":
         torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
-    tokenizer = torch.jit.load(args.tokenizer_jit_path).to("cuda")
-    detokenizer = torch.jit.load(args.detokenizer_jit_path).to("cuda")
+    tokenizer = torch.jit.load(expand_path(args.config["tokenizer_jit_path"])).to("cuda")
+    detokenizer = torch.jit.load(expand_path(args.config["detokenizer_jit_path"])).to("cuda")
     gpt = (
         None
         if args.tokenizer_only

@@ -11,7 +11,6 @@ srun -A ycy@h100 -C h100 --pty \
 
 python scripts/hbird_eval.py \
 --gpt_checkpoint_path xxx \
---tokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
 --outfile ./tmp/test_fn.json \
 --num_workers 16 \
 --batch_size 16
@@ -167,7 +166,6 @@ if __name__ == "__main__":
     parser.add_argument("--gpt_checkpoint_path", type=expand_path, required=True)
     parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))
     parser.add_argument("--layer_idx", type=int, default=12)
-    parser.add_argument("--tokenizer_jit_path", type=expand_path, required=True)
     parser.add_argument("--outfile", type=expand_path, required=True)
     parser.add_argument("--memory_size", type=str, default="x10")
     parser.add_argument("--task", type=str, default="segmentation", choices=["segmentation", "depth"])
@@ -201,7 +199,7 @@ if __name__ == "__main__":
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
     gpt = load_pretrained_gpt(args.gpt_checkpoint_path, tempdir=os.environ.get("JOBSCRATCH", "/tmp"))
-    tokenizer = torch.jit.load(args.tokenizer_jit_path).to("cuda")
+    tokenizer = torch.jit.load(expand_path(args.config["tokenizer_jit_path"])).to("cuda")
     metrics = evaluate_datasets(
         gpt,
         args.layer_idx,
