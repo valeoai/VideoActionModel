@@ -21,6 +21,7 @@ import argparse
 import os
 import subprocess
 from glob import glob
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
 
@@ -68,6 +69,7 @@ if __name__ == "__main__":
     parser.add_argument("--outdir", type=expand_path, required=True)
     parser.add_argument("--maxsize", type=str, default="2G")
     parser.add_argument("--extension", type=str, default="pt")
+    parser.add_argument("--num_threads", type=int, default=1)
     args = parser.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -80,8 +82,20 @@ if __name__ == "__main__":
             assert os.path.isfile(args.checkpoint_dir), "Invalid checkpoint path"
             checkpoint_paths = [args.checkpoint_dir]
 
-        for checkpoint_path in tqdm(checkpoint_paths, desc="Creating tar files"):
-            create_tar_file(checkpoint_path, args.outdir, args.maxsize)
+        if args.num_threads <= 1:
+            for checkpoint_path in tqdm(checkpoint_paths, desc="Creating tar files"):
+                create_tar_file(checkpoint_path, args.outdir, args.maxsize)
+        else:
+            with ThreadPoolExecutor(max_workers=args.num_threads) as plot_executor:
+                all_futures = []
+                for checkpoint_path in checkpoint_paths:
+                    future = plot_executor.submit(
+                        create_tar_file, checkpoint_path, args.outdir, args.maxsize
+                    )
+                    all_futures.append(future)
+
+                for future in tqdm(as_completed(all_futures), total=len(all_futures), desc="Creating tar files"):
+                    future.result()
 
     elif args.mode == "extract":
         extract_tar_file(args.checkpoint_dir, args.outdir)
