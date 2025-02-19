@@ -11,7 +11,7 @@
 #SBATCH --time=10:10:00
 #SBATCH --output=slurm_jobs_logs/stdout/ego_eval/%A_%a.out
 #SBATCH --error=slurm_jobs_logs/stdout/ego_eval/%A_%a.out
-#SBATCH --array=3,6,7
+#SBATCH --array=0-8
 
 mkdir -p slurm_jobs_logs/stdout/ego_eval
 mkdir -p slurm_jobs_logs/files/ego_eval
@@ -20,7 +20,7 @@ mkdir -p slurm_jobs_logs/files/ego_eval
 module purge
 module load arch/h100
 module load pytorch-gpu/py3/2.4.0
-export PYTHONUSERBASE=$WORK/python_envs/world_model
+export PYTHONUSERBASE=$WORK/python_envs/video_action_model
 export MPICH_GPU_SUPPORT_ENABLED=1
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1

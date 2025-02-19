@@ -20,7 +20,7 @@ mkdir -p slurm_jobs_logs/files/hbird_d_eval
 module purge
 module load arch/h100
 module load pytorch-gpu/py3/2.4.0
-export PYTHONUSERBASE=$WORK/python_envs/world_model
+export PYTHONUSERBASE=$WORK/python_envs/video_action_model
 export MPICH_GPU_SUPPORT_ENABLED=1
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
@@ -58,7 +58,6 @@ outfile[5]="./slurm_jobs_logs/files/hbird_d_eval/test_depth_layer12_finetune_204
 
 srun python scripts/hbird_evaluation.py \
 --gpt_checkpoint_path ${ckpt[$SLURM_ARRAY_TASK_ID]} \
---tokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
 --outfile ${outfile[$SLURM_ARRAY_TASK_ID]} \
 --num_workers 16 \
 --batch_size 16 \

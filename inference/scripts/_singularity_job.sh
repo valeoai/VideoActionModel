@@ -74,7 +74,7 @@ if [ $SHOULD_START_MODEL == true ]; then
     &
 fi
 
-echo "Running neuro-ncap in foreground with ${NCAP_CONTAINER}..."
+echo "Running NeuroNCAP in foreground with ${NCAP_CONTAINER}..."
 singularity exec --nv \
   --bind $NCAP_FOLDER:/neuro_ncap \
   --bind $NUSCENES_PATH:/neuro_ncap/data/nuscenes \

@@ -1,7 +1,7 @@
 module purge
 module load arch/h100
 module load pytorch-gpu/py3/2.4.0
-export PYTHONUSERBASE=$WORK/python_envs/world_model
+export PYTHONUSERBASE=$WORK/python_envs/video_action_model
 export TRITON_CACHE_DIR=$SCRATCH/.triton
 
 SCRIPT_DIR=$(dirname "$(realpath "$0")")

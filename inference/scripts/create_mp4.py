@@ -1,4 +1,4 @@
-"""Small script to create .mp4 from Neuro-NCAP logs."""
+"""Small script to create .mp4 from NeuroNCAP logs."""
 
 import argparse
 import os
@@ -28,7 +28,7 @@ def get_all_folders(rootdir: str) -> List[str]:
 
 
 def create_mp4_from_folder(folder: str, task: str, outdir: str) -> str:
-    """Create a gif from a folder with image files."""
+    """Create a mp4 from a folder with image files."""
     name = f"{folder.split('/')[-2]}_{folder.split('/')[-1]}.mp4".replace("-", "_")
     name = os.path.join(outdir, name)
     if os.path.exists(name):

@@ -1,7 +1,7 @@
 module purge
 module load arch/h100
 module load pytorch-gpu/py3/2.4.0
-export PYTHONUSERBASE=$WORK/python_envs/world_model
+export PYTHONUSERBASE=$WORK/python_envs/video_action_model
 
 ckpt[0]=$ycy_ALL_CCFRSCRATCH/output_data/vaiorbis/Vaiorbis_pretrained0000038823_DDP_Nodes6_BSperGPU16_totalBS384_attdim768_actdim192_0121_0053_1737417196/checkpoints/end_of_epoch_epoch=000_step=0000007251.ckpt
 log_dir[0]=logs/action_expert_38k_attndim768_actdim192

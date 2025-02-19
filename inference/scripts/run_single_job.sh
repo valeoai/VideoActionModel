@@ -51,7 +51,7 @@ singularity exec --nv \
 	&
 
 singularity exec --nv \
-    --bind $WORK/NextTokenPredictor:/model \
+    --bind $WORK/VideoActionModel:/model \
     --bind $IMAGE_TOKENIZER_PATH:/model/weights/image_tokenizer.jit \
     --bind $VAM_CKPT_PATH:/model/weights/vam.pt \
     --pwd /model \

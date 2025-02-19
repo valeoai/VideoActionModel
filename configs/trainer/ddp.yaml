@@ -7,3 +7,4 @@ accelerator: gpu
 devices: 4
 num_nodes: 1
 sync_batchnorm: True
+precision: "bf16-mixed"

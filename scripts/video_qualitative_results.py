@@ -3,12 +3,13 @@ import os
 import pickle
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from einops import rearrange
+from PIL import Image
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -16,10 +17,11 @@ from tqdm import tqdm
 
 from vam.datalib import CropAndResizeTransform, EgoTrajectoryDataset, torch_image_to_plot
 from vam.evaluation.datasets import KITTIDataset
-from vam.utils import boolean_flag, expand_path, torch_dtype
+from vam.utils import boolean_flag, concatenate_mp4, create_mp4_from_folder, expand_path, read_eval_config, torch_dtype
 from vam.video_pretraining import MupGPT2, load_pretrained_gpt
 
-Image = Tensor | np.ndarray | List[Tensor] | List[np.ndarray]
+ImageType = Tensor | np.ndarray | List[Tensor] | List[np.ndarray]
+Config = Dict[str, Any]
 
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -37,26 +39,23 @@ plt.rcParams.update(
 )
 
 
-def get_nuscenes(context_length: int) -> EgoTrajectoryDataset:
-    # with open(expand_path("$ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl"), "rb") as f:
-    with open(expand_path("pickles/nuscenes_val_data_cleaned.pkl"), "rb") as f:
+def get_nuscenes(config: Config, context_length: int) -> EgoTrajectoryDataset:
+    with open(expand_path(config["nuscenes"]["pickle"]), "rb") as f:
         pickle_data = pickle.load(f)
 
     transform = CropAndResizeTransform(resize_factor=3.125, trop_crop_size=0)
 
     return EgoTrajectoryDataset(
         pickle_data=pickle_data,
-        # images_rootdir=expand_path("$ycy_ALL_CCFRSCRATCH/nuscenes_v2"),
-        images_rootdir=expand_path("/datasets_local/nuscenes"),
+        images_rootdir=expand_path(config["nuscenes"]["images_rootdir"]),
         sequence_length=context_length,
         images_transform=transform,
     )
 
 
-def get_kitti(context_length: int) -> KITTIDataset:
+def get_kitti(config: Config, context_length: int) -> KITTIDataset:
     return KITTIDataset(
-        root="/datasets_local/KITTI_STEP",
-        # root="$ycy_ALL_CCFRSCRATCH/KITTI_STEP",
+        root=config["kitti"]["root"],
         split="val",
         window_size=context_length,
         frame_stride=5,
@@ -64,8 +63,17 @@ def get_kitti(context_length: int) -> KITTIDataset:
     )
 
 
+def save_images(images: ImageType, savedir: str) -> None:
+    for idx, img in enumerate(images):
+        if isinstance(img, Tensor):
+            img = img.cpu().numpy()
+        img = Image.fromarray(img)
+        img.save(os.path.join(savedir, f"{idx:04d}.png"))
+        img.close()
+
+
 def plot_images(
-    images: Image,
+    images: ImageType,
     save_path: Optional[str] = None,
     num_rows: Optional[int] = None,
     num_cols: Optional[int] = None,
@@ -84,10 +92,8 @@ def plot_images(
             if idx >= (len(images[row]) if isinstance(images, list) else len(images)):
                 break
             if isinstance(images, list):
-                # plt.imshow(images[row][idx])
                 axes[row][col].imshow(images[row][idx])
             else:
-                # plt.imshow(images[idx])
                 axes[row][col].imshow(images[idx])
             axes[row][col].axis("off")
             idx += 1
@@ -100,7 +106,22 @@ def plot_images(
 
     if save_path is not None:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        # fig.close()
+
+
+def handle_output(context_frames: np.ndarray, generated_frames: np.ndarray, window_idx: int, outdir: str) -> None:
+    os.makedirs(window_outdir := os.path.join(outdir, str(window_idx)), exist_ok=True)
+    plot_images([context_frames, generated_frames], save_path=os.path.join(window_outdir, "plot.png"))
+    os.makedirs(context_outdir := os.path.join(window_outdir, "context"), exist_ok=True)
+    os.makedirs(generated_outdir := os.path.join(window_outdir, "generated"), exist_ok=True)
+    save_images(context_frames, context_outdir)
+    save_images(generated_frames, generated_outdir)
+    create_mp4_from_folder(context_outdir, context_mp4 := os.path.join(window_outdir, "context.mp4"), overlay="Real")
+    create_mp4_from_folder(
+        generated_outdir, generated_mp4 := os.path.join(window_outdir, "generated.mp4"), overlay="Generated"
+    )
+    concatenate_mp4([context_mp4, generated_mp4], os.path.join(window_outdir, "concatenated.mp4"))
+    print(f"Saved results for window {window_idx} to {window_outdir}")
+    return
 
 
 @torch.no_grad()
@@ -154,7 +175,12 @@ def get_future_frames(
             plot_futures = []
             for idx, window_idx in enumerate(batch["window_idx"].tolist()):
                 future = plot_executor.submit(
-                    plot_images, [_images[idx], generated_images[idx]], save_path=os.path.join(outdir, f"{window_idx}.png")
+                    # plot_images, [_images[idx], generated_images[idx]], save_path=os.path.join(outdir, f"{window_idx}.png")
+                    handle_output,
+                    _images[idx],
+                    generated_images[idx],
+                    window_idx,
+                    outdir,
                 )
                 plot_futures.append(future)
 
@@ -167,21 +193,31 @@ if __name__ == "__main__":
     Example usage:
 
     python scripts/video_qualitative_results.py \
-        --outdir ./tmp/generation_gpt \
-        --gpt_checkpoint_path weights/fused_ckpt.pt \
-        --tokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
-        --detokenizer_jit_path ~/iveco/scratch_iveco/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit \
+        --config configs/paths/eval_paths_local.yaml \
+        --outdir ~/iveco/scratch_iveco/VAM_JZGC4/video_qual_results/vavim_l \
+        --gpt_checkpoint_path ~/iveco/scratch_iveco/VAM_JZGC4/checkpoints/Finetune/width_2048_pretrained_139k_total_155k.pt \
         --dtype bf16 \
-        --generate_x 10 \
+        --generate_x 30 \
+        --per_proc_batch_size 8
+
+    srun -A cya@h100 -C h100 --pty \
+    --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --gres=gpu:1 --hint=nomultithread \
+    --qos=qos_gpu_h100-dev --time=00:45:00 \
+    python scripts/video_qualitative_results.py \
+        --outdir $cya_ALL_CCFRSCRATCH/qual_results/vavim_l \
+        --gpt_checkpoint_path xx \
+        --dtype bf16 \
+        --generate_x 30 \
+        --context_length 3 \
+        --prediction_length 5 \
         --per_proc_batch_size 8
     """
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--outdir", type=expand_path, required=True)
+    parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))
 
     parser.add_argument("--tokenizer_only", type=boolean_flag, default=False)
-    parser.add_argument("--tokenizer_jit_path", type=expand_path, required=True)
-    parser.add_argument("--detokenizer_jit_path", type=expand_path, required=True)
     parser.add_argument("--gpt_checkpoint_path", type=expand_path, default=None)
 
     parser.add_argument("--context_length", type=int, default=4)
@@ -196,8 +232,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     all_datasets = {
-        "nuscenes": get_nuscenes(context_length=args.context_length),
-        # "kitti": get_kitti(context_length=args.context_length + args.prediction_length),
+        "nuscenes": get_nuscenes(args.config, context_length=args.context_length),
+        # "kitti": get_kitti(args.config, context_length=args.context_length + args.prediction_length),
     }
 
     world_size = int(os.environ.get("SLURM_NTASKS", 1))
@@ -217,8 +253,8 @@ if __name__ == "__main__":
         torch.cuda.set_device(local_rank)
         torch.distributed.init_process_group(backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank)
 
-    tokenizer = torch.jit.load(args.tokenizer_jit_path).to("cuda")
-    detokenizer = torch.jit.load(args.detokenizer_jit_path).to("cuda")
+    tokenizer = torch.jit.load(expand_path(args.config["tokenizer_jit_path"])).to("cuda")
+    detokenizer = torch.jit.load(expand_path(args.config["detokenizer_jit_path"])).to("cuda")
     gpt = (
         None
         if args.tokenizer_only

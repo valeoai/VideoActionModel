@@ -3,7 +3,7 @@ Example usage:
 
 python scripts/regain_index_from_train.py \
 --ckpt /path/to/ckpt.pt \
---is_deepspeed \
+--outdir tmp \
 --name checkpoint_90_pretraining
 """
 
@@ -14,18 +14,13 @@ from typing import Any, Dict
 
 import torch
 import torch.distributed
-from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 from torch.utils.data import DistributedSampler
 from tqdm import tqdm
 
 from vam.datalib import OpenDVTokensDataset, StatefulDataLoader
+from vam.utils import expand_path
 
 StateDict = Dict[str, Any]
-
-
-def _path(path: str) -> str:
-    path = os.path.expanduser(os.path.expandvars(path))
-    return path
 
 
 def main(name: str, outdir: str, train_dataset: OpenDVTokensDataset, rank: int, hp: dict) -> None:
@@ -62,29 +57,34 @@ def main(name: str, outdir: str, train_dataset: OpenDVTokensDataset, rank: int, 
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--ckpt", type=_path, required=True)
-parser.add_argument("--is_deepspeed", action="store_true", default=False)
+parser.add_argument("--ckpt", type=expand_path, required=True)
 parser.add_argument("--name", type=str, required=True)
-parser.add_argument("--outdir", type=_path, default="tmp")
+parser.add_argument("--outdir", type=expand_path, default="tmp")
 args = parser.parse_args()
 
 os.makedirs(args.outdir, exist_ok=True)
 
-if args.is_deepspeed:
-    hp = convert_zero_checkpoint_to_fp32_state_dict(
-        args.ckpt,
-        f"{args.outdir}/fused_ckpt_{args.name}.pt",
-    )
+if os.path.isdir(args.ckpt):
+    # This is a deepspeed checkpoint
+    import tempfile
+
+    from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
+
+    with tempfile.TemporaryDirectory(dir=os.environ.get("JOBSCRATCH", "/tmp")) as tmpdirname:
+        hp = convert_zero_checkpoint_to_fp32_state_dict(
+            args.ckpt,
+            os.path.join(tmpdirname, "fused_ckpt.pt"),
+        )
 else:
-    hp = torch.load(args.ckpt)
+    hp = torch.load(args.ckpt, map_location="cpu")
 
 ckpt = hp["loops"]["fit_loop"]["state_dict"]["combined_loader"][0]
 
 world_size = len(ckpt)
 
 # we should be able to get paths from the checkpoint
-data_root_dir = _path(hp["OpenDVTokensDataModule"]["data_root_dir"])
-with open(_path(hp["OpenDVTokensDataModule"]["video_list_path"]), "r") as f:
+data_root_dir = expand_path(hp["OpenDVTokensDataModule"]["data_root_dir"])
+with open(expand_path(hp["OpenDVTokensDataModule"]["video_list_path"]), "r") as f:
     video_list = json.load(f)
 video_list = [os.path.join(data_root_dir, video) for video in video_list]
 

@@ -1,8 +1,19 @@
-# Neuro-NCAP evaluation
+# NeuroNCAP evaluation
+
+This folder contains the code to evaluate VaVAM with the NeuroNCAP benchmark. Please check out their [website](https://research.zenseact.com/publications/neuro-ncap/) for additional details.
+
+Note: we have forked the neuro-ncap repository to add new metrics to the evaluation pipeline. These metrics are detailed in our technical report.
+
+The following installation was derived from our usage:
+
+- We can not use docker on our SLURM cluster, so docker images are first build locally.
+- We follow NeuroNCAP and use singularity images on the cluster.
+
+You may need to adapt this installation guide to suit your needs.
 
 ## Local install part
 
-Tutorial to install NeuroNCAP. This is the first part that must be done on the local cluster to have access to docker.
+This is the first part that must be done on the local cluster to have access to docker.
 
 First define the base directory where to store all folder:
 
@@ -19,7 +30,7 @@ cd neuro-ncap
 git checkout trajectory_metrics  # We need to checkout the trajectory_metrics branch to have our new metrics
 cd $BASE_REPO
 git clone https://github.com/georghess/neurad-studio.git
-# We assume that the NextTokenPredictor repo is already here
+# We assume that the VideoActionModel repo is already here
 ```
 
 Build the different docker images and save them as tar file
@@ -45,7 +56,7 @@ docker save -o neurad.docker.tar.gz neurad:latest
 Video Action Model:
 
 ```bash
-cd $BASE_REPO/NextTokenPredictor
+cd $BASE_REPO/VideoActionModel
 docker build -t ncap_vam:latest -f docker/Dockerfile .
 docker save -o ncap_vam.docker.tar.gz ncap_vam:latest
 ```
@@ -56,7 +67,7 @@ Then send them all to JZ.
 export $DOCKER_JZ_FOLDER=$ycy_ALL_CCFRSCRATCH/neuroncap_docker_file  # you need to define this
 scp $BASE_REPO/neuro-ncap/ncap.docker.tar.gz jz:$DOCKER_JZ_FOLDER
 scp $BASE_REPO/neurad-studio/rendering.docker.tar.gz jz:$DOCKER_JZ_FOLDER
-scp $BASE_REPO/NextTokenPredictor/ncap_vam.docker.tar.gz jz:$DOCKER_JZ_FOLDER
+scp $BASE_REPO/VideoActionModel/ncap_vam.docker.tar.gz jz:$DOCKER_JZ_FOLDER
 ```
 
 ## Jean-Zay install part
@@ -79,7 +90,7 @@ cd neuro-ncap
 git checkout trajectory_metrics  # We need to checkout the trajectory_metrics branch to have our new metrics
 cd $BASE_JZ_REPO
 git clone https://github.com/georghess/neurad-studio.git
-# We assume that the NextTokenPredictor repo is already here
+# We assume that the VideoActionModel repo is already here
 ```
 
 Download the weights / checkpoinst:

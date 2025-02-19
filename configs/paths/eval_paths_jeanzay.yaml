@@ -1,0 +1,27 @@
+tokenizer_jit_path: $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit
+detokenizer_jit_path: $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit
+
+cityscapes:
+  root: $ycy_ALL_CCFRSCRATCH/cityscapes
+  pseudo_depth: $ycy_ALL_CCFRSCRATCH/cityscapes/cityscapes_depth
+
+kitti:
+  root: $ycy_ALL_CCFRSCRATCH/KITTI_STEP
+  pseudo_depth: $ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_depth
+
+kitti_video:
+  root: $ycy_ALL_CCFRSCRATCH/KITTI_STEP
+  pseudo_depth: $ycy_ALL_CCFRSCRATCH/KITTI_STEP/kitti_video_depth
+
+opendv:
+  data_root_dir: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/flat_tokens
+  split: $fzh_ALL_CCFRSCRATCH/OpenDV_processed/val.json
+
+nuscenes:
+  tokens_rootdir: $ycy_ALL_CCFRSCRATCH/nuscenes_v2/tokens
+  images_rootdir: $ycy_ALL_CCFRSCRATCH/nuscenes_v2
+  pickle: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
+
+nuplan:
+  tokens_rootdir: $ycy_ALL_CCFRSCRATCH/nuplan_v2_tokens/tokens
+  pickle: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl

@@ -1,17 +1,17 @@
 #!/bin/bash
 #SBATCH --job-name=quality_eval
-#SBATCH -A ycy@h100
+#SBATCH -A cya@h100
 #SBATCH -C h100
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=24
 #SBATCH --gres=gpu:1
 #SBATCH --hint=nomultithread
-#SBATCH --qos=qos_gpu_h100-gc
+#SBATCH --qos=qos_gpu_h100-t3
 #SBATCH --time=12:00:00
 #SBATCH --output=slurm_jobs_logs/stdout/quality_eval/%A_%a.out
 #SBATCH --error=slurm_jobs_logs/stdout/quality_eval/%A_%a.out
-#SBATCH --array=0-3
+#SBATCH --array=4-6
 
 mkdir -p slurm_jobs_logs/stdout/quality_eval
 mkdir -p slurm_jobs_logs/files/quality_eval
@@ -20,7 +20,7 @@ mkdir -p slurm_jobs_logs/files/quality_eval
 module purge
 module load arch/h100
 module load pytorch-gpu/py3/2.4.0
-export PYTHONUSERBASE=$WORK/python_envs/world_model
+export PYTHONUSERBASE=$WORK/python_envs/video_action_model
 export MPICH_GPU_SUPPORT_ENABLED=1
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
@@ -52,12 +52,24 @@ ckpt[3]="none"
 outfile[3]="./slurm_jobs_logs/files/quality_eval/llamagen.json"
 tokenizer_only[3]=True
 
+# [PRETRAIN]
+# 768, 90% data:
+ckpt[4]="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_768_Nodes16_BSperGPU6_totalBS384_weight_decay1e-07_0116_1243_1737027800/checkpoints/vam_before_drop_epoch=000_step=0000139763_fused.pt"
+outfile[4]="./slurm_jobs_logs/files/quality_eval/test_layer12_pretrain_768.json"
+tokenizer_only[4]=False
+# 1024, 90% data:
+ckpt[5]="$ycy_ALL_CCFRSCRATCH/output_data/opendv_gpt2_LlamaGen/wd_sweep/GPT2_OpenDV_Llamagen_1024_Nodes32_BSperGPU3_totalBS384_weight_decay1e-07_0118_0114_1737159286/checkpoints/vam_before_drop_epoch=000_step=0000139763_fused.pt"
+outfile[5]="./slurm_jobs_logs/files/quality_eval/test_layer12_pretrain_1024.json"
+tokenizer_only[5]=False
+# 2048, 90% data:
+ckpt[6]="$ycy_ALL_CCFRSCRATCH/vavim_2048_pretrain_fused.ckpt"
+outfile[6]="./slurm_jobs_logs/files/quality_eval/test_layer12_pretrain_2048.json"
+tokenizer_only[6]=False
+
 
 srun python scripts/quality_evaluation.py \
 --outfile ${outfile[$SLURM_ARRAY_TASK_ID]} \
 --gpt_checkpoint_path ${ckpt[$SLURM_ARRAY_TASK_ID]} \
---tokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
---detokenizer_jit_path $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit \
 --dtype bf16 \
 --tokenizer_only ${tokenizer_only[$SLURM_ARRAY_TASK_ID]} \
 --per_proc_batch_size 32
