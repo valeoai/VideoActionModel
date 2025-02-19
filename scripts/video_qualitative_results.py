@@ -109,7 +109,7 @@ def plot_images(
 
 
 def handle_output(context_frames: np.ndarray, generated_frames: np.ndarray, window_idx: int, outdir: str) -> None:
-    os.makedirs(window_outdir := os.path.join(outdir, window_idx), exist_ok=True)
+    os.makedirs(window_outdir := os.path.join(outdir, str(window_idx)), exist_ok=True)
     plot_images([context_frames, generated_frames], save_path=os.path.join(window_outdir, "plot.png"))
     os.makedirs(context_outdir := os.path.join(window_outdir, "context"), exist_ok=True)
     os.makedirs(generated_outdir := os.path.join(window_outdir, "generated"), exist_ok=True)
@@ -193,6 +193,16 @@ if __name__ == "__main__":
         --config configs/paths/eval_paths_local.yaml \
         --outdir ~/iveco/scratch_iveco/VAM_JZGC4/video_qual_results/vavim_l \
         --gpt_checkpoint_path ~/iveco/scratch_iveco/VAM_JZGC4/checkpoints/Finetune/width_2048_pretrained_139k_total_155k.pt \
+        --dtype bf16 \
+        --generate_x 30 \
+        --per_proc_batch_size 8
+
+    srun -A cya@h100 -C h100 --pty \
+    --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --gres=gpu:1 --hint=nomultithread \
+    --qos=qos_gpu_h100-dev --time=00:45:00 \
+    python scripts/video_qualitative_results.py \
+        --outdir $cya_ALL_CCFRSCRATCH/qual_results/vavim_l \
+        --gpt_checkpoint_path xxx \
         --dtype bf16 \
         --generate_x 30 \
         --per_proc_batch_size 8
