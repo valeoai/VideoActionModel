@@ -351,6 +351,12 @@ We are releasing the code in this repository under the [MIT License](LICENSE).
 
 We are releasing the pre-trained models / weights under the **research-only** [VideoActionModel License](LICENSE_MODEL). The weights were trained with datasets that are subjected to their own licenses and restrictions. Please see below.
 
+This project contains data derived from the [nuScenes dataset](https://www.nuscenes.org) and are licensed under CC BY-NC-SA 4.0. Using those data come with the following terms of use:
+
+- Those data can be used for non-commercial purposes only
+- Any derivatives must be distributed under the same license
+- Attribution must be provided to both this project and nuScenes
+
 ## Citation
 
 If you use this code, please cite our technical report:
