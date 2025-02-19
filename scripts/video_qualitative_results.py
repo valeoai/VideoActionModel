@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from vam.datalib import CropAndResizeTransform, EgoTrajectoryDataset, torch_image_to_plot
 from vam.evaluation.datasets import KITTIDataset
-from vam.utils import boolean_flag, create_mp4_from_folder, expand_path, read_eval_config, torch_dtype
+from vam.utils import boolean_flag, concatenate_mp4, create_mp4_from_folder, expand_path, read_eval_config, torch_dtype
 from vam.video_pretraining import MupGPT2, load_pretrained_gpt
 
 ImageType = Tensor | np.ndarray | List[Tensor] | List[np.ndarray]
@@ -115,8 +115,11 @@ def handle_output(context_frames: np.ndarray, generated_frames: np.ndarray, wind
     os.makedirs(generated_outdir := os.path.join(window_outdir, "generated"), exist_ok=True)
     save_images(context_frames, context_outdir)
     save_images(generated_frames, generated_outdir)
-    create_mp4_from_folder(context_outdir, os.path.join(window_outdir, "context.mp4"))
-    create_mp4_from_folder(generated_outdir, os.path.join(window_outdir, "generated.mp4"))
+    create_mp4_from_folder(context_outdir, context_mp4 := os.path.join(window_outdir, "context.mp4"), overlay="Real")
+    create_mp4_from_folder(
+        generated_outdir, generated_mp4 := os.path.join(window_outdir, "generated.mp4"), overlay="Generated"
+    )
+    concatenate_mp4([context_mp4, generated_mp4], os.path.join(window_outdir, "concatenated.mp4"))
     print(f"Saved results for window {window_idx} to {window_outdir}")
     return
 
@@ -202,9 +205,11 @@ if __name__ == "__main__":
     --qos=qos_gpu_h100-dev --time=00:45:00 \
     python scripts/video_qualitative_results.py \
         --outdir $cya_ALL_CCFRSCRATCH/qual_results/vavim_l \
-        --gpt_checkpoint_path xxx \
+        --gpt_checkpoint_path xx \
         --dtype bf16 \
         --generate_x 30 \
+        --context_length 3 \
+        --prediction_length 5 \
         --per_proc_batch_size 8
     """
 

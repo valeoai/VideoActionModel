@@ -249,8 +249,8 @@ if __name__ == "__main__":
         print(metrics)
 
         metrics["gpt_checkpoint_path"] = args.gpt_checkpoint_path
-        metrics["tokenizer_jit_path"] = args.tokenizer_jit_path
-        metrics["detokenizer_jit_path"] = args.detokenizer_jit_path
+        metrics["tokenizer_jit_path"] = args.config["tokenizer_jit_path"]
+        metrics["detokenizer_jit_path"] = args.config["detokenizer_jit_path"]
 
         os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
         with open(args.outfile, "w") as f:

@@ -214,7 +214,7 @@ if __name__ == "__main__":
         world_size=world_size,
     )
     metrics["gpt_checkpoint_path"] = args.gpt_checkpoint_path
-    metrics["tokenizer_jit_path"] = args.tokenizer_jit_path
+    metrics["tokenizer_jit_path"] = args.config["tokenizer_jit_path"]
     print(metrics)
 
     if rank == 0:

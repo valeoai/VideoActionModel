@@ -1,6 +1,6 @@
 from vam.utils.boolean_flag import boolean_flag
 from vam.utils.cmd_line_logging import RankedLogger
-from vam.utils.create_mp4_from_folder import create_mp4_from_folder
+from vam.utils.create_mp4_from_folder import concatenate_mp4, create_mp4_from_folder
 from vam.utils.expand_path import expand_path
 from vam.utils.hyperparam_logging import log_hyperparameters
 from vam.utils.info_printing import print_config_tree
@@ -15,6 +15,7 @@ from vam.utils.warmup_stable_drop import WarmupStableDrop
 __all__ = [
     "boolean_flag",
     "RankedLogger",
+    "concatenate_mp4",
     "create_mp4_from_folder",
     "expand_path",
     "log_hyperparameters",
