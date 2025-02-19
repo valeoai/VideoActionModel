@@ -3,6 +3,7 @@
 # VaViM and VaVAM: Autonomous Driving through Video Generative Modeling
 
 [![Paper](http://img.shields.io/badge/paper-arxiv.0000.0000-B31B1B.svg)](https://arxiv.org/)
+[![Website](https://img.shields.io/badge/Project-Website-87CEEB)](https://valeoai.github.io/vavim-vavam/)
 [![python](https://img.shields.io/badge/-Python_3.8_%7C_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
 [![license](https://img.shields.io/badge/License-MIT-green.svg?labelColor=gray)](https://github.com/valeoai/VideoActionModel#license)
