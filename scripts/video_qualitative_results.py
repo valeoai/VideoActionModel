@@ -3,12 +3,13 @@ import os
 import pickle
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from einops import rearrange
+from PIL import Image
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -16,10 +17,10 @@ from tqdm import tqdm
 
 from vam.datalib import CropAndResizeTransform, EgoTrajectoryDataset, torch_image_to_plot
 from vam.evaluation.datasets import KITTIDataset
-from vam.utils import boolean_flag, expand_path, torch_dtype, read_eval_config
+from vam.utils import boolean_flag, create_mp4_from_folder, expand_path, read_eval_config, torch_dtype
 from vam.video_pretraining import MupGPT2, load_pretrained_gpt
 
-Image = Tensor | np.ndarray | List[Tensor] | List[np.ndarray]
+ImageType = Tensor | np.ndarray | List[Tensor] | List[np.ndarray]
 Config = Dict[str, Any]
 
 torch.backends.cudnn.allow_tf32 = True
@@ -62,8 +63,17 @@ def get_kitti(config: Config, context_length: int) -> KITTIDataset:
     )
 
 
+def save_images(images: ImageType, savedir: str) -> None:
+    for idx, img in enumerate(images):
+        if isinstance(img, Tensor):
+            img = img.cpu().numpy()
+        img = Image.fromarray(img)
+        img.save(os.path.join(savedir, f"{idx:04d}.png"))
+        img.close()
+
+
 def plot_images(
-    images: Image,
+    images: ImageType,
     save_path: Optional[str] = None,
     num_rows: Optional[int] = None,
     num_cols: Optional[int] = None,
@@ -82,10 +92,8 @@ def plot_images(
             if idx >= (len(images[row]) if isinstance(images, list) else len(images)):
                 break
             if isinstance(images, list):
-                # plt.imshow(images[row][idx])
                 axes[row][col].imshow(images[row][idx])
             else:
-                # plt.imshow(images[idx])
                 axes[row][col].imshow(images[idx])
             axes[row][col].axis("off")
             idx += 1
@@ -98,7 +106,19 @@ def plot_images(
 
     if save_path is not None:
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
-        # fig.close()
+
+
+def handle_output(context_frames: np.ndarray, generated_frames: np.ndarray, window_idx: int, outdir: str) -> None:
+    os.makedirs(window_outdir := os.path.join(outdir, window_idx), exist_ok=True)
+    plot_images([context_frames, generated_frames], save_path=os.path.join(window_outdir, "plot.png"))
+    os.makedirs(context_outdir := os.path.join(window_outdir, "context"), exist_ok=True)
+    os.makedirs(generated_outdir := os.path.join(window_outdir, "generated"), exist_ok=True)
+    save_images(context_frames, context_outdir)
+    save_images(generated_frames, generated_outdir)
+    create_mp4_from_folder(context_outdir, os.path.join(window_outdir, "context.mp4"))
+    create_mp4_from_folder(generated_outdir, os.path.join(window_outdir, "generated.mp4"))
+    print(f"Saved results for window {window_idx} to {window_outdir}")
+    return
 
 
 @torch.no_grad()
@@ -152,7 +172,12 @@ def get_future_frames(
             plot_futures = []
             for idx, window_idx in enumerate(batch["window_idx"].tolist()):
                 future = plot_executor.submit(
-                    plot_images, [_images[idx], generated_images[idx]], save_path=os.path.join(outdir, f"{window_idx}.png")
+                    # plot_images, [_images[idx], generated_images[idx]], save_path=os.path.join(outdir, f"{window_idx}.png")
+                    handle_output,
+                    _images[idx],
+                    generated_images[idx],
+                    window_idx,
+                    outdir,
                 )
                 plot_futures.append(future)
 

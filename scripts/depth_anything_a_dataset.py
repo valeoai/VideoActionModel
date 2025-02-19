@@ -63,7 +63,6 @@ if not os.path.exists("torchhub"):
 from depth_anything.dpt import DepthAnything  # noqa: E402 # type: ignore
 from depth_anything.util.transform import NormalizeImage, PrepareForNet, Resize  # noqa: E402  # type: ignore
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset_name", type=str, default="cityscapes")
 parser.add_argument("--config", type=read_eval_config, default=read_eval_config("configs/paths/eval_paths_jeanzay.yaml"))

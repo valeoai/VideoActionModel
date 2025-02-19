@@ -7,12 +7,12 @@ python scripts/fused_checkpoint.py \
 --checkpoint $SCRATCH/2048_pretrain \
 --output $SCRATCH/2048_pretrain_fused.pt
 """
+
 import argparse
 
 from lightning.pytorch.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
 
 from vam.utils import expand_path
-
 
 parser = argparse.ArgumentParser(description="Fuse checkpoint files")
 parser.add_argument("--checkpoint", type=expand_path, required=True, help="Path to the checkpoint file")
