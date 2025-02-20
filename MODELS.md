@@ -10,12 +10,12 @@ We use the following script to convert to tar files:
 
 ```bash
 # Performs something akin to:
-# tar czf - filename | split -b 1G - filename.tar.gz.part_
+# tar czf - filename | split -b 1900MB - filename.tar.gz.part_
 python scripts/handle_checkpoints.py \
 --mode create \
 --checkpoint_dir XXXX \
 --outdir vavam_release \
---maxsize 2G
+--maxsize 1900MB
 ```
 
 If a model is chunked into several tar files (VaViM-L and VaVAM-L), you can merge them using the following command:
@@ -53,20 +53,20 @@ Here are the links for our main VaViM and VaVAM models:
     <tr>
       <td>VaVAM-S</td>
       <td align="right">185M + 21M</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_139k_total_155k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_768_pretrained_139k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-B</td>
       <td align="right">318M + 38M</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_139k_total_155k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_139k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-L</td>
       <td align="right">1.2B + 150M</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 3</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_aa">part 1</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_ab">part 2</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_ac">part 3</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_aa">part 1</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ab">part 2</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ac">part 3</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ad">part 4</a></td>
     </tr>
   </tbody>
 </table>
@@ -90,64 +90,64 @@ We also release the different checkpoints that helped up compute our scaling law
       <td>VaViM-S</td>
       <td align="right">185</td>
       <td align="right">38</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_38k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_38k_total_54k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaViM-S</td>
       <td align="right">185</td>
       <td align="right">77</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_77k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_77k_total_93k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaViM-S</td>
       <td align="right">185</td>
       <td align="right">116</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_116k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_116k_total_132k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaViM-S</td>
       <td align="right">185</td>
       <td align="right">139</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_139k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_139k_total_155k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaViM-B</td>
       <td align="right">318</td>
       <td align="right">38</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_38k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_38k_total_54k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaViM-B</td>
       <td align="right">318</td>
       <td align="right">77</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_77k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_77k_total_93k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaViM-B</td>
       <td align="right">318</td>
       <td align="right">116</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_116k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_116k_total_132k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaViM-B</td>
       <td align="right">318</td>
       <td align="right">139</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_139k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_139k_total_155k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaViM-L</td>
       <td align="right">1200</td>
       <td align="right">139</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_aa">part 1</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ab">part 2</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ac">part 3</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_aa">part 1</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_ab">part 2</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_ac">part 2</a></td>
     </tr>
   </tbody>
 </table>
@@ -170,55 +170,55 @@ We trained VaVAM models given the VaViM models. Here are the different VaVAM mod
       <td>VaVAM-S</td>
       <td align="right">185M + 21M</td>
       <td align="right">38</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_768_pretrained_38k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-S</td>
       <td align="right">185M + 21M</td>
       <td align="right">77</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_77k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-S</td>
       <td align="right">185M + 21M</td>
       <td align="right">116</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_768_pretrained_116k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-S</td>
       <td align="right">185M + 21M</td>
       <td align="right">139</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_768_pretrained_139k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-B</td>
       <td align="right">318M + 38M</td>
       <td align="right">38</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_38k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-B</td>
       <td align="right">318M + 38M</td>
       <td align="right">77</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_77k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-B</td>
       <td align="right">318M + 38M</td>
       <td align="right">116</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_116k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-B</td>
       <td align="right">318M + 38M</td>
       <td align="right">139</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_139k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-L</td>
       <td align="right">1.2B + 150M</td>
       <td align="right">139</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 3</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_aa">part 1</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ab">part 2</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ac">part 3</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ad">part 4</a></td>
     </tr>
   </tbody>
 </table>

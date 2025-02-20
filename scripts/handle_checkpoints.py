@@ -7,7 +7,7 @@ python scripts/handle_checkpoints.py \
 --mode create \
 --checkpoint_dir ~/iveco/scratch_iveco/VAM_JZGC4/checkpoints \
 --outdir weights/release \
---maxsize 2G
+--maxsize 1900MB
 
 2. Extract tar files
 
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type=str, required=True, choices=["create", "extract"])
     parser.add_argument("--checkpoint_dir", type=expand_path, required=True)
     parser.add_argument("--outdir", type=expand_path, required=True)
-    parser.add_argument("--maxsize", type=str, default="2G")
+    parser.add_argument("--maxsize", type=str, default="1900MB")
     parser.add_argument("--extension", type=str, default="pt")
     parser.add_argument("--num_threads", type=int, default=1)
     args = parser.parse_args()

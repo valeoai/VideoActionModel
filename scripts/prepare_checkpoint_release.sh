@@ -1,9 +1,9 @@
 #!/bin/bash
 
 : '
-srun -A cya@h100 -C h100 --pty \
---nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --gres=gpu:0 --hint=nomultithread \
---qos=qos_gpu_h100-dev --time=00:45:00 \
+srun -A ycy@h100 --pty \
+--cpus-per-task=3 --hint=nomultithread \
+--partition=prepost --time=02:00:00 \
 bash scripts/prepare_checkpoint_release.sh
 '
 
@@ -29,20 +29,24 @@ python scripts/handle_checkpoints.py \
 --checkpoint_dir $SRC_FOLDER \
 --outdir $DEST_FOLDER \
 --num_threads 16 \
---maxsize 2G
+--maxsize 1900MB
 
 # Upload the weights with the GitHub CLI
 # https://cli.github.com/manual/gh_release_uploads
 find $DEST_FOLDER -type f -name "*.tar.gz*" | while read -r filepath; do
     # Copy the file to the destination with the new name
     echo "[ ] Uploading: $filepath"
-    gh release upload v1.0.0 $filepath --clobber
+    gh release upload v1.0.0 $filepath --clobber --repo valeoai/VideoActionModel
     echo "[x] Uploaded: $filepath"
 done
 
 find $DATA_FOLDER -type f -name "*.tar.gz" | while read -r filepath; do
     # Copy the file to the destination with the new name
     echo "[ ] Uploading: $filepath"
-    gh release upload v1.0.0 $filepath --clobber
+    gh release upload v1.0.0 $filepath --clobber --repo valeoai/VideoActionModel
     echo "[x] Uploaded: $filepath"
 done
+
+# Upload the JIT models for LlamaGen
+gh release upload v1.0.0 $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit#llamagen_encoder.jit --clobber --repo valeoai/VideoActionModel
+gh release upload v1.0.0 $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_decoder.jit#llamagen_decoder.jit --clobber --repo valeoai/VideoActionModel
