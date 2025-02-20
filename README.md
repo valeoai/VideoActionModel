@@ -408,30 +408,36 @@ We thank the following public structures for granting us access to their computi
 A0141014181).
 - We acknowledge the EuroHPC Joint Undertaking for awarding this project access to the EuroHPC supercomputer LEONARDO, hosted by CINECA (Italy) and the LEONARDO consortium through an EuroHPC AI and Data-Intensive Access call.
 
-## Credits
+## Detailed contributions
 
-**Project Lead (Research direction, technical roadmap, project coordination)** <br>
+**Project Lead**<br>
+*Research direction, technical roadmap, project coordination*<br>
 Florent BARTOCCIONI
 
-**Core contributors (All aspects of the codebase, experiments, evaluations)** <br>
+**Core Contributors**<br>
+*All aspects of the codebase, experiments, evaluations*<br>
 Florent BARTOCCIONI, Elias RAMZI
 
 **Contributors**<br>
-Victor BESNIER -- Visual Tokenization codebase using pre-trained VQGAN; FID metric code <br>
-Loick CHAMBON -- Data download, transfer and extraction; visualization code development <br>
-Eduardo VALLE -- OpenDV preprocessing <br>
-Shashanka VENKATARAMANAN -- Depth anything pseudo-GT generation <br>
-Tuan-Hung VU -- GPT adaptation from nanoGPT <br>
-Yihong XU -- nuPlan preprocessing and initial dataloader development <br>
+Victor BESNIER — Visual Tokenization codebase using pre-trained VQGAN; FID metric code <br>
+Loick CHAMBON — Data download, transfer and extraction; visualization code development <br>
+Eduardo VALLE — OpenDV preprocessing <br>
+Shashanka VENKATARAMANAN — Depth anything pseudo-GT generation <br>
+Tuan-Hung VU — GPT adaptation from nanoGPT <br>
+Yihong XU — nuPlan preprocessing and initial dataloader development <br>
 
-**Technical report (Manuscript preparation, design, visualization, figures)** <br>
-Florent BARTOCCIONI, Elias RAMZI, Victor BESNIER, Shashanka VENKATARAMANAN, Eloi ZABLOCKI, Yihong XU, Tuan-Hung VU
+**Technical Report**<br>
+*Manuscript preparation, design, visualization, figures*<br>
+Florent BARTOCCIONI, Elias RAMZI, Victor BESNIER, Shashanka VENKATARAMANAN, Eloi ZABLOCKI, Yihong XU, Tuan-Hung VU, Eduardo VALLE
 
-**Grant Acquisitions (Grant proposals for Adastra, EuroHPC, and Jean Zay Grand Challenges)** <br>
+**Grant Acquisitions**<br>
+*Grant proposals for Adastra, EuroHPC, and Jean Zay Grand Challenges*<br>
 Florent BARTOCCIONI, Alexandre BOULCH, Eduardo VALLE, Spyros GIDARIS, Eloi ZABLOCKI, Matthieu CORD, Serkan ODABAS, David HURYCH
 
-**Advisory (Research and organization guidance)** <br>
+**Advisory**<br>
+*Research and organization guidance*<br>
 Eloi ZABLOCKI, Alexandre BOULCH, Mickael CHEN
 
-**Senior Advisory (Research and organization guidance)** <br>
+**Senior Advisory**<br>
+*Research and organization guidance*<br> 
 Eduardo VALLE, Andrei BURSUC, Renaud MARLET, Matthieu CORD
