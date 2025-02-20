@@ -183,7 +183,7 @@ image_detokenizer = torch.jit.load(expand_path(detokenizer_path)).to("cuda")
 
 # Load the dataset.
 dts = OpenDVTokensDataset(
-    data_root_dir=opendv_data_root_dir,
+    data_root_dir=expand_path(opendv_data_root_dir),
     video_list=["5pAf38x5z9Q"],  # This is one of the validation video from OpenDV
     sequence_length=8,
     subsampling_factor=5,
@@ -230,7 +230,7 @@ nuscenes_tokens_rootdir = "/path/to/nuscenes/tokens_dir"
 # Load the pretrained model.
 vam = load_inference_VAM(expand_path(vam_checkpoint_path), "cuda")
 
-with open(nuscenes_pickle_data_path, "rb") as f:
+with open(expand_path(nuscenes_pickle_data_path), "rb") as f:
     nuscenes_pickle_data = pickle.load(f)
 
 dataset = EgoTrajectoryDataset(
@@ -300,12 +300,14 @@ model_info = {
     "d_model": gpt.embedding_dim,
 }
 
+
 def forward_fn(x: Tensor, inference: bool) -> Tensor:
     x = image_tokenizer(x)
     x = rearrange(x, "b h w -> b 1 h w")
     x = gpt.get_intermediate_layers(x, 12)
     x = rearrange(x[:, -1], "b h w d -> b (h w) d")
     return x
+
 
 train_dts = CityscapesDataset(root=expand_path(cityscapes_root), split="train")
 val_dts = CityscapesDataset(root=expand_path(cityscapes_root), split="val")
@@ -408,7 +410,7 @@ We thank the following public structures for granting us access to their computi
 A0141014181).
 - We acknowledge the EuroHPC Joint Undertaking for awarding this project access to the EuroHPC supercomputer LEONARDO, hosted by CINECA (Italy) and the LEONARDO consortium through an EuroHPC AI and Data-Intensive Access call.
 
-## Credits
+## Detailed Contributions
 
 **Project Lead (Research direction, technical roadmap, project coordination)** <br>
 Florent BARTOCCIONI
