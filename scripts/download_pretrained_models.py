@@ -16,7 +16,7 @@ import os
 
 import torch
 
-from vam.evaluation.inception_metrics import MultiInceptionMetrics
+from vam.evaluation.quality import MultiInceptionMetrics
 
 os.environ["TMPDIR"] = os.environ.get("JOBSCRATCH", "/tmp")
 

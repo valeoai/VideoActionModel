@@ -138,20 +138,20 @@ We release several sets of weights of the models, corresponding to different com
     <tr>
       <td>VaVAM-S</td>
       <td align="right">185M + 21M</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_139k_total_155k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_768_pretrained_139k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-B</td>
       <td align="right">318M + 38M</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_139k_total_155k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_139k.tar.gz">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-L</td>
       <td align="right">1.2B + 150M</td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a></td>
-      <td><a href="https://www.github.com/valeoai/VideoActionModel">part 1</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 2</a>, <a href="https://www.github.com/valeoai/VideoActionModel">part 3</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_aa">part 1</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_ab">part 2</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_2048_pretrained_139k_total_155k_chunked.tar.gz.part_ac">part 3</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_aa">part 1</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ab">part 2</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ac">part 3</a>, <a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_2048_pretrained_139k_chunked.tar.gz.part_ad">part 4</a></td>
     </tr>
   </tbody>
 </table>
@@ -369,7 +369,7 @@ You can also cite the code repository:
 
 ```bibtex
 @software{Bartoccioni_VaVAM,
-    author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Loick Chambon} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Mickael Chen} and {Eloi Zablocki} and {Alexandre Boulch} and {Andrei Bursuc} and {Eduardo Valle} and {Matthieu Cord}},
+    author = {{Florent Bartoccioni} and {Elias Ramzi} and {Victor Besnier} and {Shashanka Venkataramanan} and {Tuan-Hung Vu} and {Yihong Xu} and {Loick Chambon} and {Spyros Gidaris} and {Serkan Odabas} and {David Hurych} and {Renaud Marlet} and {Alexandre Boulch} and {Mickael Chen} and {Eloi Zablocki} and {Andrei Bursuc} and {Eduardo Valle} and {Matthieu Cord}},
     license = {MIT},
     title = {{VaViM and VaVAM: Autonomous Driving through Video Generative Modeling}},
     url = {https://github.com/valeoai/VideoActionModel}

@@ -6,10 +6,10 @@
 
 First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDriveLab/DriveAGI) repository to download the different videos of the OpenDV dataset.
 
-Please find in the [data_files.tar.gz](https://www.github.com/valeoai/VideoActionModel) tar file the `metadata.csv` that we used to pre-process the OpenDV dataset. As detailed in our tech report, some of the videos were discarded.
+Please find in the [opendv_vavam.tar.gz](https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/opendv_vavam.tar.gz) tar file the `metadata.csv` that we used to pre-process the OpenDV dataset. As detailed in our tech report, some of the videos were discarded.
 
 ```bash
-tar -xvzf data_files.tar.gz
+tar -xzf data_files.tar.gz
 ```
 
 ### Prepare the dataset
@@ -30,7 +30,9 @@ OpenDV_Youtube
 
 ### Tokenizer
 
-Please download the JIT files of the LlamaGen tokenizer on our repository: [llamagen.jit](https://www.github.com/valeoai/VideoActionModel).
+Please download the JIT files of the LlamaGen tokenizer on our repository: [llamagen_encoder.jit](https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VQ_ds16_16384_llamagen_encoder.jit).
+
+Please, also find the detokenizer on our repository [llamagen_decoder.jit](https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VQ_ds16_16384_llamagen_decoder.jit).
 
 ### Preparing the tokens
 
@@ -109,4 +111,4 @@ bash ./scripts/tokenize_nuscenes.sh 10 24
 
 The scripts are similar to the ones used for the OpenDV dataset.
 
-Finally, you can use the pickle files from [data_files.tar.gz](https://www.github.com/valeoai/VideoActionModel) to use the datasets from our repository.
+Finally, you can use the pickle files from [nuscenes_vavam.tar.gz](https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/nuscenes_vavam.tar.gz) to use the datasets from our repository.
