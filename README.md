@@ -35,7 +35,7 @@ pip install -e .
 # pip install -e ".[dev]"
 ```
 
-Installation in cluster / cloud environments may require adaptation to their software infrastructure. While we cannot offer guidance for each individual situation, we present, as an example, the [setup we employed in a SLURM environment](scripts/create_worldmodel_env_jeanzay.sh).
+Installation in cluster / cloud environments may require adaptation to their software infrastructure. While we cannot offer guidance for each individual situation, we present, as an example, the [setup we employed in a SLURM environment](scripts/create_vam_env_jeanzay.sh).
 
 We also have  [Dockerfile](docker/Dockerfile) used to run the NeuroNCAP benchmark, which can provide additional hints on how to setup an environment.
 
