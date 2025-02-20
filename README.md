@@ -183,7 +183,7 @@ image_detokenizer = torch.jit.load(expand_path(detokenizer_path)).to("cuda")
 
 # Load the dataset.
 dts = OpenDVTokensDataset(
-    data_root_dir=opendv_data_root_dir,
+    data_root_dir=expand_path(opendv_data_root_dir),
     video_list=["5pAf38x5z9Q"],  # This is one of the validation video from OpenDV
     sequence_length=8,
     subsampling_factor=5,
@@ -230,7 +230,7 @@ nuscenes_tokens_rootdir = "/path/to/nuscenes/tokens_dir"
 # Load the pretrained model.
 vam = load_inference_VAM(expand_path(vam_checkpoint_path), "cuda")
 
-with open(nuscenes_pickle_data_path, "rb") as f:
+with open(expand_path(nuscenes_pickle_data_path), "rb") as f:
     nuscenes_pickle_data = pickle.load(f)
 
 dataset = EgoTrajectoryDataset(
@@ -300,12 +300,14 @@ model_info = {
     "d_model": gpt.embedding_dim,
 }
 
+
 def forward_fn(x: Tensor, inference: bool) -> Tensor:
     x = image_tokenizer(x)
     x = rearrange(x, "b h w -> b 1 h w")
     x = gpt.get_intermediate_layers(x, 12)
     x = rearrange(x[:, -1], "b h w d -> b (h w) d")
     return x
+
 
 train_dts = CityscapesDataset(root=expand_path(cityscapes_root), split="train")
 val_dts = CityscapesDataset(root=expand_path(cityscapes_root), split="val")
@@ -439,5 +441,5 @@ Florent BARTOCCIONI, Alexandre BOULCH, Eduardo VALLE, Spyros GIDARIS, Eloi ZABLO
 Eloi ZABLOCKI, Alexandre BOULCH, Mickael CHEN
 
 **Senior Advisory**<br>
-*Research and organization guidance*<br> 
+*Research and organization guidance*<br>
 Eduardo VALLE, Andrei BURSUC, Renaud MARLET, Matthieu CORD
