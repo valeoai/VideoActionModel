@@ -351,6 +351,12 @@ We are releasing the code in this repository under the [MIT License](LICENSE).
 
 We are releasing the pre-trained models / weights under the **research-only** [VideoActionModel License](LICENSE_MODEL). The weights were trained with datasets that are subjected to their own licenses and restrictions. Please see below.
 
+This project releases data derived from the [nuScenes dataset](https://www.nuscenes.org) and are licensed under [CC BY-NC-SA 4.0](LICENSE_DATA). Using those data come with the following terms of use:
+
+- Those data can be used for non-commercial purposes only
+- Any derivatives must be distributed under the same license
+- Attribution must be provided to both this project and nuScenes
+
 ## Citation
 
 If you use this code, please cite our technical report:
@@ -404,10 +410,10 @@ A0141014181).
 
 ## Credits
 
-**Project Lead (Research direction, technical roadmap and project coordination)** <br>
+**Project Lead (Research direction, technical roadmap, project coordination)** <br>
 Florent BARTOCCIONI
 
-**Core contributors (Contributed to all aspects of the codebase, ran experiments and evaluations)** <br>
+**Core contributors (All aspects of the codebase, experiments, evaluations)** <br>
 Florent BARTOCCIONI, Elias RAMZI
 
 **Contributors**<br>
@@ -418,14 +424,14 @@ Shashanka VENKATARAMANAN -- Depth anything pseudo-GT generation <br>
 Tuan-Hung VU -- GPT adaptation from nanoGPT <br>
 Yihong XU -- nuPlan preprocessing and initial dataloader development <br>
 
-**Paper (manuscript preparation, designing paper visualization and figures)** <br>
+**Technical report (Manuscript preparation, design, visualization, figures)** <br>
 Florent BARTOCCIONI, Elias RAMZI, Victor BESNIER, Shashanka VENKATARAMANAN, Eloi ZABLOCKI, Yihong XU, Tuan-Hung VU
 
-**Public Computing Grant Acquisition (project proposal writing for Adastra, EuroHPC and Jean-Zay grand challenges)** <br>
+**Grant Acquisitions (Grant proposals for Adastra, EuroHPC, and Jean Zay Grand Challenges)** <br>
 Florent BARTOCCIONI, Alexandre BOULCH, Eduardo VALLE, Spyros GIDARIS, Eloi ZABLOCKI, Matthieu CORD, Serkan ODABAS, David HURYCH
 
-**Advisory (research and organization guidance)** <br>
+**Advisory (Research and organization guidance)** <br>
 Eloi ZABLOCKI, Alexandre BOULCH, Mickael CHEN
 
-**Senior Advisory (research and organization guidance)** <br>
+**Senior Advisory (Research and organization guidance)** <br>
 Eduardo VALLE, Andrei BURSUC, Renaud MARLET, Matthieu CORD
