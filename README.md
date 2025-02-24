@@ -2,7 +2,7 @@
 
 # VaViM and VaVAM: Autonomous Driving through Video Generative Modeling
 
-[![Paper](http://img.shields.io/badge/paper-arxiv.0000.0000-B31B1B.svg)](https://arxiv.org/pdf/2502.15672)
+[![Paper](http://img.shields.io/badge/paper-arxiv.2502.15672-B31B1B.svg)](https://arxiv.org/pdf/2502.15672)
 [![Website](https://img.shields.io/badge/Project-Website-87CEEB)](https://valeoai.github.io/vavim-vavam/)
 [![python](https://img.shields.io/badge/-Python_3.8_%7C_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![pytorch](https://img.shields.io/badge/PyTorch_2.4.0-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
@@ -138,14 +138,14 @@ We release several sets of weights of the models, corresponding to different com
     <tr>
       <td>VaVAM-S</td>
       <td align="right">185M + 21M</td>
-      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_139k_total_155k.tar.gz">part 1</a></td>
-      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_768_pretrained_139k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_768_pretrained_139k_total_155k.pt">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_768_pretrained_139k.pt">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-B</td>
       <td align="right">318M + 38M</td>
-      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_139k_total_155k.tar.gz">part 1</a></td>
-      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_139k.tar.gz">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/width_1024_pretrained_139k_total_155k.pt">part 1</a></td>
+      <td><a href="https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/VAM_width_1024_pretrained_139k.pt">part 1</a></td>
     </tr>
     <tr>
       <td>VaVAM-L</td>
@@ -375,10 +375,10 @@ If you use this code, please cite our technical report:
 You can also cite the code repository:
 
 ```bibtex
-@software{Bartoccioni_VaVAM,
+@software{vavam2025_github,
+    title = {VaViM and VaVAM: Autonomous Driving through Video Generative Modeling},
     author={Bartoccioni, Florent and Ramzi, Elias and Besnier, Victor and Venkataramanan, Shashanka and Vu, Tuan-Hung and Xu, Yihong and Chambon, Loick and Gidaris, Spyros and Odabas, Serkan and Hurych, David and Marlet, Renaud and Boulch, Alexandre and Chen, Mickael and Zablocki, Eloi and Bursuc, Andrei and Valle, Eduardo and Cord, Matthieu},
     license = {MIT},
-    title = {{VaViM and VaVAM: Autonomous Driving through Video Generative Modeling}},
     url = {https://github.com/valeoai/VideoActionModel}
 }
 ```
