@@ -9,7 +9,7 @@ First follow the instructions in the [OpenDV Dataset](https://github.com/OpenDri
 Please find in the [opendv_vavam.tar.gz](https://github.com/valeoai/VideoActionModel/releases/download/v1.0.0/opendv_vavam.tar.gz) tar file the `metadata.csv` that we used to pre-process the OpenDV dataset. As detailed in our tech report, some of the videos were discarded.
 
 ```bash
-tar -xzf data_files.tar.gz
+tar -xzf opendv_vavam.tar.gz
 ```
 
 ### Prepare the dataset
