@@ -33,19 +33,26 @@ python scripts/handle_checkpoints.py \
 
 # Upload the weights with the GitHub CLI
 # https://cli.github.com/manual/gh_release_uploads
-find $DEST_FOLDER -type f -name "*.tar.gz*" | while read -r filepath; do
+
+# Weights for S/B that are less than 2GB can be uploaded directly
+find $ycy_ALL_CCFRSCRATCH/release_weights_v1 -type f -name "*.pt" -not -name "*2048*" | while read -r filepath; do
     # Copy the file to the destination with the new name
     echo "[ ] Uploading: $filepath"
     gh release upload v1.0.0 $filepath --clobber --repo valeoai/VideoActionModel
     echo "[x] Uploaded: $filepath"
 done
 
-find $DATA_FOLDER -type f -name "*.tar.gz" | while read -r filepath; do
+# Large files are chunked into tar files
+find $DEST_FOLDER -type f -name "*2048*.tar.gz*" | while read -r filepath; do
     # Copy the file to the destination with the new name
     echo "[ ] Uploading: $filepath"
     gh release upload v1.0.0 $filepath --clobber --repo valeoai/VideoActionModel
     echo "[x] Uploaded: $filepath"
 done
+
+# Upload datafiles
+gh release upload v1.0.0 $ycy_ALL_CCFRSCRATCH/release_weights_v1/datafiles/opendv_vavam.tar.gz --clobber --repo valeoai/VideoActionModel
+gh release upload v1.0.0 $ycy_ALL_CCFRSCRATCH/release_weights_v1/datafiles/nuscenes_vavam.tar.gz --clobber --repo valeoai/VideoActionModel
 
 # Upload the JIT models for LlamaGen
 gh release upload v1.0.0 $ycy_ALL_CCFRWORK/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit#llamagen_encoder.jit --clobber --repo valeoai/VideoActionModel
