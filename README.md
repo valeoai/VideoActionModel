@@ -113,7 +113,7 @@ python jeanzay_slurm_job_submit.py \
 -p 'experiment=action_learning data.batch_size=16 model.vam_conf.gpt_config.embedding_dim=768 model.vam_conf.action_config.embedding_dim=192 model.vam_conf.action_config.init_std=0.0086 model.optimizer_conf.lr=0.0194 model.optimizer_conf.weight_decay=1e-07 paths.output_dir=XXXXX ++trainer.max_epochs=1 data.num_workers=6 model.vam_conf.gpt_checkpoint_path="XXXXX" trainer.strategy=ddp +model.grad_logging=100'
 ```
 
-Outside an SLURM environement, you can launch the `vam/train.py` script, and add the following to your command line:
+Outside a SLURM environment, you can launch the `vam/train.py` script, and add the following to your command line:
 
 ```bash
 name=XXX \  # Name of the experiment
@@ -392,6 +392,7 @@ This code was inspired / contains parts of the following repositories:
 - [LLamaGen](https://github.com/FoundationVision/LlamaGen)
 - [open-pi-zero](https://github.com/allenzren/open-pi-zero)
 - [open-hummingbird-eval](https://github.com/vpariza/open-hummingbird-eval)
+- [neuro-ncap](https://github.com/atonderski/neuro-ncap)
 
 ## Data sources
 
