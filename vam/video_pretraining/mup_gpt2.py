@@ -28,7 +28,10 @@ from mup import MuReadout, MuSharedReadout, normal_
 from torch import Tensor
 from tqdm import tqdm
 
+from vam.utils import nvtx
 from vam.video_pretraining.prepare_token_sequence import compute_position_indices
+
+MUP_GPT2_COLOR = nvtx.get_domain_color("mup_gpt2")
 
 
 class KVCache(nn.Module):
@@ -270,7 +273,9 @@ class MupGPT2(nn.Module):
         self.apply(self._init_weights)
 
         # report number of parameters
-        print("number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,))
+        print(
+            "number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,)
+        )  # TODO: EV: disable or log instead of print
 
     def get_num_params(self, non_embedding: bool = True) -> int:
         """
@@ -387,10 +392,10 @@ class MupGPT2(nn.Module):
 
     def _get_emb(self, token_sequence: Tensor, spatial_positions: Tensor, temporal_positions: Tensor) -> Tensor:
         assert (
-            spatial_positions.max() < self.nb_tokens_per_timestep
+            spatial_positions.is_meta or spatial_positions.max() < self.nb_tokens_per_timestep
         ), f"spatial_positions.max()={spatial_positions.max()} >= self.nb_tokens_per_timestep={self.nb_tokens_per_timestep}"
         assert (
-            temporal_positions.max() < self.nb_timesteps
+            temporal_positions.is_meta or temporal_positions.max() < self.nb_timesteps
         ), f"temporal_positions.max()={temporal_positions.max()} >= self.nb_timesteps={self.nb_timesteps}"
 
         # compute spatio-temporal position embeddings
@@ -412,7 +417,7 @@ class MupGPT2(nn.Module):
         bs, context_timesteps, height, width = token_sequence.shape
         token_sequence = rearrange(token_sequence, "b t h w -> b (t h w)")
 
-        positions = compute_position_indices(bs, context_timesteps, height, width)
+        positions = compute_position_indices(bs, context_timesteps, height, width, device=token_sequence.device)
         spatial_positions = positions["spatial_positions"]
         temporal_positions = positions["temporal_positions"]
 
@@ -540,6 +545,8 @@ class MupGPT2(nn.Module):
     ) -> Tensor:
         verbose = int(verbose)
 
+        nvtx.push_range("forward_inference", color=MUP_GPT2_COLOR, domain="mup_gpt2")
+        nvtx.push_range("setup", color=MUP_GPT2_COLOR, domain="mup_gpt2")
         bs, _, height, width = burnin_visual_tokens.shape
         context = rearrange(burnin_visual_tokens, "b t h w -> b (t h w)")
 
@@ -547,7 +554,9 @@ class MupGPT2(nn.Module):
             return context.size(1) // (height * width)
 
         # we get positions for the max context size we are allowed
-        positions = compute_position_indices(bs, self.nb_timesteps, height, width)
+        nvtx.push_range("compute_position_indices", color=MUP_GPT2_COLOR, domain="mup_gpt2")
+        positions = compute_position_indices(bs, self.nb_timesteps, height, width, device=burnin_visual_tokens.device)
+        nvtx.pop_range(domain="mup_gpt2")
 
         # cut the context to the maximum context size
         context = context[:, -self.block_size :]
@@ -559,12 +568,17 @@ class MupGPT2(nn.Module):
         )
 
         if use_kv_cache:
+            nvtx.push_range("kv_cache_setup", color=MUP_GPT2_COLOR, domain="mup_gpt2")
             self._setup_kv_cache(bs)
             kv_cache_was_reset = True
+            nvtx.pop_range(domain="mup_gpt2")  # kv_cache_setup
+
+        nvtx.pop_range(domain="mup_gpt2")  # setup
 
         for frame_idx in tqdm(
             range(number_of_future_frames), f"Generating {number_of_future_frames} frames", disable=verbose < 1
         ):
+            nvtx.push_range("future_frame", color=MUP_GPT2_COLOR, domain="mup_gpt2")
 
             # We should always have at most self.nb_timesteps - 1 frames in the context
             # to leave space for the generated frame
@@ -583,7 +597,9 @@ class MupGPT2(nn.Module):
                 leave=False,
                 position=1,
             ):
+                nvtx.push_range("next_token", color=MUP_GPT2_COLOR, domain="mup_gpt2")
                 # Get next token
+                nvtx.push_range("get_context", color=MUP_GPT2_COLOR, domain="mup_gpt2")
                 tokens_in_context = context.size(1)
                 tmp_ctx = context
                 tmp_spatial_positions = spatial_positions[:, :tokens_in_context]
@@ -592,7 +608,9 @@ class MupGPT2(nn.Module):
                     tmp_ctx = tmp_ctx[:, -1:]
                     tmp_spatial_positions = tmp_spatial_positions[:, -1:]
                     tmp_temporal_positions = tmp_temporal_positions[:, -1:]
+                nvtx.pop_range(domain="mup_gpt2")  # get_context
 
+                nvtx.push_range("next_token_forward", color=MUP_GPT2_COLOR, domain="mup_gpt2")
                 logits = self.forward(
                     tmp_ctx,
                     tmp_spatial_positions,
@@ -600,14 +618,28 @@ class MupGPT2(nn.Module):
                     inference=True,
                     use_kv_cache=use_kv_cache and not kv_cache_was_reset,
                 )
+                nvtx.pop_range(domain="mup_gpt2")  # next_token_forward
+
+                nvtx.push_range("next_token_sample", color=MUP_GPT2_COLOR, domain="mup_gpt2")
                 next_tokens = self._sample_next_token(logits, temperature, topk_sampler)
                 context = torch.cat([context, next_tokens], dim=1)
                 kv_cache_was_reset = False
+                nvtx.pop_range(domain="mup_gpt2")  # next_token_sample
 
+                nvtx.pop_range(domain="mup_gpt2")  # next_token
+
+            nvtx.push_range("future_frame_process", color=MUP_GPT2_COLOR, domain="mup_gpt2")
             generated_frames[:, frame_idx] = self._process_generated_frame(context, height, width)
+            nvtx.pop_range(domain="mup_gpt2")  # future_frame_process
+
+            nvtx.pop_range(domain="mup_gpt2")  # future_frame
 
         if use_kv_cache:
+            nvtx.push_range("kv_cache_reset", color=MUP_GPT2_COLOR, domain="mup_gpt2")
             self._clear_kv_cache()
+            nvtx.pop_range(domain="mup_gpt2")  # reset_kv_cache
+
+        nvtx.pop_range(domain="mup_gpt2")  # forward_inference
         return generated_frames
 
 
@@ -635,9 +667,9 @@ def load_pretrained_gpt(checkpoint_path: str, device: torch.device | str = "cuda
 
     gpt.load_state_dict(state_dict)
     mup.set_base_shapes(gpt, ckpt["hyper_parameters"]["mup_base_shapes"], rescale_params=False)
-    _ = gpt.eval()
-    _ = gpt.to(device)
-    _ = gpt.requires_grad_(False)
+    gpt.eval()
+    gpt.to(device)
+    gpt.requires_grad_(False)
 
     return gpt
 

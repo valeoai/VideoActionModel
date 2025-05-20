@@ -1,11 +1,13 @@
-from typing import Dict
+from typing import Optional
 
 import torch
 from einops import rearrange, repeat
 from torch import Tensor
 
 
-def compute_position_indices(batch_size: int, num_frames: int, height: int, width: int) -> Dict[str, Tensor]:
+def compute_position_indices(
+    batch_size: int, num_frames: int, height: int, width: int, device: Optional[torch.device] = None
+) -> dict[str, Tensor]:
     """
     Compute spatial positions, temporal positions, for a given batch size, frame size, and number of frames.
 
@@ -22,7 +24,8 @@ def compute_position_indices(batch_size: int, num_frames: int, height: int, widt
             - spatial_positions: Tensor of spatial positions for each token, shape [B, T*H*W].
             - temporal_positions: Tensor of temporal positions for each token, shape [B, T*H*W].
     """
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     num_visual_tokens = height * width
     total_tokens_per_frame = num_visual_tokens
@@ -36,7 +39,7 @@ def compute_position_indices(batch_size: int, num_frames: int, height: int, widt
     return {"spatial_positions": spatial_positions, "temporal_positions": temporal_positions}
 
 
-def prepare_token_sequence(visual_tokens: Tensor) -> Dict[str, Tensor]:
+def prepare_token_sequence(visual_tokens: Tensor) -> dict[str, Tensor]:
 
     position_indices = compute_position_indices(*visual_tokens.shape)
 
@@ -45,7 +48,7 @@ def prepare_token_sequence(visual_tokens: Tensor) -> Dict[str, Tensor]:
     return {"token_sequence": visual_tokens, **position_indices}
 
 
-def prepare_AR_token_sequences(visual_tokens: Tensor) -> Dict[str, Tensor]:
+def prepare_AR_token_sequences(visual_tokens: Tensor) -> dict[str, Tensor]:
 
     sequence_data = prepare_token_sequence(visual_tokens)
 
