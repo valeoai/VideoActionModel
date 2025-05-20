@@ -60,7 +60,7 @@ class KVCache(nn.Module):
         cache_shape = (batch_size, n_kv_heads, seq_length, head_dim)
         self.register_buffer("cache_k", torch.zeros(cache_shape, dtype=dtype, device=device))
         self.register_buffer("cache_v", torch.zeros(cache_shape, dtype=dtype, device=device))
-        self.start_pos = 0
+        self.register_buffer("start_pos", torch.zeros((), dtype=dtype, device=device))
         self.layer_idx = layer_idx
 
     def reset(self) -> None:
@@ -68,7 +68,7 @@ class KVCache(nn.Module):
         self.cache_v.zero_()
         self.start_pos = 0
 
-    def update(self, xk: Tensor, xv: Tensor) -> Tuple[Tensor, Tensor]:
+    def update(self, xk: Tensor, xv: Tensor, start_pos: Tensor) -> Tuple[Tensor, Tensor]:
         # changed from original implementation because shape in mup_GPT2 is (b nb_heads seq dim_head)
         seqlen = xk.size(2)
         self.cache_k[:, :, self.start_pos : self.start_pos + seqlen] = xk
@@ -127,12 +127,13 @@ class CausalSelfAttention(nn.Module):
         # will be KVCache object managed by inference context manager
         self.cache = None
 
-    def forward(self, x: Tensor, attn_mask: Tensor) -> Tensor:
+    def forward(self, x: Tensor, attn_mask: Optional[Tensor]) -> Tensor:
 
         # calculate query, key, values for all heads in batch
         x = self.c_attn(x)
 
         # split into qkv and heads
+        # TODO: the rearrange() will break compilation => turn into layer or rewrite in PyTorch
         q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
 
         # KV cache update
@@ -146,7 +147,7 @@ class CausalSelfAttention(nn.Module):
         v = self.value(v)
 
         ### muP: attention scaling 1/dim_heads instead of 1/sqrt(dim_heads)
-        attn_scaling = self.attn_scale / v.size(-1)
+        attn_scaling = self.attn_scale / self.dim_heads
 
         # efficient attention using Flash Attention CUDA kernels
         y = torch.nn.functional.scaled_dot_product_attention(
@@ -158,6 +159,7 @@ class CausalSelfAttention(nn.Module):
             scale=attn_scaling,  # muP: attention scaling
         )
 
+        # TODO: see above
         y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")  # re-assemble all head outputs side by side
 
         # output projection
@@ -182,10 +184,31 @@ class Block(nn.Module):
         self.ln_2 = nn.LayerNorm(dim_model, elementwise_affine=False)
         self.mlp = MLP(dim_model, mlp_dim_mult)
 
-    def forward(self, x: Tensor, attn_mask: Tensor) -> Tensor:
+    def forward(
+        self,
+        x_and_mask: tuple[Tensor, Tensor] | Tensor,
+    ) -> tuple[Tensor, Tensor] | Tensor:
+        """
+        Forward pass of the transformer block. The arguments/return format is conceived to allow chaining of blocks with
+        nn.Sequential.
+        Args:
+            x_and_mask: The input tensor or a tuple containing the input tensor and the attention mask.
+        Returns:
+            If x_and_mask is a tensor, returns the output tensor.
+            If x_and_mask is a tuple, returns a tuple containing the output tensor and the input attention mask.
+        """
+        if isinstance(x_and_mask, Tensor):
+            x = x_and_mask
+            attn_mask = None
+        else:
+            x, attn_mask = x_and_mask
+
         x = x + self.attn(self.ln_1(x), attn_mask)
         x = x + self.mlp(self.ln_2(x))
-        return x
+
+        if attn_mask is None:
+            return x
+        return x, attn_mask
 
 
 class MupGPT2(nn.Module):
@@ -238,8 +261,8 @@ class MupGPT2(nn.Module):
                 "wie": nn.Embedding(vocabulary_size, embedding_dim),  # token embeddings
                 "wse": nn.Embedding(nb_tokens_per_timestep, embedding_dim),  # spatial position embeddings
                 "wte": nn.Embedding(nb_timesteps, embedding_dim),  # temporal position embeddings
-                "h": nn.ModuleList(
-                    [
+                "h": nn.Sequential(
+                    *[
                         Block(
                             embedding_dim,
                             dim_heads,
@@ -253,6 +276,8 @@ class MupGPT2(nn.Module):
                 "ln_f": nn.LayerNorm(embedding_dim, elementwise_affine=False),
             }
         )
+
+        self._traced_layers: dict[int, nn.Module] = {}
 
         if output_tied:
             self.lm_head = MuSharedReadout(self.transformer.wie.weight, bias=False, output_mult=output_scale)
@@ -436,6 +461,7 @@ class MupGPT2(nn.Module):
 
         return rearrange(x, "b (t h w) d -> b t h w d", t=context_timesteps, h=height, w=width)
 
+    # ============================== This is the critical section to be optimized
     def forward(
         self,
         token_sequence: Tensor,
@@ -454,16 +480,20 @@ class MupGPT2(nn.Module):
         """
         x = self._get_emb(token_sequence, spatial_positions, temporal_positions)
 
-        seqlen = token_sequence.size(1)
+        batch_size, seqlen = token_sequence.size()
         if inference and use_kv_cache:
-            attn_mask = None
             assert seqlen == 1, "inference with KV cache only supports single token forward"
+            attn_mask = None
+            layers = self._traced_layers[batch_size]
         else:
             attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
+            layers = self.transformer.h
 
         # forward world embeddings to the transformer
-        for block in self.transformer.h:
-            x = block(x, attn_mask)
+        if attn_mask is None:
+            x = layers(token_sequence)
+        else:
+            x, _ = layers((token_sequence, attn_mask))
         emb_out = self.transformer.ln_f(x)
 
         if not inference:
@@ -533,6 +563,7 @@ class MupGPT2(nn.Module):
         frame = rearrange(frame, "b (h w) -> b h w", h=height, w=width)
         return frame
 
+    # =================================== This is where the setup and compiling must happen
     @torch.no_grad()
     def forward_inference(
         self,
@@ -552,6 +583,19 @@ class MupGPT2(nn.Module):
 
         def _count_nb_frames(context: Tensor) -> int:
             return context.size(1) // (height * width)
+
+        # Traces the layers and compiles for the given batch size
+        if bs not in self._traced_layers:
+            nvtx.push_range("forward_trace", domain="mup_gpt2", color=MUP_GPT2_COLOR)
+            layers = torch.jit.trace(
+                self.transformer.h,
+                example_inputs=context[:, -1],
+                check_trace=False,  # Two calls won't be the same due to the cache update
+                # check_tolerance=1e-6,
+            )
+            self._traced_layers[bs] = layers
+            self._reset_kv_cache()
+            nvtx.pop_range(domain="mup_gpt2")
 
         # we get positions for the max context size we are allowed
         nvtx.push_range("compute_position_indices", color=MUP_GPT2_COLOR, domain="mup_gpt2")
