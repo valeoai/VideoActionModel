@@ -1,20 +1,23 @@
-import time
 from pathlib import Path
 import torch
+import time
+import sys
+
 from einops import rearrange
-from vam.video_pretraining.mup_gpt2 import load_pretrained_gpt
-from vam.utils import expand_path, nvtx
 from tqdm import tqdm
 
+from vam.video_pretraining.mup_gpt2 import load_pretrained_gpt
+from vam.utils import expand_path, nvtx
+
 device  = "cuda"
-dtype   = torch.bfloat16              # or torch.float16
-BS      = 1                           # batch
-CTX_T   = 2                           # context frames
-PRED_T  = 1                           # frames to generate
+dtype   = torch.bfloat16 # or torch.float16
+BS      = 1  # batch
+CTX_T   = 2  # context frames
+PRED_T  = 1  # frames to generate
 TOPK    = 3
 TEMP    = 0.95
-WARMUP  = 3                           # compiled graph warm-up
-NRUNS   = 10                          # timed runs
+NRUNS   = 10 if len(sys.argv) <= 1 else int(sys.argv[1])  # timed runs
+WARMUP  = 3 if len(sys.argv) <= 2 else int(sys.argv[2])   # compiled graph warm-up
 
 MUP_GPT2_COLOR = nvtx.get_domain_color("benchmark")
 
