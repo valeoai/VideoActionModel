@@ -19,6 +19,7 @@ normal_ init
 import os
 from collections import OrderedDict
 from typing import Optional, Tuple
+from warnings import warn
 
 import mup
 import torch
@@ -60,7 +61,7 @@ class KVCache(nn.Module):
         cache_shape = (batch_size, n_kv_heads, seq_length, head_dim)
         self.register_buffer("cache_k", torch.zeros(cache_shape, dtype=dtype, device=device))
         self.register_buffer("cache_v", torch.zeros(cache_shape, dtype=dtype, device=device))
-        self.register_buffer("start_pos", torch.zeros((), dtype=dtype, device=device))
+        self.register_buffer("start_pos", torch.zeros((), dtype=torch.int32, device=device))
         self.layer_idx = layer_idx
 
     def reset(self) -> None:
@@ -68,7 +69,7 @@ class KVCache(nn.Module):
         self.cache_v.zero_()
         self.start_pos.zero_()
 
-    def update(self, xk: Tensor, xv: Tensor, start_pos: Tensor) -> Tuple[Tensor, Tensor]:
+    def update(self, xk: Tensor, xv: Tensor) -> Tuple[Tensor, Tensor]:
         # changed from original implementation because shape in mup_GPT2 is (b nb_heads seq dim_head)
         sample_length = xk.size(2)
         self.cache_k[:, :, self.start_pos : self.start_pos + sample_length] = xk
@@ -135,7 +136,8 @@ class CausalSelfAttention(nn.Module):
         # split into qkv and heads - rewritten in vanilla PyTorch because jit.trace doesn't play nice with rearrange
         # q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
         b, seq, _ = x.size()
-        q, k, v = x.view(b, seq, 3, self.nb_heads, self.dim_heads).permute(2, 0, 3, 1, 4).contiguous()
+        qkv = x.view(b, seq, 3, self.nb_heads, self.dim_heads).permute(2, 0, 3, 1, 4).contiguous()
+        q, k, v = qkv[0], qkv[1], qkv[2]
 
         # KV cache update
         if self.cache is not None:
@@ -279,6 +281,8 @@ class MupGPT2(nn.Module):
                 "ln_f": nn.LayerNorm(embedding_dim, elementwise_affine=False),
             }
         )
+
+        self.compile_forward = compile_forward
         self._traced_batch_size: Optional[int] = None
         self._traced_layers: Optional[nn.Module] = None
 
@@ -495,9 +499,9 @@ class MupGPT2(nn.Module):
 
         # forward world embeddings to the transformer
         if attn_mask is None:
-            x = layers(token_sequence)
+            x = layers(x)
         else:
-            x, _ = layers((token_sequence, attn_mask))
+            x, _ = layers((x, attn_mask))
         emb_out = self.transformer.ln_f(x)
 
         if not inference:
@@ -607,6 +611,8 @@ class MupGPT2(nn.Module):
             if self._traced_batch_size == bs:
                 self._reset_kv_cache()
             else:
+                if self.compile_forward and self._traced_batch_size is not None:
+                    warn(f"New batch_size of {bs} triggered recompilation (compiled batch_size={self._traced_batch_size})")
                 self._setup_kv_cache(bs)
                 self._traced_layers = None
                 self._traced_batch_size = bs
@@ -616,9 +622,19 @@ class MupGPT2(nn.Module):
         # Traces the layers and compiles for the given batch size - must happen
         if self.compile_forward and self._traced_layers is None:
             nvtx.push_range("forward_trace", domain="mup_gpt2", color=MUP_GPT2_COLOR)
+            tmp_input_seq = self._get_emb(context[:, -1], spatial_positions, temporal_positions)
+            tmp_spatial_positions = spatial_positions[:, -1:]
+            tmp_temporal_positions = temporal_positions[:, -1:]
             layers = torch.jit.trace(
                 self.transformer.h,
-                example_inputs=context[:, -1],
+                example_inputs=tmp_input_seq,
+                # example_kwarg_inputs={
+                #     "token_sequence": context[:, -1],
+                #     "spatial_positions": tmp_spatial_positions,
+                #     "temporal_positions": tmp_temporal_positions,
+                #     "inference": True,
+                #     "use_kv_cache": True,
+                # },
                 check_trace=False,  # Two calls won't be the same due to the cache update
                 # check_tolerance=1e-6,
             )
