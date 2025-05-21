@@ -18,7 +18,7 @@ TOPK    = 3
 TEMP    = 0.95
 NRUNS   = 10 if len(sys.argv) <= 1 else int(sys.argv[1])  # timed runs
 WARMUP  = 3 if len(sys.argv) <= 2 else int(sys.argv[2])   # compiled graph warm-up
-COMPILE = True if len(sys.argv) <= 2 else sys.argv[3] in ("true", "yes", "t", "y", "T", "Y")
+COMPILE = True if len(sys.argv) <= 3 else sys.argv[3] in ("true", "yes", "t", "y", "T", "Y")
 
 MUP_GPT2_COLOR = nvtx.get_domain_color("benchmark")
 
