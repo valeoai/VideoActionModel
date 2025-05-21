@@ -18,6 +18,7 @@ TOPK    = 3
 TEMP    = 0.95
 NRUNS   = 10 if len(sys.argv) <= 1 else int(sys.argv[1])  # timed runs
 WARMUP  = 3 if len(sys.argv) <= 2 else int(sys.argv[2])   # compiled graph warm-up
+COMPILE = True if len(sys.argv) <= 2 else sys.argv[3] in ("true", "yes", "t", "y", "T", "Y")
 
 MUP_GPT2_COLOR = nvtx.get_domain_color("benchmark")
 
@@ -31,6 +32,7 @@ torch.set_default_dtype(dtype)
 nvtx.push_range("setup", color=MUP_GPT2_COLOR, domain="benchmark")
 ckpt = expand_path("~/scratch/vavim1/width_768_pretrained_139k_total_155k.pt")
 gpt  = load_pretrained_gpt(ckpt, device=device).to(dtype)
+gpt.compile_forward = COMPILE
 nvtx.pop_range(domain="benchmark")
 
 nvtx.push_range("burnin", color=MUP_GPT2_COLOR, domain="benchmark")
