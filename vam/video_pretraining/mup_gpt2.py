@@ -132,9 +132,10 @@ class CausalSelfAttention(nn.Module):
         # calculate query, key, values for all heads in batch
         x = self.c_attn(x)
 
-        # split into qkv and heads
-        # TODO: the rearrange() will break compilation => turn into layer or rewrite in PyTorch
-        q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
+        # split into qkv and heads - rewritten in vanilla PyTorch because jit.trace doesn't play nice with rearrange
+        # q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
+        b, seq, _ = x.size()
+        q, k, v = x.view(b, seq, 3, self.nb_heads, self.dim_heads).permute(2, 0, 3, 1, 4).contiguous()
 
         # KV cache update
         if self.cache is not None:
@@ -159,8 +160,9 @@ class CausalSelfAttention(nn.Module):
             scale=attn_scaling,  # muP: attention scaling
         )
 
-        # TODO: see above
-        y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")  # re-assemble all head outputs side by side
+        # y = rearrange(y, "b nb_heads seq dim_head -> b seq (nb_heads dim_head)")  # re-assemble all head outputs side by side
+        b, nb_heads, seq, dim_head = y.size()
+        y = y.permute(0, 2, 1, 3).contiguous().view(b, seq, nb_heads * dim_head)
 
         # output projection
         y = self.c_proj(y)
@@ -237,6 +239,7 @@ class MupGPT2(nn.Module):
         output_tied: bool = True,
         output_scale: float = 1.0,
         attn_scale: float = 1.0,
+        compile_forward: bool = True,
     ) -> None:
 
         super().__init__()
@@ -484,7 +487,7 @@ class MupGPT2(nn.Module):
         if inference and use_kv_cache:
             assert seqlen == 1, "inference with KV cache only supports single token forward"
             attn_mask = None
-            layers = self._traced_layers[batch_size]
+            layers = self._traced_layers[batch_size] if self.compile_forward else self.transformer.h
         else:
             attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
             layers = self.transformer.h
@@ -585,7 +588,7 @@ class MupGPT2(nn.Module):
             return context.size(1) // (height * width)
 
         # Traces the layers and compiles for the given batch size
-        if bs not in self._traced_layers:
+        if self.compile_forward and bs not in self._traced_layers:
             nvtx.push_range("forward_trace", domain="mup_gpt2", color=MUP_GPT2_COLOR)
             layers = torch.jit.trace(
                 self.transformer.h,
@@ -594,7 +597,6 @@ class MupGPT2(nn.Module):
                 # check_tolerance=1e-6,
             )
             self._traced_layers[bs] = layers
-            self._reset_kv_cache()
             nvtx.pop_range(domain="mup_gpt2")
 
         # we get positions for the max context size we are allowed
@@ -719,13 +721,13 @@ def load_pretrained_gpt(checkpoint_path: str, device: torch.device | str = "cuda
 
 
 if __name__ == "__main__":
-    height, width = 8, 12
+    def self_test():
+        height, width = 8, 12
+        model = MupGPT2(
+            embedding_dim=128, nb_layers=4, nb_tokens_per_timestep=height * width, nb_timesteps=8, vocabulary_size=1024
+        )
+        mup.set_base_shapes(model, None)
+        visual_tokens = torch.randint(0, 1024, (1, 4, 8, 12), dtype=torch.long)
+        _generated_frames = model.forward_inference(2, visual_tokens, temperature=1.0, topk_sampler=3, use_kv_cache=True, verbose=2)
 
-    model = MupGPT2(
-        embedding_dim=128, nb_layers=4, nb_tokens_per_timestep=height * width, nb_timesteps=8, vocabulary_size=1024
-    )
-    mup.set_base_shapes(model, None)
-
-    visual_tokens = torch.randint(0, 1024, (1, 4, 8, 12), dtype=torch.long)
-
-    generated_frames = model.forward_inference(2, visual_tokens, temperature=1.0, topk_sampler=3, use_kv_cache=True, verbose=2)
+    self_test()
