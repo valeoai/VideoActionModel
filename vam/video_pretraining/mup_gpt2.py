@@ -61,7 +61,7 @@ class KVCache(nn.Module):
         cache_shape = (batch_size, n_kv_heads, seq_length, head_dim)
         self.register_buffer("cache_k", torch.zeros(cache_shape, dtype=dtype, device=device))
         self.register_buffer("cache_v", torch.zeros(cache_shape, dtype=dtype, device=device))
-        self.register_buffer("start_pos", torch.zeros((), dtype=torch.int32, device=device))
+        self.register_buffer("start_pos", torch.zeros((), dtype=torch.int32, device="cpu"))  # Must stay in CPU to avoid DtoH transfers
         self.layer_idx = layer_idx
 
     def reset(self) -> None:
@@ -207,8 +207,10 @@ class Block(nn.Module):
         else:
             x, attn_mask = x_and_mask
 
+        nvtx.push_range("block_forward", color=MUP_GPT2_COLOR, domain="mup_gpt2")
         x = x + self.attn(self.ln_1(x), attn_mask)
         x = x + self.mlp(self.ln_2(x))
+        nvtx.pop_range(domain="mup_gpt2")
 
         if attn_mask is None:
             return x
