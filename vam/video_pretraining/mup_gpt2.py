@@ -66,16 +66,16 @@ class KVCache(nn.Module):
     def reset(self) -> None:
         self.cache_k.zero_()
         self.cache_v.zero_()
-        self.start_pos = 0
+        self.start_pos.zero_()
 
     def update(self, xk: Tensor, xv: Tensor, start_pos: Tensor) -> Tuple[Tensor, Tensor]:
         # changed from original implementation because shape in mup_GPT2 is (b nb_heads seq dim_head)
-        seqlen = xk.size(2)
-        self.cache_k[:, :, self.start_pos : self.start_pos + seqlen] = xk
-        self.cache_v[:, :, self.start_pos : self.start_pos + seqlen] = xv
-        xk_cached = self.cache_k[:, :, : self.start_pos + seqlen]
-        xv_cached = self.cache_v[:, :, : self.start_pos + seqlen]
-        self.start_pos += seqlen
+        sample_length = xk.size(2)
+        self.cache_k[:, :, self.start_pos : self.start_pos + sample_length] = xk
+        self.cache_v[:, :, self.start_pos : self.start_pos + sample_length] = xv
+        xk_cached = self.cache_k[:, :, : self.start_pos + sample_length]
+        xv_cached = self.cache_v[:, :, : self.start_pos + sample_length]
+        self.start_pos += sample_length
         return xk_cached, xv_cached
 
 
@@ -124,7 +124,7 @@ class CausalSelfAttention(nn.Module):
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size)).view(1, 1, block_size, block_size))
 
-        # will be KVCache object managed by inference context manager
+        # the cache attribute is an instance of KV-Cache, created and managed by the callers
         self.cache = None
 
     def forward(self, x: Tensor, attn_mask: Optional[Tensor]) -> Tensor:
@@ -279,8 +279,8 @@ class MupGPT2(nn.Module):
                 "ln_f": nn.LayerNorm(embedding_dim, elementwise_affine=False),
             }
         )
-
-        self._traced_layers: dict[int, nn.Module] = {}
+        self._traced_batch_size: Optional[int] = None
+        self._traced_layers: Optional[nn.Module] = None
 
         if output_tied:
             self.lm_head = MuSharedReadout(self.transformer.wie.weight, bias=False, output_mult=output_scale)
@@ -483,11 +483,12 @@ class MupGPT2(nn.Module):
         """
         x = self._get_emb(token_sequence, spatial_positions, temporal_positions)
 
-        batch_size, seqlen = token_sequence.size()
+        seqlen = token_sequence.size(1)
         if inference and use_kv_cache:
             assert seqlen == 1, "inference with KV cache only supports single token forward"
             attn_mask = None
-            layers = self._traced_layers[batch_size] if self.compile_forward else self.transformer.h
+            layers = self._traced_layers if self.compile_forward else self.transformer.h
+            assert layers is not None, "Single-token layers not compiled!"
         else:
             attn_mask = torch.tril(torch.ones(seqlen, seqlen, device=token_sequence.device, dtype=torch.bool))
             layers = self.transformer.h
@@ -534,10 +535,10 @@ class MupGPT2(nn.Module):
         for block in self.transformer.h:
             block.attn.cache.reset()
 
-    def _clear_kv_cache(self) -> None:
-        """Clear the key-value cache."""
-        for block in self.transformer.h:
-            block.attn.cache = None
+    # def _clear_kv_cache(self) -> None:
+    #     """Clear the key-value cache."""
+    #     for block in self.transformer.h:
+    #         block.attn.cache = None
 
     def _sample_next_token(self, logits: Tensor, temperature: float, topk_sampler: int) -> Tensor:
         """
@@ -587,18 +588,6 @@ class MupGPT2(nn.Module):
         def _count_nb_frames(context: Tensor) -> int:
             return context.size(1) // (height * width)
 
-        # Traces the layers and compiles for the given batch size
-        if self.compile_forward and bs not in self._traced_layers:
-            nvtx.push_range("forward_trace", domain="mup_gpt2", color=MUP_GPT2_COLOR)
-            layers = torch.jit.trace(
-                self.transformer.h,
-                example_inputs=context[:, -1],
-                check_trace=False,  # Two calls won't be the same due to the cache update
-                # check_tolerance=1e-6,
-            )
-            self._traced_layers[bs] = layers
-            nvtx.pop_range(domain="mup_gpt2")
-
         # we get positions for the max context size we are allowed
         nvtx.push_range("compute_position_indices", color=MUP_GPT2_COLOR, domain="mup_gpt2")
         positions = compute_position_indices(bs, self.nb_timesteps, height, width, device=burnin_visual_tokens.device)
@@ -615,9 +604,30 @@ class MupGPT2(nn.Module):
 
         if use_kv_cache:
             nvtx.push_range("kv_cache_setup", color=MUP_GPT2_COLOR, domain="mup_gpt2")
-            self._setup_kv_cache(bs)
+            if self._traced_batch_size == bs:
+                self._reset_kv_cache()
+            else:
+                self._setup_kv_cache(bs)
+                self._traced_layers = None
+                self._traced_batch_size = bs
             kv_cache_was_reset = True
             nvtx.pop_range(domain="mup_gpt2")  # kv_cache_setup
+
+        # Traces the layers and compiles for the given batch size - must happen
+        if self.compile_forward and self._traced_layers is None:
+            nvtx.push_range("forward_trace", domain="mup_gpt2", color=MUP_GPT2_COLOR)
+            layers = torch.jit.trace(
+                self.transformer.h,
+                example_inputs=context[:, -1],
+                check_trace=False,  # Two calls won't be the same due to the cache update
+                # check_tolerance=1e-6,
+            )
+            self._traced_layers = layers
+            # Tracing may have polluted the cache, so we need to reset it
+            if use_kv_cache:
+                self._reset_kv_cache()
+                kv_cache_was_reset = True
+            nvtx.pop_range(domain="mup_gpt2")
 
         nvtx.pop_range(domain="mup_gpt2")  # setup
 
@@ -679,11 +689,6 @@ class MupGPT2(nn.Module):
             nvtx.pop_range(domain="mup_gpt2")  # future_frame_process
 
             nvtx.pop_range(domain="mup_gpt2")  # future_frame
-
-        if use_kv_cache:
-            nvtx.push_range("kv_cache_reset", color=MUP_GPT2_COLOR, domain="mup_gpt2")
-            self._clear_kv_cache()
-            nvtx.pop_range(domain="mup_gpt2")  # reset_kv_cache
 
         nvtx.pop_range(domain="mup_gpt2")  # forward_inference
         return generated_frames
