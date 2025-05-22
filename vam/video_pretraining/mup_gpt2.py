@@ -133,9 +133,12 @@ class CausalSelfAttention(nn.Module):
         # calculate query, key, values for all heads in batch
         x = self.c_attn(x)
 
+        # print("x.shape:")
+        # print(x.shape)
+
         # split into qkv and heads - rewritten in vanilla PyTorch because jit.trace doesn't play nice with rearrange
         # q, k, v = rearrange(x, "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads", n=3, dim_heads=self.dim_heads)
-        b, seq, _ = x.size()
+        b, seq = x.shape[:2]
         qkv = x.view(b, seq, 3, self.nb_heads, self.dim_heads).permute(2, 0, 3, 1, 4).contiguous()
         q, k, v = qkv[0], qkv[1], qkv[2]
 
@@ -207,10 +210,8 @@ class Block(nn.Module):
         else:
             x, attn_mask = x_and_mask
 
-        nvtx.push_range("block_forward", color=MUP_GPT2_COLOR, domain="mup_gpt2")
         x = x + self.attn(self.ln_1(x), attn_mask)
         x = x + self.mlp(self.ln_2(x))
-        nvtx.pop_range(domain="mup_gpt2")
 
         if attn_mask is None:
             return x
@@ -436,7 +437,15 @@ class MupGPT2(nn.Module):
         spatial_pos_emb = self.transformer.wse(spatial_positions)
         temporal_pos_emb = self.transformer.wte(temporal_positions)
 
+        if len(token_sequence.shape) == 1:
+            token_sequence = token_sequence.unsqueeze(1)
         tok_emb = self.transformer.wie(token_sequence)
+
+        # print('emb.shapes:')
+        # print(token_sequence.shape)
+        # print(tok_emb.shape)
+        # print(temporal_pos_emb.shape)
+        # print(spatial_pos_emb.shape)
 
         return tok_emb + temporal_pos_emb + spatial_pos_emb
 
@@ -587,6 +596,7 @@ class MupGPT2(nn.Module):
         verbose = int(verbose)
 
         nvtx.push_range("forward_inference", color=MUP_GPT2_COLOR, domain="mup_gpt2")
+
         nvtx.push_range("setup", color=MUP_GPT2_COLOR, domain="mup_gpt2")
         bs, _, height, width = burnin_visual_tokens.shape
         context = rearrange(burnin_visual_tokens, "b t h w -> b (t h w)")
@@ -672,6 +682,7 @@ class MupGPT2(nn.Module):
                 position=1,
             ):
                 nvtx.push_range("next_token", color=MUP_GPT2_COLOR, domain="mup_gpt2")
+
                 # Get next token
                 nvtx.push_range("get_context", color=MUP_GPT2_COLOR, domain="mup_gpt2")
                 tokens_in_context = context.size(1)

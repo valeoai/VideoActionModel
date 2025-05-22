@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 import torch
 import time
@@ -9,16 +10,34 @@ from tqdm import tqdm
 from vam.video_pretraining.mup_gpt2 import load_pretrained_gpt
 from vam.utils import expand_path, nvtx
 
-device  = "cuda"
-dtype   = torch.bfloat16 # or torch.float16
-BS      = 1  # batch
-CTX_T   = 2  # context frames
-PRED_T  = 1  # frames to generate
-TOPK    = 3
-TEMP    = 0.95
-NRUNS   = 10 if len(sys.argv) <= 1 else int(sys.argv[1])  # timed runs
-WARMUP  = 3 if len(sys.argv) <= 2 else int(sys.argv[2])   # compiled graph warm-up
-COMPILE = True if len(sys.argv) <= 3 else sys.argv[3] in ("true", "yes", "t", "y", "T", "Y")
+parser = argparse.ArgumentParser(description="Model run configuration")
+parser.add_argument('--device', type=str, default='cuda', help='Device to run on, e.g. "cuda" or "cpu"')
+parser.add_argument('--dtype', type=str, choices=['bfloat16', 'float16'], default='bfloat16',
+                    help='Data type: "bfloat16" or "float16"')
+parser.add_argument('--bs', type=int, default=32, help='Batch size')
+parser.add_argument('--ctx_t', type=int, default=1, help='Number of context frames')
+parser.add_argument('--pred_t', type=int, default=1, help='Number of frames to generate')
+parser.add_argument('--topk', type=int, default=3, help='Top-K sampling')
+parser.add_argument('--temp', type=float, default=0.95, help='Temperature for sampling')
+parser.add_argument('--nruns', type=int, default=10, help='Number of timed runs')
+parser.add_argument('--warmup', type=int, default=3, help='Number of warm-up runs')
+parser.add_argument('--compile', action="store_true", help='Whether to compile the model')
+
+args = parser.parse_args()
+
+# Convert dtype string to torch dtype
+args.dtype = torch.bfloat16 if args.dtype == 'bfloat16' else torch.float16
+
+device  = args.device
+dtype   = args.dtype
+BS      = args.bs
+CTX_T   = args.ctx_t
+PRED_T  = args.pred_t
+TOPK    = args.topk
+TEMP    = args.temp
+NRUNS   = args.nruns
+WARMUP  = args.warmup
+COMPILE = args.compile
 
 MUP_GPT2_COLOR = nvtx.get_domain_color("benchmark")
 
@@ -69,7 +88,7 @@ nvtx.pop_range(domain="benchmark")
 
 #TODO: PREFILL TIME IS ACTUALLY TAKEN IN ACCOUNT HERE
 latency  = sum(times) / NRUNS
-ntokens  = PRED_T * gpt.nb_tokens_per_timestep
+ntokens  = BS * PRED_T * gpt.nb_tokens_per_timestep
 throughput = ntokens / latency          # tokens / second
 
 print(f"Walltime per call : {latency*1e3:.2f} ms")
