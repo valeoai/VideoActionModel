@@ -569,7 +569,7 @@ class MupGPT2(nn.Module):
             # We should always have at most self.nb_timesteps - 1 frames in the context
             # to leave space for the generated frame
             if _count_nb_frames(context) > self.nb_timesteps - 1:
-                context = context[:, : (self.nb_timesteps - 1) * self.nb_tokens_per_timestep]
+                context = context[:, -((self.nb_timesteps - 1) * self.nb_tokens_per_timestep) :]
                 # because we use learned positional embeddings, we can not keep the context
                 # in cache and simply roll it. We need to recompute the whole cache.
                 if use_kv_cache:
