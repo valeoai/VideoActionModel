@@ -1,14 +1,23 @@
 import os
 import pickle
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 from lightning import LightningDataModule
+import torch
+import torchvision.transforms.v2 as transforms
 from torch.utils.data import default_collate
 
 from vam.datalib.data_mixing import combined_ego_trajectory_dataset
 from vam.datalib.stateful_dataloader import StatefulDataLoader
+from vam.datalib.transforms import CropAndResizeTransform
 
 StateDict = Dict[str, Any]
+
+# target size is 280 x 504  (both divisible by 14 for DINO)
+_DEFAULT_TRANSFORM = {
+    "nuplan:default": CropAndResizeTransform(top_crop_size=30, resize_factor=3.75, width_center_crop=30),
+    "nuscenes:default": CropAndResizeTransform(top_crop_size=25, resize_factor=3.125, width_center_crop=25),
+}
 
 
 def _path(path: str) -> str | None:
@@ -38,10 +47,14 @@ class EgoTrajectoryDataModule(LightningDataModule):
         nuscenes_train_pickle_path: Optional[str] = None,
         nuplan_val_pickle_path: Optional[str] = None,
         nuscenes_val_pickle_path: Optional[str] = None,
+        nuplan_images_rootdir: Optional[str] = None,
+        nuscenes_images_rootdir: Optional[str] = None,
         sequence_length: int = 8,
         action_length: int = 6,
         batch_size: int = 32,
         num_workers: int = 4,
+        nuplan_images_transform: Optional[Callable | str] = None,
+        nuscenes_images_transform: Optional[Callable | str] = None,
         sub_batch_size: Optional[int] = None,
     ) -> None:
         super().__init__()
@@ -51,6 +64,19 @@ class EgoTrajectoryDataModule(LightningDataModule):
         self.nuscenes_train_pickle_path = _path(nuscenes_train_pickle_path)
         self.nuplan_val_pickle_path = _path(nuplan_val_pickle_path)
         self.nuscenes_val_pickle_path = _path(nuscenes_val_pickle_path)
+        self.nuplan_images_rootdir = _path(nuplan_images_rootdir)
+        self.nuscenes_images_rootdir = _path(nuscenes_images_rootdir)
+        
+        self.nuplan_images_transform = (
+            _DEFAULT_TRANSFORM[f"{nuplan_images_transform}"]
+            if isinstance(nuplan_images_transform, str)
+            else nuplan_images_transform
+        )
+        self.nuscenes_images_transform = (
+            _DEFAULT_TRANSFORM[f"{nuscenes_images_transform}"]
+            if isinstance(nuscenes_images_transform, str)
+            else nuscenes_images_transform
+        )
 
         self.sequence_length = sequence_length
         self.action_length = action_length
@@ -71,8 +97,12 @@ class EgoTrajectoryDataModule(LightningDataModule):
             kwargs = {
                 "nuplan_tokens_rootdir": self.nuplan_tokens_rootdir,
                 "nuscenes_tokens_rootdir": self.nuscenes_tokens_rootdir,
+                "nuplan_images_rootdir": self.nuplan_images_rootdir,
+                "nuscenes_images_rootdir": self.nuscenes_images_rootdir,
                 "sequence_length": self.sequence_length,
                 "action_length": self.action_length,
+                "nuplan_images_transform": self.nuplan_images_transform,
+                "nuscenes_images_transform": self.nuscenes_images_transform,
             }
 
             self.train_dataset = combined_ego_trajectory_dataset(

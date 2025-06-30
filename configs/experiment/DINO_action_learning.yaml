@@ -1,0 +1,88 @@
+# @package _global_
+
+defaults:
+  - override /data: ego_trajectory_dataset
+  - override /callbacks: callbacks_action_training
+  - override /trainer: deepspeed2
+  - override /logger: many_loggers
+  - override /paths: jeanzay_nuplan
+  - override /scheduler: warmup_stable_drop
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+
+trainer:
+  max_epochs: 1
+  # clip gradients' global norm to using gradient_clip_algorithm='norm' by default
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  log_every_n_steps: 5
+  default_root_dir: ${paths.output_dir}/${name}/
+
+scheduler:
+  warmup_iter: 75 # 1% ~ end_iter * 0.01
+  end_iter: 7251 # (len_dataset - 1) // BATCH_SIZE * nb_epochs
+  drop_iter: 725 # 10%
+
+data:
+  nuplan_tokens_rootdir: null
+  nuplan_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_train_data_cleaned.pkl
+  nuplan_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl
+  nuplan_images_rootdir: $cya_ALL_CCFRSCRATCH/nuplan/frames
+  nuplan_images_transform: "nuplan:default"
+  nuscenes_tokens_rootdir: null
+  nuscenes_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl
+  nuscenes_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
+  nuscenes_images_rootdir: $cya_ALL_CCFRSCRATCH/nuscenes
+  nuscenes_images_transform: "nuscenes:default"
+  sequence_length: 3
+  action_length: 6
+
+model:
+  _target_: vam.action_expert.ActionLearning
+  _recursive_: false
+  flow_sampling: beta
+  flow_alpha: 1.5
+  flow_beta: 1.0
+  vam_conf:
+    _target_: vam.action_expert.DINO_action_model.DINOActionModel
+    _recursive_: false
+    context_length: ${data.sequence_length}
+    num_inference_steps: 10
+    flow_sig_min: 0.001
+    final_action_clip_value: null
+    action_scaling: 70.
+    dino_config:
+      _target_: vam.action_expert.DINO_action_model.DINOBackbone
+      model_name: vit_large_patch14_dinov2.lvd142m
+    action_mup_base_shapes: ./mup_shapes/actionexpert_24layers_baseattentiondim256_baseembeddingdim64.bsh
+    action_checkpoint_path: null
+    action_config:
+      _target_: vam.action_expert.MupActionExpert
+      embedding_dim: 64
+      attention_dim: ${model.vam_conf.gpt_config.embedding_dim}
+      action_dim: 2
+      action_horizon: ${data.action_length}
+      number_high_level_command: 3
+      dim_heads: ${model.vam_conf.gpt_config.dim_heads}
+      nb_layers: ${model.vam_conf.gpt_config.nb_layers}
+      init_std: 0.01
+  optimizer_conf:
+    lr: 0.0001
+    weight_decay: 1e-8
+    betas: [0.9, 0.95]
+    eps: 1e-08
+    decoupled_wd: True
+
+
+
+        dino_config: OmegaConf,
+        action_config: OmegaConf,
+        action_mup_base_shapes: mup.MuReadOnly | None,
+        action_checkpoint_path: Optional[str],
+        context_length: int = 8,
+        num_inference_steps: int = 10,
+        flow_sig_min: float = 0.001,
+        final_action_clip_value: Optional[float] = None,
+        action_scaling: float = 1.0,

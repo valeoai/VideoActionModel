@@ -1,7 +1,10 @@
 import json
 import os
 import random
-from typing import List, Optional
+from typing import List, Optional, Callable
+from torch import Tensor
+
+from PIL import Image
 
 from torch.utils.data import ConcatDataset, Dataset, Subset
 
@@ -115,8 +118,12 @@ def all_token_datasets(
 def combined_ego_trajectory_dataset(
     nuplan_pickle_data: Optional[List[dict]] = None,
     nuplan_tokens_rootdir: Optional[str] = None,
+    nuplan_images_rootdir: Optional[str] = None,
+    nuplan_images_transform: Optional[Callable] = None,
     nuscenes_pickle_data: Optional[List[dict]] = None,
     nuscenes_tokens_rootdir: Optional[str] = None,
+    nuscenes_images_rootdir: Optional[str] = None,
+    nuscenes_images_transform: Optional[Callable] = None,
     ratios: Optional[List[float]] = None,
     total_number_of_samples: Optional[int] = None,
     seed: int = 0,
@@ -135,6 +142,8 @@ def combined_ego_trajectory_dataset(
             EgoTrajectoryDataset(
                 nuplan_pickle_data,
                 tokens_rootdir=nuplan_tokens_rootdir,
+                images_rootdir=nuplan_images_rootdir,
+                images_transform=nuplan_images_transform,
                 camera="CAM_F0",
                 subsampling_factor=5,  # Nuplan is originally at 10Hz, we subsample to 2Hz
                 **kwargs,
@@ -146,6 +155,8 @@ def combined_ego_trajectory_dataset(
             EgoTrajectoryDataset(
                 nuscenes_pickle_data,
                 tokens_rootdir=nuscenes_tokens_rootdir,
+                images_rootdir=nuscenes_images_rootdir,
+                images_transform=nuscenes_images_transform,
                 camera="CAM_FRONT",
                 **kwargs,
             )

@@ -17,6 +17,13 @@ class TopCrop:
         # Crop the top of the image by the specified amount | top, left, height, width
         return TF.crop(img, self.trop_crop_size, 0, img.shape[1] - self.trop_crop_size, img.shape[2])
 
+class CenteredWidthCrop:
+    def __init__(self, total_crop_size: int = 0) -> None:
+        self.crop_size = total_crop_size // 2
+
+    def __call__(self, img: Tensor) -> Tensor:
+        # Crop the top of the image by the specified amount | top, left, height, width
+        return TF.crop(img, 0, self.crop_size, img.shape[1], img.shape[2] - self.crop_size)
 
 class ResizeByFactor:
     def __init__(self, resize_factor: float) -> None:
@@ -42,13 +49,14 @@ class CropAndResizeTransform:
     Wrapper for custom transform
     """
 
-    def __init__(self, trop_crop_size: int, resize_factor: float) -> None:
+    def __init__(self, top_crop_size: int, resize_factor: float, width_center_crop: int = 0) -> None:
 
         self.transforms = transforms.Compose(
             [
                 transforms.ToImage(),
                 transforms.ToDtype(torch.uint8, scale=True),
-                TopCrop(trop_crop_size),
+                TopCrop(top_crop_size),
+                CenteredWidthCrop(width_center_crop),
                 ResizeByFactor(resize_factor),
                 transforms.ToDtype(torch.float32, scale=True),
                 Normalize(),  # Normalize to [-1, 1]
