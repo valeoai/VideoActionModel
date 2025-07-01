@@ -233,8 +233,13 @@ class JointModelDINO(nn.Module):
         k = torch.cat([k_vis, k_act], dim=-2)
         v = torch.cat([v_vis, v_act], dim=-2)
 
+        if self.training:
+            attn_mask = self.attn_mask
+        else:
+            attn_mask = None # bidirectional
+
         y = torch.nn.functional.scaled_dot_product_attention(
-            q, k, v, attn_mask=self.attn_mask, is_causal=False, scale=attn.attn_scale / attn.dim_heads
+            q, k, v, attn_mask=attn_mask, is_causal=False, scale=attn.attn_scale / attn.dim_heads
         )
         y = rearrange(y, "b h s d -> b s (h d)")
         y = attn.c_proj(y)
