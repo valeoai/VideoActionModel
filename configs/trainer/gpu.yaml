@@ -3,3 +3,4 @@ defaults:
 
 accelerator: gpu
 devices: 1
+precision: "bf16-mixed"

@@ -1,10 +1,8 @@
 import os
 import pickle
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
 
 from lightning import LightningDataModule
-import torch
-import torchvision.transforms.v2 as transforms
 from torch.utils.data import default_collate
 
 from vam.datalib.data_mixing import combined_ego_trajectory_dataset
@@ -15,8 +13,8 @@ StateDict = Dict[str, Any]
 
 # target size is 280 x 504  (both divisible by 14 for DINO)
 _DEFAULT_TRANSFORM = {
-    "nuplan:default": CropAndResizeTransform(top_crop_size=30, resize_factor=3.75, width_center_crop=30),
-    "nuscenes:default": CropAndResizeTransform(top_crop_size=25, resize_factor=3.125, width_center_crop=25),
+    "nuplan:default": CropAndResizeTransform(top_crop_size=30, resize_factor=3.75, width_center_crop=54),
+    "nuscenes:default": CropAndResizeTransform(top_crop_size=25, resize_factor=3.125, width_center_crop=44),
 }
 
 
@@ -66,7 +64,7 @@ class EgoTrajectoryDataModule(LightningDataModule):
         self.nuscenes_val_pickle_path = _path(nuscenes_val_pickle_path)
         self.nuplan_images_rootdir = _path(nuplan_images_rootdir)
         self.nuscenes_images_rootdir = _path(nuscenes_images_rootdir)
-        
+
         self.nuplan_images_transform = (
             _DEFAULT_TRANSFORM[f"{nuplan_images_transform}"]
             if isinstance(nuplan_images_transform, str)

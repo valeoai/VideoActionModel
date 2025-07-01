@@ -27,14 +27,14 @@ scheduler:
 
 data:
   nuplan_tokens_rootdir: null
-  nuplan_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_train_data_cleaned.pkl
-  nuplan_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl
-  nuplan_images_rootdir: $cya_ALL_CCFRSCRATCH/nuplan/frames
+  nuplan_train_pickle_path: ${paths.nuplan.train_pickle}
+  nuplan_val_pickle_path: ${paths.nuplan.val_pickle}
+  nuplan_images_rootdir: ${paths.nuplan.images_rootdir}
   nuplan_images_transform: "nuplan:default"
   nuscenes_tokens_rootdir: null
-  nuscenes_train_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl
-  nuscenes_val_pickle_path: $ycy_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
-  nuscenes_images_rootdir: $cya_ALL_CCFRSCRATCH/nuscenes
+  nuscenes_train_pickle_path: ${paths.nuscenes.train_pickle}
+  nuscenes_val_pickle_path: ${paths.nuscenes.val_pickle}
+  nuscenes_images_rootdir: ${paths.nuscenes.images_rootdir}
   nuscenes_images_transform: "nuscenes:default"
   sequence_length: 3
   action_length: 6
@@ -45,6 +45,7 @@ model:
   flow_sampling: beta
   flow_alpha: 1.5
   flow_beta: 1.0
+  batch_key: image
   vam_conf:
     _target_: vam.action_expert.DINO_action_model.DINOActionModel
     _recursive_: false
@@ -56,9 +57,8 @@ model:
     nb_tokens_per_timesteps: 720 # 280 / 14 * 504 / 14
     dino_config:
       _target_: vam.action_expert.DINO_action_model.DINOBackbone
-      model_name: "dinov2_vitl14_reg" 
-    action_mup_base_shapes: ./mup_shapes/actionexpert_24layers_baseattentiondim256_baseembeddingdim64.bsh
-    action_checkpoint_path: null
+      model_name: "dinov2_vitl14_reg"
+    action_mup_base_shapes: null
     action_config:
       _target_: vam.action_expert.MupActionExpert
       embedding_dim: 192

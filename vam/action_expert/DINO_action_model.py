@@ -1,5 +1,3 @@
-import os
-from collections import OrderedDict
 from typing import Dict, Optional, Tuple
 
 import mup
@@ -8,23 +6,20 @@ import torch.nn as nn
 from einops import rearrange
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
-from torch import Tensor, LongTensor
+from torch import LongTensor, Tensor
 from tqdm import tqdm
-from pathlib import Path
 
+from vam.action_expert.mup_action_expert import Block as ActionBlock
+from vam.action_expert.mup_action_expert import MupActionExpert
+from vam.action_expert.mup_action_expert import SelfAttention as ActionAttention
 
+InputsDict = Dict[str, Tensor]
+OutputDict = Dict[str, Tensor]
 mupShapes = str | Dict[str, Tuple[int, ...]]
 
 # ------------------------------------------------------------------------------------
 # Vision backbone : DINOv2
 # ------------------------------------------------------------------------------------
-
-try:
-    import timm  # type: ignore
-except ImportError as err:  # pragma: no cover
-    raise ImportError(
-        "timm is required for the DINOv2 baseline – install with `pip install timm`"
-    ) from err
 
 
 class DINOBackbone(nn.Module):
@@ -35,21 +30,12 @@ class DINOBackbone(nn.Module):
     by default
     """
 
-    def __init__(
-        self,
-        model_name: str = "dinov2_vitl14_reg",
-        **kwargs
-    ) -> None:
+    def __init__(self, model_name: str = "dinov2_vitl14_reg", **kwargs) -> None:
         super().__init__()
-        
+
         # Load Meta’s released checkpoint via torch-hub.
         #  ──>  https://github.com/facebookresearch/dinov2
-        self.dinov2_encoder = torch.hub.load(
-            "facebookresearch/dinov2",
-            model_name,
-            force_reload=False,
-            **kwargs
-        )
+        self.dinov2_encoder = torch.hub.load("facebookresearch/dinov2", model_name, force_reload=False, **kwargs)
         self.num_prefix_tokens = 1 + getattr(self.dinov2_encoder, "num_register_tokens", 0)
         self.embedding_dim = self.dinov2_encoder.embed_dim  # 1024 for L/14
         self.dinov2_encoder.eval()
@@ -59,27 +45,14 @@ class DINOBackbone(nn.Module):
     def forward(self, x: Tensor) -> Tensor:  # x : [B, T, C, H, W]
         b, t, c, h, w = x.shape
         x = rearrange(x, "b t c h w -> (b t) c h w")
-        out = self.dinov2_encoder.forward_features(x, return_all_tokens=True)
-        patch_tokens = rearrange(
-            out["x_norm_patchtokens"],
-            "(b t) n d -> b (t n) d", 
-            b=b, t=t
-        )
+        out = self.dinov2_encoder.forward_features(x)
+        patch_tokens = rearrange(out["x_norm_patchtokens"], "(b t) n d -> b (t n) d", b=b, t=t)
         return patch_tokens
 
 
 # ------------------------------------------------------------------------------------
 # Joint model: static DINO tokens  ↔  Action‑Expert transformer
 # ------------------------------------------------------------------------------------
-
-from vam.action_expert.mup_action_expert import (
-    Block as ActionBlock,
-    MupActionExpert,
-    SelfAttention as ActionAttention,
-)
-
-InputsDict = Dict[str, Tensor]
-OutputDict = Dict[str, Tensor]
 
 
 class JointModelDINO(nn.Module):
@@ -94,8 +67,8 @@ class JointModelDINO(nn.Module):
         dino: DINOBackbone,
         action_expert: MupActionExpert,
         context_length: int,
-        action_horizon: int, 
-        nb_tokens_per_timesteps: int
+        action_horizon: int,
+        nb_tokens_per_timesteps: int,
     ) -> None:
         super().__init__()
         self.dino = dino
@@ -109,14 +82,13 @@ class JointModelDINO(nn.Module):
 
         # Dino Feature Projection
         self.visual_to_action = nn.Sequential(
-            nn.Linear(self.visual_dim, self.action_dim, bias=False),
-            nn.RMSNorm(self.action_dim, elementwise_affine=False)
+            nn.Linear(self.visual_dim, self.action_dim, bias=False), nn.RMSNorm(self.action_dim, elementwise_affine=False)
         )
 
         # Learnable frame‑index embedding (D_a sized)
         self.frame_index_embed = nn.Embedding(context_length, self.action_dim)
-        
-        self._build_block_causal_mask(context_length, action_horizon, nb_tokens_per_timesteps)
+
+        self._build_block_causal_mask(context_length, nb_tokens_per_timesteps, action_horizon)
 
     # ---------------------------------------------------------------------
     # Helpers
@@ -126,19 +98,17 @@ class JointModelDINO(nn.Module):
         """Project frozen visual tokens to K and V for *one* layer."""
         action_block: ActionBlock = self.action_expert.transformer.h[layer_idx]
         action_attention: ActionAttention = action_block.attn
-        
+
         _, action_k, action_v = rearrange(
             action_attention.c_attn(visual_tokens),
             "b seq (n nb_heads dim_heads) -> n b nb_heads seq dim_heads",
             n=3,
             dim_heads=action_attention.dim_heads,
         )
-        
+
         return action_k, action_v
 
-    def _noisy_action_to_embeds(
-        self, noisy_action: Tensor, high_level_command: LongTensor, t: Tensor
-    ) -> Tensor:
+    def _noisy_action_to_embeds(self, noisy_action: Tensor, high_level_command: LongTensor, t: Tensor) -> Tensor:
         """Action embedding of the action expert model."""
         # noisy_action: [Batch_Size, timesteps, Horizon_Steps, Action_Dim]
         action_embeds = self.action_expert.action_encoder(
@@ -146,12 +116,12 @@ class JointModelDINO(nn.Module):
         )
         action_embeds = rearrange(action_embeds, "b t h d -> b (t h) d")
         return action_embeds
-    
+
     # ------------------------------------------------------------------
     # block‑causal mask builder
     # ------------------------------------------------------------------
 
-    def _build_block_causal_mask(self, T: int, N: int, H: int, device: torch.device) -> Tensor:
+    def _build_block_causal_mask(self, T: int, N: int, H: int) -> Tensor:
         """
         Create a block‑causal boolean mask for cross‑attention.
 
@@ -181,18 +151,19 @@ class JointModelDINO(nn.Module):
         S_vis = T * N
 
         # timestep index for each action query row
-        row_t = torch.repeat_interleave(torch.arange(T, device=device), H)  # [S_act]
+        row_t = torch.repeat_interleave(torch.arange(T), H)  # [S_act]
 
         # ----- visual part --------------------------------------------------
-        vis_frame_idx = torch.arange(S_vis, device=device) // N  # [S_vis]
+        vis_frame_idx = torch.arange(S_vis) // N  # [S_vis]
         allowed_vis = vis_frame_idx.unsqueeze(0) <= row_t.unsqueeze(1)  # broadcast
 
         # ----- action part --------------------------------------------------
-        act_time_idx = torch.repeat_interleave(torch.arange(T, device=device), H)  # [S_act]
+        act_time_idx = torch.repeat_interleave(torch.arange(T), H)  # [S_act]
         allowed_act = act_time_idx.unsqueeze(0) == row_t.unsqueeze(1)
 
         attn_mask = torch.cat([allowed_vis, allowed_act], dim=-1)  # [S_act, S_vis+S_act]
-        
+
+        self.attn_mask: Tensor
         self.register_buffer("attn_mask", attn_mask)
 
     # ---------------------------------------------------------------------
@@ -205,9 +176,9 @@ class JointModelDINO(nn.Module):
         visual_embeds = self.dino(inputs_all["video_frames"])  # [B, T, N, D_v]
         visual_embeds = self.visual_to_action(visual_embeds)  # [B, T, N, D_a]
 
-        N_patch = visual_embeds.size(2) // T
+        N_patch = visual_embeds.size(1) // T
         device = visual_embeds.device
-        frame_ids = torch.arange(T - 1, device=device).repeat_interleave(N_patch)  # [T·N]
+        frame_ids = torch.arange(T, device=device).repeat_interleave(N_patch)  # [T·N]
         pe = self.frame_index_embed(frame_ids)  # [T·N, D_a]
         visual_embeds = visual_embeds + pe.unsqueeze(0)  # broadcast over batch
 
@@ -247,21 +218,17 @@ class JointModelDINO(nn.Module):
     # One transformer layer of cross‑attention + FFN
     # ------------------------------------------------------------------
 
-    def _forward_single_layer(self, attn_mask: Tensor, visual: Tensor, action: Tensor, layer_idx: int) -> Tensor:
+    def _forward_single_layer(self, visual: Tensor, action: Tensor, layer_idx: int) -> Tensor:
         blk: ActionBlock = self.action_expert.transformer.h[layer_idx]
         attn: ActionAttention = blk.attn
 
         # LayerNorm on action branch
         act_in = blk.ln_1(action)
         act_qkv = attn.c_attn(act_in)
-        q, k_act, v_act = rearrange(
-            act_qkv, "b s (n h d) -> n b h s d", n=3, h=attn.num_heads, d=attn.dim_heads
-        )
+        q, k_act, v_act = rearrange(act_qkv, "b s (n h d) -> n b h s d", n=3, h=attn.num_heads, d=attn.dim_heads)
 
         # Visual K,V (static) – reshape to match heads dimension
         k_vis, v_vis = self._visual_tokens_to_kv(visual, layer_idx)
-        k_vis = rearrange(k_vis, "b s (h d) -> b h s d", h=attn.num_heads, d=attn.dim_heads)
-        v_vis = rearrange(v_vis, "b s (h d) -> b h s d", h=attn.num_heads, d=attn.dim_heads)
 
         k = torch.cat([k_vis, k_act], dim=-2)
         v = torch.cat([v_vis, v_act], dim=-2)
@@ -282,6 +249,7 @@ class JointModelDINO(nn.Module):
 # Wrapper: training + inference API (flow‑matching)
 # ------------------------------------------------------------------------------------
 
+
 class DINOActionModel(nn.Module):
     """Flow‑matching diffusion model that uses DINOv2 visual features."""
 
@@ -290,7 +258,6 @@ class DINOActionModel(nn.Module):
         dino_config: OmegaConf,
         action_config: OmegaConf,
         action_mup_base_shapes: Optional[mupShapes] = None,
-        action_checkpoint_path: Optional[str]  = None,
         nb_tokens_per_timesteps: int = 64,
         context_length: int = 8,
         num_inference_steps: int = 10,
@@ -305,32 +272,25 @@ class DINOActionModel(nn.Module):
         self.final_action_clip_value = final_action_clip_value
         self.context_length = context_length
         self.action_scaling = action_scaling
-        # convenience
-        self.action_dim = self.action_expert.action_dim
-        self.action_horizon = self.action_expert.action_horizon
 
         # models ----------------------------------------------------------------
         self.dino: DINOBackbone = instantiate(dino_config)
         self.action_expert: MupActionExpert = instantiate(action_config)
 
-        if action_checkpoint_path is not None:
-            sd = torch.load(action_checkpoint_path, map_location="cpu")["state_dict"]
-            self.action_expert.load_state_dict(sd, strict=False)
-            mup.set_base_shapes(self.action_expert, action_mup_base_shapes, rescale_params=False)
-            self.action_expert.requires_grad_(False)
-        else:
-            mup.set_base_shapes(self.action_expert, action_mup_base_shapes)
-            self.action_expert.apply(self.action_expert._init_weights)
+        # convenience
+        self.action_dim = self.action_expert.action_dim
+        self.action_horizon = self.action_expert.action_horizon
 
         self.joint_model = JointModelDINO(
             self.dino,
-            self.action_expert, 
+            self.action_expert,
             context_length=context_length,
             action_horizon=self.action_horizon,
-            nb_tokens_per_timesteps=nb_tokens_per_timesteps
+            nb_tokens_per_timesteps=nb_tokens_per_timesteps,
         )
 
-        
+        mup.set_base_shapes(self.joint_model, action_mup_base_shapes)
+        self.action_expert.apply(self.action_expert._init_weights)
 
     # ------------------------------------------------------------------
     # Training : flow‑matching loss
@@ -386,9 +346,7 @@ class DINOActionModel(nn.Module):
                 x = torch.clamp(x, -final_action_clip_value, final_action_clip_value)
             return x * self.action_scaling
 
-        action = torch.randn(
-            (B, 1, self.action_horizon, self.action_dim), device=device, dtype=dtype
-        )
+        action = torch.randn((B, 1, self.action_horizon, self.action_dim), device=device, dtype=dtype)
         dt = 1.0 / num_inference_steps
         t = torch.zeros((B, 1), device=device, dtype=dtype)
         for _ in tqdm(range(num_inference_steps), disable=not verbose, desc="Euler int"):

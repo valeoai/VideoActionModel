@@ -1,9 +1,13 @@
-# Path to the directory where checkpoints and logs will be saved
-output_dir: /lustre/fsn1/projects/rech/ycy/commun/output_data/next_token_predictor
+defaults:
+  - default
 
-# Path to the directory where data is located
-data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/nuplan/sensor_blobs/
+## motional
+nuscenes:
+  images_rootdir: $cya_ALL_CCFRSCRATCH/nuscenes
+  train_pickle: $cya_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl
+  val_pickle: $cya_ALL_CCFRWORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
 
-pickle_path: /lustre/fswork/projects/rech/ycy/commun/nuplan_pickling/generated_files/
-
-quantized_data_root_dir: /lustre/fsn1/projects/rech/ycy/commun/nuplan_tokenized/VQGAN_ImageNet_f16_1024
+nuplan:
+  images_rootdir: $cya_ALL_CCFRSCRATCH/nuplan/frames
+  train_pickle: $cya_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_train_data_cleaned.pkl
+  val_pickle: $cya_ALL_CCFRWORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl

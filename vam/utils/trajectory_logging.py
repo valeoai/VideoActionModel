@@ -111,7 +111,7 @@ class TrajectoryLoggingCallback(Callback):
 
             with torch.no_grad():
                 recon = pl_module.vam.forward_inference(
-                    batch_to_log["visual_tokens"],
+                    batch_to_log[pl_module.batch_key],
                     batch_to_log["high_level_command"][:, -1:],
                     dtype=batch_to_log["positions"].dtype,
                 )

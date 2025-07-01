@@ -144,6 +144,7 @@ class SelfAttention(nn.Module):
         self.dim_heads = dim_heads
         self.dim_model = dim_model
         self.attn_dim = attn_dim
+        self.num_heads = attn_dim // dim_heads  # number of attention heads
 
         ########### muP ###########
         self.attn_scale = attn_scale

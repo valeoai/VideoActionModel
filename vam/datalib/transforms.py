@@ -17,6 +17,7 @@ class TopCrop:
         # Crop the top of the image by the specified amount | top, left, height, width
         return TF.crop(img, self.trop_crop_size, 0, img.shape[1] - self.trop_crop_size, img.shape[2])
 
+
 class CenteredWidthCrop:
     def __init__(self, total_crop_size: int = 0) -> None:
         self.crop_size = total_crop_size // 2
@@ -24,6 +25,7 @@ class CenteredWidthCrop:
     def __call__(self, img: Tensor) -> Tensor:
         # Crop the top of the image by the specified amount | top, left, height, width
         return TF.crop(img, 0, self.crop_size, img.shape[1], img.shape[2] - self.crop_size)
+
 
 class ResizeByFactor:
     def __init__(self, resize_factor: float) -> None:
@@ -45,11 +47,9 @@ class Normalize:
 
 
 class ImageNetNormalize(transforms.Normalize):
-    def __init__(self):
-        super().__init__(
-            mean=(0.485, 0.456, 0.406),
-            std=(0.229, 0.224, 0.225)
-        )
+    def __init__(self) -> None:
+        super().__init__(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+
 
 class CropAndResizeTransform:
     """
@@ -57,13 +57,8 @@ class CropAndResizeTransform:
     """
 
     def __init__(
-        self,
-        top_crop_size: int, 
-        resize_factor: float,
-        width_center_crop: int = 0,
-        imagenet_normalize: bool = False
+        self, top_crop_size: int, resize_factor: float, width_center_crop: int = 0, imagenet_normalize: bool = False
     ) -> None:
-
 
         self.transforms = transforms.Compose(
             [
@@ -126,3 +121,14 @@ class NeuroNCAPTransform:
 
     def __call__(self, *args, **kwargs) -> Tensor:
         return self.transforms(*args, **kwargs)
+
+
+if __name__ == "__main__":
+    nuplan_default = CropAndResizeTransform(top_crop_size=30, resize_factor=3.75, width_center_crop=54)
+    nuscenes_default = CropAndResizeTransform(top_crop_size=25, resize_factor=3.125, width_center_crop=44)
+
+    nuplan_image = torch.rand(3, 1080, 1920)  # Simulated nuPlan image
+    nuscenes_image = torch.rand(3, 900, 1600)  # Simulated nuScenes image
+
+    print("NuPlan transformed shape:", nuplan_default(nuplan_image).shape)
+    print("NuScenes transformed shape:", nuscenes_default(nuscenes_image).shape)

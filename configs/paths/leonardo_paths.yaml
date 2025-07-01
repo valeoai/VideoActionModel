@@ -1,0 +1,12 @@
+defaults:
+  - default
+
+nuscenes:
+  images_rootdir: $SCRATCH/../eramzi00/nuscenes
+  train_pickle: $WORK/cleaned_trajectory_pickle/nuscenes_train_data_cleaned.pkl
+  val_pickle: $WORK/cleaned_trajectory_pickle/nuscenes_val_data_cleaned.pkl
+
+nuplan:
+  images_rootdir: $FAST/nuplan/frames
+  train_pickle: $WORK/cleaned_trajectory_pickle/nuplan_train_data_cleaned.pkl
+  val_pickle: $WORK/cleaned_trajectory_pickle/nuplan_val_data_cleaned.pkl

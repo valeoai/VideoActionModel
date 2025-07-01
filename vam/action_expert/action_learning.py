@@ -40,6 +40,7 @@ class ActionLearning(LightningModule):
         compile: bool = False,
         log_norm: bool = False,
         grad_logging: int = 0,
+        batch_key: str = "visual_tokens",
     ) -> None:
         """
         Args:
@@ -59,6 +60,7 @@ class ActionLearning(LightningModule):
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
         self.grad_logging = grad_logging
+        self.batch_key = batch_key
 
         self.flow_sampling = flow_sampling
         if self.flow_sampling == "beta":
@@ -100,7 +102,7 @@ class ActionLearning(LightningModule):
         Adapted from:
         https://github.com/allenzren/open-pi-zero/blob/main/src/agent/train.py
         """
-        batch_size, context_length, *_ = batch["visual_tokens"].size()
+        batch_size, context_length, *_ = batch[self.batch_key].size()
         bsz = batch_size * context_length
 
         if self.flow_sampling == "uniform":  # uniform between 0 and 1
@@ -128,7 +130,7 @@ class ActionLearning(LightningModule):
         diffusion_step = self.noise_schedule(batch)
 
         loss = self.vam(
-            visual_tokens=batch["visual_tokens"],
+            batch[self.batch_key],
             high_level_command=batch["high_level_command"],
             actions=batch["positions"],
             t=diffusion_step,
@@ -158,7 +160,7 @@ class ActionLearning(LightningModule):
         diffusion_step = self.noise_schedule(batch)
 
         loss = self.vam(
-            visual_tokens=batch["visual_tokens"],
+            batch[self.batch_key],
             high_level_command=batch["high_level_command"],
             actions=batch["positions"],
             t=diffusion_step,
