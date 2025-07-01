@@ -56,7 +56,7 @@ class ActionLearning(LightningModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
-        self.vam: VideoActionModel = hydra.utils.instantiate(vam_conf)
+        self.vam = hydra.utils.instantiate(vam_conf)
         self.optimizer_conf = optimizer_conf
         self.scheduler_conf = scheduler_conf
         self.grad_logging = grad_logging
@@ -264,9 +264,9 @@ class ActionLearning(LightningModule):
         # save class name of the model in the checkpoint
         checkpoint["model_class_path"] = self.__module__ + "." + self.__class__.__qualname__
 
-        if self.vam.gpt_mup_base_shapes is not None:
+        if hasattr(self.vam, "gpt_mup_base_shapes") and self.vam.gpt_mup_base_shapes is not None:
             checkpoint["gpt_mup_base_shapes"] = mup.shape._extract_shapes(self.vam.gpt_mup_base_shapes)
-        if self.vam.action_mup_base_shapes is not None:
+        if hasattr(self.vam, "action_mup_base_shapes") and self.vam.action_mup_base_shapes is not None:
             checkpoint["action_mup_base_shapess"] = mup.shape._extract_shapes(self.vam.action_mup_base_shapes)
 
 
