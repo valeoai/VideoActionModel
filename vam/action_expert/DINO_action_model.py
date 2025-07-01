@@ -10,6 +10,10 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from torch import Tensor, LongTensor
 from tqdm import tqdm
+from pathlib import Path
+
+
+mupShapes = str | Dict[str, Tuple[int, ...]]
 
 # ------------------------------------------------------------------------------------
 # Vision backbone : DINOv2
@@ -31,22 +35,36 @@ class DINOBackbone(nn.Module):
     by default
     """
 
-    def __init__(self, model_name: str = "vit_large_patch14_dinov2.lvd142m") -> None:
+    def __init__(
+        self,
+        model_name: str = "dinov2_vitl14_reg",
+        **kwargs
+    ) -> None:
         super().__init__()
-        self.vit = timm.create_model(model_name, pretrained=True)
-        self.patch_size = self.vit.patch_embed.patch_size  # (14, 14) for L/14
-        self.embedding_dim = self.vit.embed_dim  # 1024 for L/14
-        self.vit.eval()
-        self.vit.requires_grad_(False)
+        
+        # Load Meta’s released checkpoint via torch-hub.
+        #  ──>  https://github.com/facebookresearch/dinov2
+        self.dinov2_encoder = torch.hub.load(
+            "facebookresearch/dinov2",
+            model_name,
+            force_reload=False,
+            **kwargs
+        )
+        self.num_prefix_tokens = 1 + getattr(self.dinov2_encoder, "num_register_tokens", 0)
+        self.embedding_dim = self.dinov2_encoder.embed_dim  # 1024 for L/14
+        self.dinov2_encoder.eval()
+        self.dinov2_encoder.requires_grad_(False)
 
     @torch.no_grad()
     def forward(self, x: Tensor) -> Tensor:  # x : [B, T, C, H, W]
         b, t, c, h, w = x.shape
         x = rearrange(x, "b t c h w -> (b t) c h w")
-        # timm's forward_features:   cls | patch_0 … patch_N
-        feats = self.vit.forward_features(x)  # [B*T, 1+N, D]
-        patch_tokens = feats[:, 1:]  # drop CLS
-        patch_tokens = rearrange(patch_tokens, "(b t) n d -> b (t n) d", b=b, t=t)
+        out = self.dinov2_encoder.forward_features(x, return_all_tokens=True)
+        patch_tokens = rearrange(
+            out["x_norm_patchtokens"],
+            "(b t) n d -> b (t n) d", 
+            b=b, t=t
+        )
         return patch_tokens
 
 
@@ -76,6 +94,8 @@ class JointModelDINO(nn.Module):
         dino: DINOBackbone,
         action_expert: MupActionExpert,
         context_length: int,
+        action_horizon: int, 
+        nb_tokens_per_timesteps: int
     ) -> None:
         super().__init__()
         self.dino = dino
@@ -96,7 +116,7 @@ class JointModelDINO(nn.Module):
         # Learnable frame‑index embedding (D_a sized)
         self.frame_index_embed = nn.Embedding(context_length, self.action_dim)
         
-        self._build_block_causal_mask()
+        self._build_block_causal_mask(context_length, action_horizon, nb_tokens_per_timesteps)
 
     # ---------------------------------------------------------------------
     # Helpers
@@ -269,8 +289,9 @@ class DINOActionModel(nn.Module):
         self,
         dino_config: OmegaConf,
         action_config: OmegaConf,
-        action_mup_base_shapes: mup.MuReadOnly | None,
-        action_checkpoint_path: Optional[str],
+        action_mup_base_shapes: Optional[mupShapes] = None,
+        action_checkpoint_path: Optional[str]  = None,
+        nb_tokens_per_timesteps: int = 64,
         context_length: int = 8,
         num_inference_steps: int = 10,
         flow_sig_min: float = 0.001,
@@ -284,6 +305,9 @@ class DINOActionModel(nn.Module):
         self.final_action_clip_value = final_action_clip_value
         self.context_length = context_length
         self.action_scaling = action_scaling
+        # convenience
+        self.action_dim = self.action_expert.action_dim
+        self.action_horizon = self.action_expert.action_horizon
 
         # models ----------------------------------------------------------------
         self.dino: DINOBackbone = instantiate(dino_config)
@@ -299,12 +323,14 @@ class DINOActionModel(nn.Module):
             self.action_expert.apply(self.action_expert._init_weights)
 
         self.joint_model = JointModelDINO(
-            self.dino, self.action_expert, context_length=context_length
+            self.dino,
+            self.action_expert, 
+            context_length=context_length,
+            action_horizon=self.action_horizon,
+            nb_tokens_per_timesteps=nb_tokens_per_timesteps
         )
 
-        # convenience
-        self.action_dim = self.action_expert.action_dim
-        self.action_horizon = self.action_expert.action_horizon
+        
 
     # ------------------------------------------------------------------
     # Training : flow‑matching loss

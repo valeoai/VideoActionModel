@@ -16,7 +16,7 @@ if __name__ == "__main__":
     parser.add_argument("--python_cmd", "-p", type=str, required=True)
     parser.add_argument("--gpus_per_node", type=int, default=1)
     parser.add_argument("--nodes", type=int, default=1)
-    parser.add_argument("--account", type=str, default="ycy@h100")
+    parser.add_argument("--account", type=str, default="cya@h100")
     parser.add_argument("--gpu_type", type=str, default="h100")
     parser.add_argument("--file_to_run", "-f", type=str, default="train")
     parser.add_argument("--wall_time", "-wt", type=str, default="20:00:00")  # jean zay has max time of 20h

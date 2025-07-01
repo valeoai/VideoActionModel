@@ -44,12 +44,26 @@ class Normalize:
         return 2 * img - 1
 
 
+class ImageNetNormalize(transforms.Normalize):
+    def __init__(self):
+        super().__init__(
+            mean=(0.485, 0.456, 0.406),
+            std=(0.229, 0.224, 0.225)
+        )
+
 class CropAndResizeTransform:
     """
     Wrapper for custom transform
     """
 
-    def __init__(self, top_crop_size: int, resize_factor: float, width_center_crop: int = 0) -> None:
+    def __init__(
+        self,
+        top_crop_size: int, 
+        resize_factor: float,
+        width_center_crop: int = 0,
+        imagenet_normalize: bool = False
+    ) -> None:
+
 
         self.transforms = transforms.Compose(
             [
@@ -59,7 +73,7 @@ class CropAndResizeTransform:
                 CenteredWidthCrop(width_center_crop),
                 ResizeByFactor(resize_factor),
                 transforms.ToDtype(torch.float32, scale=True),
-                Normalize(),  # Normalize to [-1, 1]
+                ImageNetNormalize() if imagenet_normalize else Normalize(),  # Normalize to [-1, 1]
             ]
         )
 

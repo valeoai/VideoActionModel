@@ -6,7 +6,7 @@ module load arch/h100
 module load pytorch-gpu/py3/2.4.0
 export PYTHONUSERBASE=$WORK/python_envs/video_action_model
 
-srun -A ycy@h100 --pty \
+srun -A cya@h100 --pty \
 --cpus-per-task=3 --hint=nomultithread \
 --partition=prepost --time=00:40:00 \
 python scripts/download_pretrained_models.py
