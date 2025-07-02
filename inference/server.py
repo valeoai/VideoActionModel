@@ -101,7 +101,6 @@ def _bytestr_to_numpy(pngs: List[bytes]) -> np.ndarray:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config_path", type=str, required=True)
     parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--dtype", type=str, default="bf16", choices=["bf16", "fp32", "fp16"])
@@ -112,6 +111,6 @@ if __name__ == "__main__":
 
     dtype = {"bf16": torch.bfloat16, "fp32": torch.float32, "fp16": torch.float16}[args.dtype]
 
-    vam_runner = VAMRunner(args.config_path, args.checkpoint_path, device, dtype)
+    vam_runner = VAMRunner( args.checkpoint_path, device, dtype)
 
     uvicorn.run(app, host=args.host, port=args.port)

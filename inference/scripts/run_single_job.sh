@@ -27,17 +27,15 @@ echo "Scenario: $scenario"
 export TIME_START=$(date +"%Y-%m-%d_%H-%M-%S")
 echo "Start time: $TIME_START"
 
-## Tokenizer paths
-export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
 ## VAM paths
-export VAM_CKPT_PATH=$ycy_ALL_CCFRSCRATCH/test_fused_checkpoint/tmp_action_expert_fused.pt
+export VAM_CKPT_PATH=/lustre/fsn1/projects/rech/cya/commun/output_data/fbartocc/experiments/DINO_VAM/Dino_L_action_learning_8layers_nuPlan_nuScenes_0701_2231_1751401896/checkpoints/before_drop_epoch=000_step=0000006525.ckpt
 
 export renderer_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
 export model_port=$(python -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
 
 singularity exec --nv \
     --bind $BASE_DIR/neurad-studio:/neurad_studio \
-    --bind $ycy_ALL_CCFRSCRATCH/nuscenes_v2:/neurad_studio/data/nuscenes \
+    --bind $cya_ALL_CCFRSCRATCH/nuscenes:/neurad_studio/data/nuscenes \
     --bind $HOME/.cache:/.cache \
     --pwd /neurad_studio \
     --env PYTHONPATH=. \
@@ -52,7 +50,6 @@ singularity exec --nv \
 
 singularity exec --nv \
     --bind $WORK/VideoActionModel:/model \
-    --bind $IMAGE_TOKENIZER_PATH:/model/weights/image_tokenizer.jit \
     --bind $VAM_CKPT_PATH:/model/weights/vam.pt \
     --pwd /model \
     --env PYTHONPATH=. \
@@ -60,14 +57,13 @@ singularity exec --nv \
     $MODEL_CONTAINER \
 	python -u inference/server.py \
     --port $model_port \
-    --config_path /model/weights/image_tokenizer.jit \
     --checkpoint_path /model/weights/vam.pt \
 	&
 
 singularity exec --nv \
   --bind $NCAP_FOLDER:/neuro_ncap \
-  --bind $ycy_ALL_CCFRSCRATCH/nuscenes_v2:/neuro_ncap/data/nuscenes \
-  --bind $ycy_CCFRSCRATCH/logs/debug_neuroncap:/neuro_ncap/logdir \
+  --bind $cya_ALL_CCFRSCRATCH/nuscenes:/neuro_ncap/data/nuscenes \
+  --bind $cya_ALL_CCFRSCRATCH/logs/debug_neuroncap:/neuro_ncap/logdir \
   --pwd /neuro_ncap \
   --env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
   $NCAP_CONTAINER \

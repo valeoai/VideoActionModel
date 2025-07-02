@@ -8,6 +8,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from torch import LongTensor, Tensor
 from tqdm import tqdm
+from collections import OrderedDict
 
 from vam.action_expert.mup_action_expert import Block as ActionBlock
 from vam.action_expert.mup_action_expert import MupActionExpert
@@ -366,3 +367,30 @@ class DINOActionModel(nn.Module):
             action = action + dt * vel
             t = t + dt
         return _post(action)
+
+
+class DINOActionModelInference(DINOActionModel):
+    """Helper class to perform inference with the VideoActionModel model."""
+
+    def forward(self, *args, **kwargs) -> Tensor:
+        return super().forward_inference(*args, **kwargs)
+    
+    
+def load_inference_DINOAM(checkpoint_path: str, device: torch.device | str = "cuda") -> DINOActionModelInference:
+    
+    ckpt = torch.load(checkpoint_path, map_location="cpu")
+
+    config = ckpt["hyper_parameters"]["vam_conf"].copy()
+    config.pop("_target_")
+    config.pop("_recursive_")
+    vam = DINOActionModelInference(**config)
+    state_dict = OrderedDict()
+    for k, v in ckpt["state_dict"].items():
+        state_dict[k.replace("vam.", "")] = v
+
+    vam.load_state_dict(state_dict)
+
+    vam.requires_grad_(False)
+    vam.eval()
+    vam.to(device)
+    return vam

@@ -8,7 +8,7 @@ from einops import rearrange
 from PIL import Image
 from torch import Tensor
 
-from vam.action_expert import VideoActionModelInference, load_inference_VAM
+from vam.action_expert.DINO_action_model import DINOActionModelInference, load_inference_DINOAM
 from vam.datalib.transforms import NeuroNCAPTransform
 
 NUSCENES_CAM_ORDER = [
@@ -69,11 +69,9 @@ class VAMInferenceOutput:
 
 class VAMRunner:
 
-    def __init__(self, config_path: str, checkpoint_path: str, device: torch.device, dtype: torch.dtype) -> None:
-        self.image_tokenizer = torch.jit.load(config_path)
-        self.image_tokenizer.to(device)
+    def __init__(self, checkpoint_path: str, device: torch.device, dtype: torch.dtype) -> None:
 
-        self.vam: VideoActionModelInference = load_inference_VAM(checkpoint_path, device)
+        self.vam: DINOActionModelInference = load_inference_DINOAM(checkpoint_path, device)
         self.nb_timesteps = self.vam.context_length
 
         self.device = device
@@ -112,14 +110,14 @@ class VAMRunner:
         # So here the temporal frames play the role of batch size
         preproc_output = self.prev_frame_info["prev_frames"].to(self.device)
         # Here we unsqueeze because the input of the VAM is (B, T, h, w)
-        visual_tokens = self.image_tokenizer(preproc_output).unsqueeze(0)
+        preproc_output = preproc_output.unsqueeze(0)
 
         # Get the command tokens
         command_tokens = torch.tensor([input.command]).unsqueeze(0).to(self.device)
 
         # Get the trajectory
         with torch.amp.autocast("cuda", dtype=self.dtype):
-            trajectory = self.vam(visual_tokens, command_tokens, self.dtype)
+            trajectory = self.vam(preproc_output, command_tokens, self.dtype)
 
         return VAMInferenceOutput(
             trajectory=_format_trajs(trajectory),
