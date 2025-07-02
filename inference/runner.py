@@ -9,7 +9,7 @@ from PIL import Image
 from torch import Tensor
 
 from vam.action_expert.DINO_action_model import DINOActionModelInference, load_inference_DINOAM
-from vam.datalib.transforms import NeuroNCAPTransform
+from vam.datalib.transforms import DINONeuroNCAPTransform
 
 NUSCENES_CAM_ORDER = [
     "CAM_FRONT",
@@ -76,7 +76,7 @@ class VAMRunner:
 
         self.device = device
         self.dtype = dtype
-        self.preproc_pipeline = NeuroNCAPTransform()
+        self.preproc_pipeline = DINONeuroNCAPTransform(top_crop_size=25, resize_factor=3.125, width_center_crop=44)
         self.reset()
 
     def reset(self) -> None:

@@ -61,15 +61,15 @@ if [ $SHOULD_START_MODEL == true ]; then
   echo "Running $MODEL_NAME service in background with ${MODEL_CONTAINER}..."
   singularity exec --nv \
     --bind $MODEL_FOLDER:/model \
-    --bind $IMAGE_TOKENIZER_PATH:/model/weights/image_tokenizer.jit \
     --bind $VAM_CKPT_PATH:/model/weights/vam.pt \
+    --bind $HOME/.cache:/.cache \
+    --env TORCH_HOME=/.cache/torch \
     --pwd /model \
     --env PYTHONPATH=. \
     --env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
     $MODEL_CONTAINER \
     python -u inference/server.py \
     --port $model_port \
-    --config_path /model/weights/image_tokenizer.jit \
     --checkpoint_path /model/weights/vam.pt \
     &
 fi

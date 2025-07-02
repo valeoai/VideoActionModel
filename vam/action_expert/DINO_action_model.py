@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from typing import Dict, Optional, Tuple
 
 import mup
@@ -8,7 +9,6 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from torch import LongTensor, Tensor
 from tqdm import tqdm
-from collections import OrderedDict
 
 from vam.action_expert.mup_action_expert import Block as ActionBlock
 from vam.action_expert.mup_action_expert import MupActionExpert
@@ -237,7 +237,7 @@ class JointModelDINO(nn.Module):
         if self.training:
             attn_mask = self.attn_mask
         else:
-            attn_mask = None # bidirectional
+            attn_mask = None  # bidirectional
 
         y = torch.nn.functional.scaled_dot_product_attention(
             q, k, v, attn_mask=attn_mask, is_causal=False, scale=attn.attn_scale / attn.dim_heads
@@ -374,10 +374,10 @@ class DINOActionModelInference(DINOActionModel):
 
     def forward(self, *args, **kwargs) -> Tensor:
         return super().forward_inference(*args, **kwargs)
-    
-    
+
+
 def load_inference_DINOAM(checkpoint_path: str, device: torch.device | str = "cuda") -> DINOActionModelInference:
-    
+
     ckpt = torch.load(checkpoint_path, map_location="cpu")
 
     config = ckpt["hyper_parameters"]["vam_conf"].copy()

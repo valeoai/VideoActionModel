@@ -123,6 +123,47 @@ class NeuroNCAPTransform:
         return self.transforms(*args, **kwargs)
 
 
+class DINOSafeResize:
+    def __init__(self, size: Tuple[int, int]) -> None:
+        self.size = size
+
+    def __call__(self, img: Tensor) -> Tensor:
+        height, width = img.shape[1], img.shape[2]
+        if (height != self.size[0]) or (width != self.size[1]):
+            img = TF.resize(img, self.size, antialias=True)
+        return img
+
+
+class DINONeuroNCAPTransform:
+    """
+    NeuroNCAP transform for nuScenes.
+
+    Some images send by NeuroNCAP are exactly the correct shape.
+    For instance:
+    (900, 1599) instead of (900, 1600)
+    """
+
+    def __init__(
+        self, top_crop_size: int, resize_factor: float, width_center_crop: int = 0, default_size: Tuple[int, int] = (900, 1600)
+    ) -> None:
+
+        self.transforms = transforms.Compose(
+            [
+                transforms.ToImage(),
+                transforms.ToDtype(torch.uint8, scale=True),
+                DINOSafeResize(default_size),
+                TopCrop(top_crop_size),
+                CenteredWidthCrop(width_center_crop),
+                ResizeByFactor(resize_factor),
+                transforms.ToDtype(torch.float32, scale=True),
+                ImageNetNormalize(),  # Normalize to [-1, 1]
+            ]
+        )
+
+    def __call__(self, *args, **kwargs) -> Tensor:
+        return self.transforms(*args, **kwargs)
+
+
 if __name__ == "__main__":
     nuplan_default = CropAndResizeTransform(top_crop_size=30, resize_factor=3.75, width_center_crop=54)
     nuscenes_default = CropAndResizeTransform(top_crop_size=25, resize_factor=3.125, width_center_crop=44)

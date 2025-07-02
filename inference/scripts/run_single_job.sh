@@ -1,7 +1,7 @@
 # Request interactive session with 1 GPU
 # srun -A fzh@v100 -C v100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu-t3 --time=00:30:00 bash
 
-# srun -A ycy@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu_h100-dev --time=01:00:00 bash run_single_job.sh
+# srun -A cya@h100 -C h100 --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --gres=gpu:1 --hint=nomultithread --qos=qos_gpu_h100-dev --time=01:00:00 bash run_single_job.sh
 
 module purge
 module load singularity
@@ -12,12 +12,12 @@ singularity version
 
 export seq=0101
 export scenario=stationary
-export runs=50
+export runs=1
 export BASE_DIR=$WORK
 export RENDERING_FOLDER=$BASE_DIR/neurad-studio
 export RENDERING_CHECKPOITNS_PATH=/neurad_studio/checkpoints
 export RENDERING_CONTAINER=$SINGULARITY_ALLOWED_DIR/neurad_70.sif
-export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap_vam.sif
+export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap_vai0rbis.sif
 export NCAP_FOLDER=$BASE_DIR/neuro-ncap
 export NCAP_CONTAINER=$SINGULARITY_ALLOWED_DIR/ncap.sif
 
@@ -51,7 +51,9 @@ singularity exec --nv \
 singularity exec --nv \
     --bind $WORK/VideoActionModel:/model \
     --bind $VAM_CKPT_PATH:/model/weights/vam.pt \
+    --bind /lustre/fsn1/projects/rech/fzh/uef86cm/.cache:/.cache \
     --pwd /model \
+    --env TORCH_HOME=/.cache/torch \
     --env PYTHONPATH=. \
 	--env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
     $MODEL_CONTAINER \
@@ -63,7 +65,7 @@ singularity exec --nv \
 singularity exec --nv \
   --bind $NCAP_FOLDER:/neuro_ncap \
   --bind $cya_ALL_CCFRSCRATCH/nuscenes:/neuro_ncap/data/nuscenes \
-  --bind $cya_ALL_CCFRSCRATCH/logs/debug_neuroncap:/neuro_ncap/logdir \
+  --bind $cya_ALL_CCFRSCRATCH/debug_neuroncap_elias:/neuro_ncap/logdir \
   --pwd /neuro_ncap \
   --env LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64 \
   $NCAP_CONTAINER \

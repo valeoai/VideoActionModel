@@ -7,11 +7,11 @@ module load singularity
 #################################################################
 # Edit the following paths to match your setup
 export BASE_DIR=$WORK
-export NUSCENES_PATH=$ycy_ALL_CCFRSCRATCH/nuscenes_v2
+export NUSCENES_PATH=$cya_ALL_CCFRSCRATCH/nuscenes
 # Model related stuff
 export MODEL_NAME='VideoActionModel'
 export MODEL_FOLDER=$BASE_DIR/$MODEL_NAME
-export MODEL_IMAGE='ncap_vam.sif'
+export MODEL_IMAGE='ncap_vai0rbis.sif'
 export MODEL_CONTAINER=$SINGULARITY_ALLOWED_DIR/$MODEL_IMAGE
 ## Tokenizer path
 export IMAGE_TOKENIZER_PATH=$fzh_ALL_CCFRSCRATCH/neuroncap_worldmodel_ckpt/jit_models/VQ_ds16_16384_llamagen.jit
@@ -33,9 +33,9 @@ export RUNS=50
 
 # SLURM related stuff
 export TIME_NOW=$(date +"%Y-%m-%d_%H-%M-%S")
-export ACCOUNT='ycy'  # fzh
+export ACCOUNT='cya'  # fzh
 export GPU_TYPE='h100'  # v100
-export QOS='qos_gpu_h100-gc'  # qos_gpu-t3
+export QOS='qos_gpu_h100-t3'  # qos_gpu-t3
 export WALL_TIME='02:00:00'
 export NUM_CPUS=16  # 10
 
@@ -68,7 +68,7 @@ if [ ! -f $NCAP_CONTAINER ]; then
     exit 1
 fi
 
-export LOG_DIR="${ycy_ALL_CCFRSCRATCH}/ncap_eval/${RUN_NAME}/${TIME_NOW}"
+export LOG_DIR="${cya_ALL_CCFRSCRATCH}/ncap_eval/${RUN_NAME}/${TIME_NOW}"
 mkdir -p $LOG_DIR/slurm_files
 mkdir -p $LOG_DIR/slurm_logs
 

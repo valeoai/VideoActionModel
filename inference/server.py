@@ -111,6 +111,6 @@ if __name__ == "__main__":
 
     dtype = {"bf16": torch.bfloat16, "fp32": torch.float32, "fp16": torch.float16}[args.dtype]
 
-    vam_runner = VAMRunner( args.checkpoint_path, device, dtype)
+    vam_runner = VAMRunner(args.checkpoint_path, device, dtype)
 
     uvicorn.run(app, host=args.host, port=args.port)
