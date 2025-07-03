@@ -575,15 +575,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    """
+    python vam/evaluate_planning_metrics.py \
+    --nusc_dataroot /datasets_local/nuscenes \
+    --vam_checkpoint ~/iveco/scratch_iveco/VAM_JZGC4/checkpoints/VAM/VAM_width_768_pretrained_139k.pt \
+    --tokenizer_path ~/iveco/scratch_iveco/VAM_JZGC4/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
+    --dataset val \
+    --batch_size 8 \
+    --max_batches -1 \
+    --device cuda \
+    --results_dir evaluation_results \
+    --version v1.0-trainval
+    """
 
-# python evaluate_planning_metrics.py \
-#     --nusc_dataroot /datasets_local/nuscenes \
-#     --vam_checkpoint /home/lchambon/iveco/scratch_iveco/VAM_JZGC4/checkpoints/VAM/VAM_width_768_pretrained_139k.pt \
-#     --tokenizer_path /home/lchambon/iveco/scratch_iveco/VAM_JZGC4/llamagen_jit_models/VQ_ds16_16384_llamagen_encoder.jit \
-#     --dataset val \
-#     --batch_size 8 \
-#     --max_batches -1 \
-#     --device cuda \
-#     --results_dir evaluation_results \
-#     --version v1.0-trainval
+    main()

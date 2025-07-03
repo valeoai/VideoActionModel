@@ -82,7 +82,7 @@ class FuturePredictionDataset(torch.utils.data.Dataset):
         self.indices = self.get_indices()
 
         # Initialize the transform for image processing
-        self.image_transform = CropAndResizeTransform(resize_factor=3.125, trop_crop_size=0)
+        self.image_transform = CropAndResizeTransform(resize_factor=3.125)
 
         # Bird's-eye view parameters
         bev_resolution, bev_start_position, bev_dimension = calculate_birds_eye_view_parameters(
