@@ -36,8 +36,8 @@ export TIME_NOW=$(date +"%Y-%m-%d_%H-%M-%S")
 export ACCOUNT='cya'  # fzh
 export GPU_TYPE='h100'  # v100
 export QOS='qos_gpu_h100-t3'  # qos_gpu-t3
-export WALL_TIME='02:00:00'
-export NUM_CPUS=16  # 10
+export WALL_TIME='01:00:00'
+export NUM_CPUS=10  # 10
 
 if [ ! -d $NCAP_FOLDER ]; then
     echo "NCAP folder not found"

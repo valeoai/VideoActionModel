@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=mp4
-#SBATCH -A ycy@h100
+#SBATCH -A cya@h100
 #SBATCH -C h100
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:0
 #SBATCH --hint=nomultithread
-#SBATCH --qos=qos_gpu_h100-gc
+#SBATCH --qos=qos_gpu_h100-dev
 #SBATCH --time=01:00:00
 #SBATCH --output=slurm_jobs_logs/stdout/mp4/%j.out
 #SBATCH --error=slurm_jobs_logs/stdout/mp4/%j.out
